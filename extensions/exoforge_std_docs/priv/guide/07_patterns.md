@@ -27,9 +27,9 @@ Exoforge combines **long-running stateful native C# processes**, **isolated rela
 | **Execution Lifecycle** | Serverless functions (JS sandbox or BYO Azure Functions). Suffixes 1–3s cold starts. | Ephemeral containers. 15-second timeout, killed after idle. | **Long-lived native .NET OS processes**. Zero cold starts; sub-millisecond dispatch. |
 | **In-Memory State** | None. Stateless between calls; static variables wiped. | None. Workers rotate unpredictably; ephemeral memory. | **Persistent C# RAM state**. Maintain queues, active room lobbies, and tick-loops in memory. |
 | **Data Storage** | Per-player JSON blobs (`GetUserData`). No SQL queries across players. Rate-limited to ~10 writes/sec. | JSON Cloud Save. Strict per-key size limits; no cross-player relational queries. | **Isolated PostgreSQL tables**. Full SQL queries (`Exo.Database.Query<T>`), foreign keys, and indexes. |
-| **Real-Time Push** | Polling or external SignalR/PubNub subscription. | Polling or external WebSockets setup. | **Built-in `:pg` Pub/Sub Bus**. 0.07 ms in-cluster fanout to 50 subscribers (benchmarked), then the WebSocket gateway pushes to clients. |
+| **Real-Time Push** | Polling or external SignalR/PubNub subscription. | Polling or external WebSockets setup. | **Built-in `:pg` Pub/Sub Bus**. 0.07 ms in-server fanout to 50 subscribers (benchmarked), then the WebSocket gateway pushes to clients. |
 | **LiveOps & Tuning** | Manual JSON editing in "Title Data" without schemas or form validation. | Remote Config raw keys and values. | **Auto-generated Studio UI**. `[ExoResource]` & `[ExoSingletonResource]` generate full forms, tables, and inspection drawers. |
-| **Scheduled Tasks** | Azure Scheduled Tasks with cold start overhead and execution timeouts. | None native. Requires external cron runner calling webhooks. | **First-class `[ExoCron]` attribute**. Runs in-process under cluster supervision. |
+| **Scheduled Tasks** | Azure Scheduled Tasks with cold start overhead and execution timeouts. | None native. Requires external cron runner calling webhooks. | **First-class `[ExoCron]` attribute**. Runs in-process under server supervision. |
 | **External Webhooks** | Clunky Azure API Management proxying. | Rejects calls without Unity Player Bearer token. | **First-class `[ExoWebhook]` attribute**. Direct Stripe, Steam, Discord webhooks with signature checks. |
 
 ---
@@ -322,7 +322,7 @@ public record GuildActivityEvent(string Topic, string ActorPlayerId, string Mess
 Cloud Code has no native cron triggers, and PlayFab Scheduled Tasks frequently encounter 10-second timeout limits when iterating over thousands of player records to distribute rewards. Developers must maintain complex external AWS Lambda or Azure Functions infrastructure with batching loops and pagination logic.
 
 ### 5.2 The Exoforge pattern
-Use `[ExoCron]` to run automated background jobs directly under cluster supervision. Because you have direct relational SQL access, a season reset can compute leaderboard rewards, archive rankings, and reset scores in a single atomic SQL statement without round-tripping data through JSON APIs.
+Use `[ExoCron]` to run automated background jobs directly under server supervision. Because you have direct relational SQL access, a season reset can compute leaderboard rewards, archive rankings, and reset scores in a single atomic SQL statement without round-tripping data through JSON APIs.
 
 ```csharp
 using System.Threading.Tasks;
@@ -375,7 +375,7 @@ using Exoforge.Plugin.SDK;
 [ExoService("billing_service", Title = "Payments & Store", Icon = "💳")]
 public class BillingExtension
 {
-    // External HTTP POST webhook: POST /api/webhooks/billing_service/stripe on the cluster
+    // External HTTP POST webhook: POST /api/webhooks/billing_service/stripe on the server
     [ExoWebhook("stripe")]
     public async Task<WebhookResult> HandleStripeWebhook(WebhookPayload payload)
     {

@@ -201,7 +201,6 @@ public static class ExoforgeEditorConfig
     private static bool _fallbackInitialSetupCompleted = false;
     private static string _fallbackDotnetPath = "dotnet";
     private static string _fallbackLoginEmail = DefaultLoginEmail;
-    private static string _fallbackLoginPassword = "";
 
     private static string Scoped(string key) => key;
 #else
@@ -353,27 +352,14 @@ public static class ExoforgeEditorConfig
     }
 
     /// <summary>
-    /// Last password used in the Control Center's <c>auth.login</c> form, persisted in per-user
-    /// EditorPrefs.
+    /// Earlier SDK versions kept the last password in EditorPrefs, in clear. Nothing writes it any more: a
+    /// signed-in editor holds a session token, and signing in again asks for the password.
     /// </summary>
-    public static string LastLoginPassword
+    public static void ForgetStoredPassword()
     {
-        get
-        {
 #if UNITY_EDITOR
-            return EditorPrefs.GetString(LoginPasswordKey, string.Empty);
-#else
-            return _fallbackLoginPassword;
+        EditorPrefs.DeleteKey(LoginPasswordKey);
 #endif
-        }
-        set
-        {
-#if UNITY_EDITOR
-            EditorPrefs.SetString(LoginPasswordKey, value ?? string.Empty);
-#else
-            _fallbackLoginPassword = value ?? string.Empty;
-#endif
-        }
     }
 
     public static string WorkspacePath

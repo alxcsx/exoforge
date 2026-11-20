@@ -76,6 +76,9 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
         }
     }
 
+    /// <summary>The runtime the connected server reports (e.g. <c>linux-musl-x64</c>); empty before it has been asked.</summary>
+    public static string ServerTargetRid => Instance?._clusterTargetRid ?? "";
+
     public static string ActiveWsEndpoint
     {
         get
@@ -215,7 +218,6 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
     // Authentication foldout
     private bool _showAuthFoldout;
     private string _loginEmail = "";
-    private string _loginPassword = "";
 
     // Tab content synchronization state
     private bool _lastRenderedConnectedState;
@@ -228,6 +230,8 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
 
     // Cluster Telemetry
     private string _nodeName = "—";
+    /// <summary>The game versions the server serves, one line ("live 1.2.0 · dev 1.3.0"); "Not set up" when none is registered.</summary>
+    private string _gameVersions = "—";
     private string _uptime = "—";
     private string _memoryMb = "—";
     private int _pluginsCount;
@@ -255,8 +259,6 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
 
     /// <summary>Plugin id → the service names it provides, for the per-plugin "Test" shortcut.</summary>
     private Dictionary<string, List<string>> _pluginServices = new();
-    private int _selectedServiceIndex = 0;
-    private int _selectedActionIndex = 0;
 
     // Live Events
     private sealed record LoggedEvent(DateTime At, string Topic, string EventName, string RawJson, string? Origin, string? Rid);
@@ -274,21 +276,11 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
     private Vector2 _eventDetailScroll;
 
     // Action Sandbox
-    private string _sandboxService = "";
-    private string _sandboxAction = "";
-    private string _sandboxPayload = "{}";
-    private string _sandboxResult = "";
-    private string _sandboxLatency = "";
-    private bool _sandboxSuccess = true;
-    private Vector2 _sandboxResultScroll;
 
     // Plugins
-    private string _newPluginName = "";
     private int _newPluginTemplateIndex;
     private bool _showScaffoldAdvanced;
     private bool _showRemotePlugins;
-    private string _pluginLogs = "";
-    private string _pluginLogsFor = "";
     private bool _showPluginLogs;
     private Vector2 _pluginLogsScroll;
     private List<LocalPluginInfo> _localPlugins = new();
@@ -298,7 +290,6 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
     private string _clusterTargetRid = "";
     private bool _isBuilding;
     private string _buildLog = "";
-    private bool _showBuildLog;
     private Vector2 _buildLogScroll;
 
     private Tab _currentTab = Tab.Extensions;
@@ -484,6 +475,8 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
         };
     }
 
+    private const string SetupPromptedKey = "Exoforge_SetupPromptedThisSession";
+
     [InitializeOnLoadMethod]
     private static void AutoCheckInitialSetupAndAuth()
     {
@@ -499,8 +492,14 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
 
             if (IsSetupRequired)
             {
-                // First install / unconfigured project: prompt the setup wizard
-                ExoforgeSetupModal.Open();
+                // First install / unconfigured project: prompt the setup wizard, once per editor session. A domain
+                // reload (every script change) used to bring it back for a developer who had closed it.
+                if (!SessionState.GetBool(SetupPromptedKey, false))
+                {
+                    SessionState.SetBool(SetupPromptedKey, true);
+                    ExoforgeSetupModal.Open();
+                }
+
                 return;
             }
 
@@ -611,9 +610,11 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
             ExoforgeEditorConfig.WorkspacePath = ExoforgeEditorConfig.DefaultWorkspaceRelPath;
         }
 
-        // Restore the last login and password so the auth form doesn't reset on every editor start.
+        // Restore the last email so the auth form doesn't reset on every editor start. The password is never kept.
         _loginEmail = ExoforgeEditorConfig.LastLoginEmail;
-        _loginPassword = ExoforgeEditorConfig.LastLoginPassword;
+        ExoforgeEditorConfig.ForgetStoredPassword();
+
+        if (string.IsNullOrEmpty(_buildLog)) _buildLog = ExoforgeExtensionOps.LastBuildLog();
 
         RefreshLocalPlugins();
 
@@ -958,6 +959,7 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
 
         string envName = ActiveEnvironment?.Name ?? "default";
         var envDropdownBtn = ExoforgeUIStyle.CreateEnvSelector(envName, ShowEnvDropdown, out _envBadge);
+        ExoforgeExtensionOps.StyleEnvLabel(_envBadge, envName, ActiveWsUrl);
         brandContainer.Add(envDropdownBtn);
 
         masthead.Add(brandContainer);
@@ -1275,7 +1277,7 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
         if (_envBadge != null)
         {
             string envName = ActiveEnvironment?.Name ?? "default";
-            _envBadge.text = envName;
+            ExoforgeExtensionOps.StyleEnvLabel(_envBadge, envName, ActiveWsUrl);
         }
 
         if (_endpointLabel != null)
@@ -1298,80 +1300,7 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
     {
     }
 
-    private void ScaffoldNewPlugin()
-    {
-        if (string.IsNullOrWhiteSpace(_newPluginName)) return;
-
-        try
-        {
-            string template = ExoScaffolder.Templates[Mathf.Clamp(_newPluginTemplateIndex, 0, ExoScaffolder.Templates.Length - 1)];
-            // The package ships the plugin SDK as a local feed, so a scaffolded plugin builds with no
-            // repository and no published package anywhere.
-            string? feed = ExoforgeEditorConfig.PackageRoot is { } root
-                ? Path.Combine(root, "Editor", "Plugins", "NuGet~")
-                : null;
-
-            string dir = ExoScaffolder.ScaffoldExtension(Workspace.ExtensionsPath, _newPluginName, template: template, feed: feed);
-            string extFile = Path.Combine(dir, "src", ExoScaffolder.ClassNameFor(_newPluginName) + "Extension.cs");
-
-            RefreshLocalPlugins();
-            ShowStatus($"✓ Scaffolded '{ExoScaffolder.NormalizeExtensionName(_newPluginName)}' — edit {extFile}, then Build & Deploy.", MessageType.Info);
-
-            // Land the developer on the file they need to edit rather than just telling them it exists.
-            if (File.Exists(extFile))
-            {
-                var asset = UnityEditor.AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(
-                    "Assets" + extFile.Replace(Application.dataPath, ""));
-
-                if (asset != null) UnityEditor.AssetDatabase.OpenAsset(asset);
-            }
-
-            _newPluginName = "";
-            _currentTab = Tab.Extensions;
-        }
-        catch (Exception ex)
-        {
-            ShowStatus($"Scaffold failed: {ex.Message}", MessageType.Error);
-        }
-    }
-
     public sealed record EnvOption(string Name, string WsUrl, string Token, string? HttpUrl = null);
-
-    private void DrawEnvironmentSelector()
-    {
-        var envList = GetConfiguredEnvironments();
-        var names = envList.Select(e => e.Name).ToArray();
-
-        int currentIndex = envList.FindIndex(e =>
-            string.Equals(e.WsUrl, ActiveWsUrl, StringComparison.OrdinalIgnoreCase) ||
-            (e.Name == "local" && ExoforgeEditorConfig.IsLocalUrl(ActiveWsUrl)));
-
-        if (currentIndex < 0)
-        {
-            var listWithCustom = names.ToList();
-            listWithCustom.Add($"(custom) {ActiveWsUrl}");
-            names = listWithCustom.ToArray();
-            currentIndex = names.Length - 1;
-        }
-
-        EditorGUILayout.BeginHorizontal();
-        int selected = EditorGUILayout.Popup("Environment", currentIndex, names);
-        if (selected != currentIndex && selected < envList.Count)
-        {
-            ApplyEnvironment(envList[selected]);
-        }
-
-        if (GUILayout.Button("Ping", EditorStyles.miniButton, GUILayout.Width(50)))
-        {
-            _ = PingClusterAsync();
-        }
-
-        if (GUILayout.Button("Settings ⚙", EditorStyles.miniButton, GUILayout.Width(75)))
-        {
-            _currentTab = Tab.Settings;
-        }
-        EditorGUILayout.EndHorizontal();
-    }
 
     /// <summary>
     /// The environments the workspace declares, in exoforge.json order.
@@ -1425,6 +1354,9 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
     public static void ApplyEnvironment(EnvOption env)
     {
         ExoforgeEditorConfig.SelectedEnvironment = env.Name;
+        // Play mode reads the generated runtime config: leaving it on the previous environment means the game
+        // keeps talking to a server the developer just switched away from.
+        ExoforgeRuntimeConfigGenerator.Generate();
         Instance?.ShowStatus($"Switched to environment '{env.Name}' ({env.WsUrl}).", MessageType.Info);
 
         if (IsClusterConnected || IsConnecting)

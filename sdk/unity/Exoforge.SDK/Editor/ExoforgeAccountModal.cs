@@ -142,7 +142,7 @@ namespace Exoforge.Unity.Editor
 
             // 3. Email and Password Fields
             _email = ExoforgeEditorConfig.LastLoginEmail;
-            _password = ExoforgeEditorConfig.LastLoginPassword;
+            _password = "";
 
             var emailField = new TextField("Email") { value = _email };
             emailField.style.marginBottom = 6;

@@ -499,15 +499,6 @@ namespace Exoforge.Unity.Editor
             return new Guid(hash);
         }
 
-        private static string MakeRelativePath(string fromPath, string toPath)
-        {
-            if (string.IsNullOrEmpty(fromPath)) return toPath;
-            var fromUri = new Uri(AppendSlash(Path.GetFullPath(fromPath)));
-            var toUri = new Uri(Path.GetFullPath(toPath));
-            var relUri = fromUri.MakeRelativeUri(toUri);
-            return Uri.UnescapeDataString(relUri.ToString());
-        }
-
         private static string AppendSlash(string path) =>
             path.EndsWith(Path.DirectorySeparatorChar.ToString()) ? path : path + Path.DirectorySeparatorChar;
     }

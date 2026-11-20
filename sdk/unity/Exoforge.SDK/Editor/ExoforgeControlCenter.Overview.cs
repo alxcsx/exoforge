@@ -65,6 +65,14 @@ public partial class ExoforgeControlCenter : EditorWindow
         DrawMetricPill("Server Built", RemoteBuildDate);
         EditorGUILayout.EndHorizontal();
 
+        if (_isConnected)
+        {
+            EditorGUILayout.Space(2);
+            EditorGUILayout.BeginHorizontal();
+            DrawMetricPill("Game versions", _gameVersions);
+            EditorGUILayout.EndHorizontal();
+        }
+
         if (_isConnected && RemoteProjectName != "—")
         {
             EditorGUILayout.Space(2);

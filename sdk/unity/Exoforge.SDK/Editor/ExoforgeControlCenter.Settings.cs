@@ -26,6 +26,42 @@ public partial class ExoforgeControlCenter : EditorWindow
     // Folder the records-support button writes IsExternalInit.cs into, relative to the project root.
     [SerializeField] private string _isExternalInitDir = ExoforgeIsExternalInit.DefaultDirectory;
 
+    private bool _prewarmingPacks;
+
+    /// <summary>
+    /// Restoring a runtime pack is a download that can take half a minute per runtime. It runs off the main thread: done
+    /// inline, the whole editor froze for the length of it.
+    /// </summary>
+    private async Task PrewarmRuntimePacksAsync(string hostRid)
+    {
+        if (_prewarmingPacks) return;
+        _prewarmingPacks = true;
+        ShowStatus("Restoring targeting packs for linux-musl-x64, linux-x64 and host RID… the editor stays usable meanwhile.", MessageType.Info);
+        Repaint();
+
+        string rids = $"{hostRid},{ExoforgeDotnetValidator.StandardServerRid},{ExoforgeDotnetValidator.FallbackServerRid}";
+        string dotnet = ExoforgeEditorConfig.DotnetPath;
+
+        try
+        {
+            bool ok = await Task.Run(() => ExoforgeDotnetValidator.PrewarmRuntimePacks(rids, dotnet, msg => UnityEngine.Debug.Log($"[Exoforge] {msg}")));
+            ShowStatus(
+                ok
+                    ? "✓ Runtime packs (linux-musl-x64, linux-x64 & host) successfully restored and cached."
+                    : "⚠️ Some runtime packs could not be restored; check internet connection to nuget.org.",
+                ok ? MessageType.Info : MessageType.Warning);
+        }
+        finally
+        {
+            _prewarmingPacks = false;
+            Repaint();
+        }
+    }
+
+    /// <summary>Enough of a token to tell two apart on screen, never enough to use it: a screenshot of Settings must be safe to share.</summary>
+    private static string MaskToken(string? token) =>
+        string.IsNullOrEmpty(token) ? "(none)" : token!.Length <= 12 ? "••••" : token.Substring(0, 8) + "…••••";
+
     private void DrawSettings()
     {
         _settingsScroll = EditorGUILayout.BeginScrollView(_settingsScroll);
@@ -171,20 +207,11 @@ public partial class ExoforgeControlCenter : EditorWindow
 
             EditorGUILayout.Space(2);
             EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button("⬇️ Pre-warm / Restore Runtime Packs (linux-musl-x64, linux-x64 & host)", GUILayout.Height(22)))
+            using (new EditorGUI.DisabledScope(_prewarmingPacks))
             {
-                ShowStatus("Restoring targeting packs for linux-musl-x64, linux-x64 and host RID...", MessageType.Info);
-                bool ok = ExoforgeDotnetValidator.PrewarmRuntimePacks(
-                    $"{dotnetRes.HostRid},{ExoforgeDotnetValidator.StandardServerRid},{ExoforgeDotnetValidator.FallbackServerRid}",
-                    ExoforgeEditorConfig.DotnetPath,
-                    msg => UnityEngine.Debug.Log($"[Exoforge] {msg}"));
-                if (ok)
+                if (GUILayout.Button(_prewarmingPacks ? "Restoring runtime packs…" : "⬇️ Pre-warm / Restore Runtime Packs (linux-musl-x64, linux-x64 & host)", GUILayout.Height(22)))
                 {
-                    ShowStatus("✓ Runtime packs (linux-musl-x64, linux-x64 & host) successfully restored and cached.", MessageType.Info);
-                }
-                else
-                {
-                    ShowStatus("⚠️ Some runtime packs could not be restored; check internet connection to nuget.org.", MessageType.Warning);
+                    _ = PrewarmRuntimePacksAsync(dotnetRes.HostRid);
                 }
             }
             if (GUILayout.Button("🔍 Re-scan", GUILayout.Width(90), GUILayout.Height(22)))
@@ -404,7 +431,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         EditorGUILayout.Space(4);
 
         string currentStudioToken = ExoTokenStore.StudioToken;
-        string newToken = EditorGUILayout.TextField("Bearer Token", currentStudioToken);
+        string newToken = EditorGUILayout.PasswordField("Bearer Token", currentStudioToken);
         if (newToken != currentStudioToken)
         {
             ExoTokenStore.SaveStudioSession(newToken);
@@ -526,7 +553,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         // Credential Management
         EditorGUILayout.LabelField("Credential Persistence", EditorStyles.boldLabel);
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-        EditorGUILayout.LabelField($"Studio Token: {ExoTokenStore.StudioToken}", EditorStyles.miniLabel);
+        EditorGUILayout.LabelField($"Studio Token: {MaskToken(ExoTokenStore.StudioToken)}", EditorStyles.miniLabel);
         EditorGUILayout.LabelField($"Studio Player ID: {ExoTokenStore.StudioPlayerId}", EditorStyles.miniLabel);
         EditorGUILayout.LabelField($"Scopes: {ExoTokenStore.StudioScopes}", EditorStyles.miniLabel);
         EditorGUILayout.Space(4);

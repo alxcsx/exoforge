@@ -126,6 +126,8 @@ public partial class ExoforgeControlCenter : EditorWindow
             }
             _editorClient.OnAnyEvent += HandleIncomingEvent;
             _editorClient.OnDisconnected += HandleClientDisconnected;
+            _editorClient.OnUpgradeRequired += () =>
+                ShowStatus("The server no longer serves this build of the game. Register or promote a game version in the Studio's Game Versions screen.", MessageType.Warning);
 
             // A Studio session is an ordinary account session with a short-lived access token. The
             // editor renews it from the stored refresh token, so an eight-hour session does not end
@@ -478,7 +480,6 @@ public partial class ExoforgeControlCenter : EditorWindow
             ExoTokenStore.SaveStudioSession(token, playerId, scopes, null, refreshToken);
             SaveWorkspaceSessionTokenShared(token, refreshToken);
             ExoforgeEditorConfig.LastLoginEmail = email;
-            ExoforgeEditorConfig.LastLoginPassword = password;
             string successMsg = $"Successfully logged in as {playerId}.";
             Instance?.ShowStatus(successMsg, MessageType.Info);
 
@@ -506,7 +507,7 @@ public partial class ExoforgeControlCenter : EditorWindow
     {
         ExoTokenStore.ClearStudioSession();
         ExoTokenStore.Clear();
-        ExoforgeEditorConfig.LastLoginPassword = string.Empty;
+        ExoforgeEditorConfig.ForgetStoredPassword();
         await DisconnectSharedAsync();
         Instance?.ShowStatus("Logged out and cleared the stored session.", MessageType.Info);
         Instance?.Repaint();
@@ -604,11 +605,6 @@ public partial class ExoforgeControlCenter : EditorWindow
         return true;
     }
 
-    private async Task LogInAsync()
-    {
-        await LogInSharedAsync(_loginEmail, _loginPassword);
-    }
-
     private async Task LogOutAsync()
     {
         await LogOutSharedAsync();
@@ -641,6 +637,28 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         EnsureCollectionsInitialized();
         _pendingEvents.Enqueue(new LoggedEvent(DateTime.UtcNow, evt.Topic, evt.Event, raw, evt.Origin, evt.RequestId));
+    }
+
+    /// <summary>"live 1.2.0 · dev 1.3.0" from <c>versioning.list</c>; blocked versions are not served, so they are left out.</summary>
+    private static string SummarizeGameVersions(JsonElement list)
+    {
+        if (list.ValueKind != JsonValueKind.Object || !list.TryGetProperty("versions", out var rows) || rows.ValueKind != JsonValueKind.Array)
+        {
+            return "—";
+        }
+
+        var served = new List<string>();
+        foreach (var row in rows.EnumerateArray())
+        {
+            string status = row.TryGetProperty("status", out var st) ? st.GetString() ?? "" : "";
+            string version = row.TryGetProperty("version", out var v) ? v.GetString() ?? "" : "";
+            if (status.Length > 0 && version.Length > 0 && status != "blocked")
+            {
+                served.Add($"{status} {version}");
+            }
+        }
+
+        return served.Count == 0 ? "Not set up" : string.Join(" · ", served);
     }
 
     private async Task RefreshRemoteInfoAsync()
@@ -709,6 +727,19 @@ public partial class ExoforgeControlCenter : EditorWindow
         catch (Exception ex)
         {
             UnityEngine.Debug.LogWarning($"[Exoforge] Failed to get system info: {ex.Message}");
+        }
+
+        // 2a. Game versions: which build of the game the server still serves, so a deploy that locks an extension below
+        // a live version is not a surprise.
+        try
+        {
+            var versions = await _editorClient.SendActionAsync<JsonElement>("versioning", "list", null);
+            _gameVersions = SummarizeGameVersions(versions);
+        }
+        catch (Exception)
+        {
+            // the versioning extension is optional; without it there is nothing to show
+            _gameVersions = "—";
         }
 
         // 2b. Remote SDK Package Metadata from File Bucket
@@ -875,27 +906,6 @@ public partial class ExoforgeControlCenter : EditorWindow
             }
         }
 
-        SelectDefaultSandboxAction();
-    }
-
-    /// <summary>
-    /// Picks the first real action so the Sandbox is usable on open. Previously it defaulted to a
-    /// hardcoded action name that no longer existed, so the first dispatch always failed.
-    /// </summary>
-    private void SelectDefaultSandboxAction()
-    {
-        if (_serviceCatalog.Count == 0) return;
-
-        bool stillValid = _serviceCatalog.TryGetValue(_sandboxService, out var current) &&
-                          current.Any(a => a.Name == _sandboxAction);
-
-        if (stillValid) return;
-
-        _sandboxService = _serviceCatalog.Keys.First();
-        _sandboxAction = _serviceCatalog[_sandboxService][0].Name;
-        _selectedServiceIndex = _serviceCatalog.Keys.ToList().IndexOf(_sandboxService);
-        _selectedActionIndex = 0;
-        LoadSamplePayload(_sandboxService, _sandboxAction);
     }
 
     private void RefreshLocalPlugins()

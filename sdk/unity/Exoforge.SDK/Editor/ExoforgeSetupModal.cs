@@ -76,10 +76,6 @@ namespace Exoforge.Unity.Editor
             {
                 _email = ExoforgeEditorConfig.LastLoginEmail;
             }
-            if (!string.IsNullOrEmpty(ExoforgeEditorConfig.LastLoginPassword))
-            {
-                _password = ExoforgeEditorConfig.LastLoginPassword;
-            }
         }
 
         private void CreateGUI()

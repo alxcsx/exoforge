@@ -92,6 +92,7 @@ namespace Exoforge.Unity.Editor
             public bool IsBuilt { get; set; }
             public bool Modified { get; set; }
             public bool HasBuildError { get; set; }
+            public string? DeployError { get; set; }
             public string LocalDirectory { get; set; } = "";
             public long BinarySizeBytes { get; set; }
         }
@@ -433,6 +434,7 @@ namespace Exoforge.Unity.Editor
 
             string envName = ExoforgeControlCenter.ActiveEnvironment?.Name ?? "default";
             var envDropdownBtn = ExoforgeUIStyle.CreateEnvSelector(envName, ShowEnvDropdown, out _envBadge);
+            ExoforgeExtensionOps.StyleEnvLabel(_envBadge, envName, ExoforgeControlCenter.ActiveWsEndpoint);
             brandContainer.Add(envDropdownBtn);
 
             masthead.Add(brandContainer);
@@ -666,7 +668,7 @@ namespace Exoforge.Unity.Editor
             if (_envBadge != null)
             {
                 string envName = ExoforgeControlCenter.ActiveEnvironment?.Name ?? "default";
-                _envBadge.text = envName;
+                ExoforgeExtensionOps.StyleEnvLabel(_envBadge, envName, ExoforgeControlCenter.ActiveWsEndpoint);
             }
         }
 
@@ -957,6 +959,10 @@ namespace Exoforge.Unity.Editor
                 {
                     bottomRow.Add(ExoforgeUIStyle.CreatePill("✗ Build Failed", ExoforgeUIStyle.AccentRed, ExoforgeUIStyle.AccentRedBg, 9));
                 }
+                else if (p.DeployError != null)
+                {
+                    bottomRow.Add(ExoforgeUIStyle.CreatePill("✗ Deploy Failed", ExoforgeUIStyle.AccentRed, ExoforgeUIStyle.AccentRedBg, 9));
+                }
                 else if (p.IsDeployed)
                 {
                     bottomRow.Add(ExoforgeUIStyle.CreatePill("Deployed", ExoforgeUIStyle.AccentGreen, ExoforgeUIStyle.AccentGreenBg, 9));
@@ -1182,6 +1188,14 @@ namespace Exoforge.Unity.Editor
             {
                 var errPill = ExoforgeUIStyle.CreatePill("✗ Build Failed", ExoforgeUIStyle.AccentRed, ExoforgeUIStyle.AccentRedBg, 9);
                 errPill.style.marginLeft = 4;
+                errPill.tooltip = ExoforgeExtensionOps.BuildFailure(plugin.Name);
+                subRow.Add(errPill);
+            }
+            else if (plugin.DeployError != null)
+            {
+                var errPill = ExoforgeUIStyle.CreatePill("✗ Deploy Failed", ExoforgeUIStyle.AccentRed, ExoforgeUIStyle.AccentRedBg, 9);
+                errPill.style.marginLeft = 4;
+                errPill.tooltip = plugin.DeployError;
                 subRow.Add(errPill);
             }
             else if (plugin.IsDeployed)
@@ -2627,7 +2641,8 @@ namespace Exoforge.Unity.Editor
                     bool modified = isBuilt && ExoDeployer.IsModifiedSinceBuild(dir, ExoDeployer.ReadManifestVersion(dir));
 
                     string displayTitle = !string.IsNullOrWhiteSpace(title) ? title : name;
-                    bool hasBuildError = SessionState.GetString($"Exoforge_BuildFailed_{name}", "").Length > 0;
+                    bool hasBuildError = ExoforgeExtensionOps.BuildFailure(name) != null;
+                    string? deployFailure = ExoforgeExtensionOps.DeployFailure(name);
                     list.Add(new PluginCardModel
                     {
                         Id = name,
@@ -2641,6 +2656,7 @@ namespace Exoforge.Unity.Editor
                         IsBuilt = isBuilt,
                         Modified = modified,
                         HasBuildError = hasBuildError,
+                        DeployError = deployFailure,
                         LocalDirectory = dir
                     });
                 }
@@ -3016,13 +3032,12 @@ namespace Exoforge.Unity.Editor
             {
                 var ws = ExoWorkspace.Load(ExoforgeEditorConfig.GetAbsoluteWorkspacePath());
                 var deployer = new ExoDeployer(ws);
-                string? configuredRid = string.IsNullOrWhiteSpace(ExoforgeEditorConfig.TargetBuildRid) ? null : ExoforgeEditorConfig.TargetBuildRid.Trim();
-                string effectiveRid = !string.IsNullOrEmpty(configuredRid) && !string.Equals(configuredRid, "auto", StringComparison.OrdinalIgnoreCase)
-                    ? configuredRid
-                    : (IsConnected ? ExoforgeDotnetValidator.StandardServerRid : ExoDeployer.HostRuntimeIdentifier());
+                // A build made while connected is a build for the server: the next click is usually Deploy.
+                string effectiveRid = ExoforgeExtensionOps.ResolveRid(null, ExoforgeEditorConfig.TargetBuildRid, IsConnected, ExoforgeControlCenter.ServerTargetRid);
                 var build = await deployer.BuildExtensionAsync(targetName, effectiveRid, ExoforgeEditorConfig.DotnetPath, s => _buildLog += s + "\n");
                 _buildLog = build.Output;
-                SessionState.EraseString($"Exoforge_BuildFailed_{targetName}");
+                ExoforgeExtensionOps.RecordBuildLog(_buildLog);
+                ExoforgeExtensionOps.ClearBuildFailure(targetName);
                 ShowStatus($"✓ Successfully built '{targetName}'.");
 
                 if (ExoforgeEditorConfig.AutoGenerateStubsOnBuild)
@@ -3043,7 +3058,8 @@ namespace Exoforge.Unity.Editor
             {
                 string errorDetails = ex is InvalidOperationException ? ex.Message : ex.ToString();
                 _buildLog = errorDetails;
-                SessionState.SetString($"Exoforge_BuildFailed_{targetName}", errorDetails);
+                ExoforgeExtensionOps.RecordBuildLog(errorDetails);
+                ExoforgeExtensionOps.RecordBuildFailure(targetName, errorDetails);
 
                 UnityEngine.Debug.LogError($"[Exoforge] Build failed for extension '{targetName}':\n{errorDetails}");
                 ShowStatus($"Build failed for '{targetName}' — see Unity Console or Build Log.");
@@ -3086,8 +3102,15 @@ namespace Exoforge.Unity.Editor
                 await BuildPluginAsync(p);
             }
 
-            ShowStatus($"Deploying {wsPlugins.Count} workspace extension(s) to server…");
+            if (!ExoforgeExtensionOps.ConfirmDeploy(ExoforgeControlCenter.ActiveEnvironment?.Name ?? "default", ExoforgeControlCenter.ActiveWsEndpoint, wsPlugins.Count))
+            {
+                ShowStatus("Deploy cancelled.");
+                return;
+            }
+
+            ShowStatus($"Deploying {wsPlugins.Count} workspace extension(s) to server, dependencies first…");
             int success = 0;
+            var failures = new List<string>();
             var ws = ExoWorkspace.Load(ExoforgeEditorConfig.GetAbsoluteWorkspacePath());
             var deployer = new ExoDeployer(ws);
             foreach (var p in wsPlugins)
@@ -3095,15 +3118,21 @@ namespace Exoforge.Unity.Editor
                 try
                 {
                     await deployer.UploadExtensionAsync(p.Name, existingClient: GetClient());
+                    ExoforgeExtensionOps.ClearDeployFailure(p.Name);
                     success++;
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning($"[Exoforge] Failed to deploy '{p.Name}': {ex.Message}");
+                    string msg = ExoforgeExtensionOps.DescribeDeployError(ex);
+                    ExoforgeExtensionOps.RecordDeployFailure(p.Name, msg);
+                    failures.Add($"{p.Name}: {msg}");
+                    Debug.LogWarning($"[Exoforge] Failed to deploy '{p.Name}': {msg}");
                 }
             }
 
-            ShowStatus($"✓ Successfully built and deployed {success}/{wsPlugins.Count} extension(s).");
+            ShowStatus(failures.Count == 0
+                ? $"✓ Built and deployed {success}/{wsPlugins.Count} extension(s)."
+                : $"Deployed {success}/{wsPlugins.Count}. Failed — {string.Join("; ", failures)}");
             await RefreshPluginsDataAsync();
         }
 
@@ -3115,12 +3144,19 @@ namespace Exoforge.Unity.Editor
                 return;
             }
 
+            if (!ExoforgeExtensionOps.ConfirmDeploy(ExoforgeControlCenter.ActiveEnvironment?.Name ?? "default", ExoforgeControlCenter.ActiveWsEndpoint, 1))
+            {
+                ShowStatus("Deploy cancelled.");
+                return;
+            }
+
             ShowStatus($"Deploying '{plugin.Name}' to server…");
             try
             {
                 var ws = ExoWorkspace.Load(ExoforgeEditorConfig.GetAbsoluteWorkspacePath());
                 var deployer = new ExoDeployer(ws);
                 await deployer.UploadExtensionAsync(plugin.Name, existingClient: GetClient());
+                ExoforgeExtensionOps.ClearDeployFailure(plugin.Name);
                 ShowStatus($"✓ Successfully deployed '{plugin.Name}' to server.");
                 await RefreshPluginsDataAsync();
                 int changed = await deployer.SyncContractsAsync(outputPathOverride: ExoforgeEditorConfig.GetAbsoluteGeneratedScriptPath(), existingClient: GetClient(), includeStudio: true);
@@ -3131,7 +3167,10 @@ namespace Exoforge.Unity.Editor
             }
             catch (Exception ex)
             {
-                ShowStatus($"Deploy failed: {ex.Message}");
+                string msg = ExoforgeExtensionOps.DescribeDeployError(ex);
+                ExoforgeExtensionOps.RecordDeployFailure(plugin.Name, msg);
+                ShowStatus($"Deploy failed for '{plugin.Name}': {msg}");
+                await RefreshPluginsDataAsync();
             }
         }
 

@@ -6,13 +6,13 @@ summary: Every attribute and property, and how to access the database.
 ---
 # C# Attributes Reference
 
-Comprehensive reference for all core attributes provided by the Exoforge Extension SDK (`Exoforge.Plugin.SDK`). Analyzed and converted into cluster contracts by the Roslyn Source Generator (`Exoforge.Plugin.Generator`) at compile time.
+Comprehensive reference for all core attributes provided by the Exoforge Extension SDK (`Exoforge.Plugin.SDK`). Analyzed and converted into server contracts by the Roslyn Source Generator (`Exoforge.Plugin.Generator`) at compile time.
 
 ---
 
 ## [ExoService] / [ExoExtension]
 
-Identifies a C# class or interface as a cluster-supervised native headless service contract and implementation.
+Identifies a C# class or interface as a server-supervised native headless service contract and implementation.
 
 The `[ExoService]` attribute (and its standardized alias `[ExoExtension]`) is the root entry point for backend features in Exoforge.
 - On a **class**: The class is its own contract and implementation. Its `[ExoAction]`, `[ExoCron]`, and `[ExoEvent]` members define the service.
@@ -81,7 +81,7 @@ Decorate any public method with `[ExoAction]` to make it callable from Unity cli
 
 > [!NOTE]
 > **Client vs Server Execution**: When invoked from game clients (Unity over WebSocket or HTTP), **every request works asynchronously** across the network transport (`await client.MyActionAsync(...)` or callbacks).
-> The `Mode` attribute exclusively dictates **server-side execution** and **extension-to-extension / in-cluster IPC** semantics (`ActionDispatcher.dispatch`).
+> The `Mode` attribute exclusively dictates **server-side execution** and **extension-to-extension / in-server IPC** semantics (`ActionDispatcher.dispatch`).
 
 By default, `Mode` is set to `ActionMode.Auto`, which is recommended for almost all methods:
 * **`Task` / `Task<T>` returns**: Inferred as `ActionMode.Async` (`"async"`).
@@ -107,7 +107,7 @@ By default, `Mode` is set to `ActionMode.Auto`, which is recommended for almost 
 |---|---|---|---|
 | Name (positional) | string | Method name | Wire action name. When omitted, automatically converted from method PascalCase to `snake_case` (e.g. `TransferItem` → `transfer_item`). |
 | Mode | ActionMode | `ActionMode.Auto` | Execution mode (`Auto`, `Sync`, `Async`, `Cast`). `Auto` infers from return type: `Task`/`Task<T>` becomes `:async`, concrete returns become `:sync`. Set `Cast` for fire-and-forget. |
-| Scope | string | `"player"` | Minimum authorization scope required to invoke (`"guest"`, `"player"`, `"service"`, `"studio"`, `"admin"`; `"service"` is for trusted servers such as a game server or a CI job, and sits below `studio`; the dispatcher also knows `"global"`, no role required, and `"server"`, which no transport can reach: only calls from inside the cluster). The dispatcher enforces it before the action runs; internal calls bypass it. |
+| Scope | string | `"player"` | Minimum authorization scope required to invoke (`"guest"`, `"player"`, `"service"`, `"studio"`, `"admin"`; `"service"` is for trusted servers such as a game server or a CI job, and sits below `studio`; the dispatcher also knows `"global"`, no role required, and `"server"`, which no transport can reach: only calls from inside the server). The dispatcher enforces it before the action runs; internal calls bypass it. |
 | Service | string | `null` | Owning service name when a single extension provides multiple `[ExoService]` contracts. Defaults to the primary service. |
 | FromVersion | string | `null` | Starts an action *revision* at this extension version (`"2.0.0"`). Several methods may share one action name when each has its own `FromVersion`: a caller whose game version locks the extension below it gets the previous revision, everyone else the newest. See [Versions & Migrations](guide:04_versions_and_migrations). |
 
@@ -133,7 +133,7 @@ public TransferItemResponse TransferItem(TransferItemRequest req)
 
 ## [ExoCron]
 
-Executes scheduled recurring background tasks via the cluster scheduler.
+Executes scheduled recurring background tasks via the server scheduler.
 
 Decorate any service method with `[ExoCron("schedule")]` to turn it into an automated background job. Ideal for leaderboard rollovers, daily resets, state sweepers, and periodic syncs.
 
@@ -153,7 +153,7 @@ Decorate any service method with `[ExoCron("schedule")]` to turn it into an auto
 [ExoCron("0 0 * * *", Description = "Rolls over daily leaderboards at midnight UTC", RunOnStartup = false)]
 public void RolloverDailyLeaderboards()
 {
-    // Executes automatically at midnight UTC under cluster supervisor
+    // Executes automatically at midnight UTC under server supervisor
 }
 ```
 
@@ -161,7 +161,7 @@ public void RolloverDailyLeaderboards()
 
 ## [ExoEvent]
 
-Declares an **event schema** on records, classes, or structs emitted or received on the cluster pub/sub bus.
+Declares an **event schema** on records, classes, or structs emitted or received on the server pub/sub bus.
 
 > [!IMPORTANT]
 > `[ExoEvent]` is used to describe an **event schema** on records or classes, **NOT** to annotate a listener function.
@@ -360,7 +360,7 @@ public record SeasonSettings(
 
 ## Static `Exo` & `ExoServices` Capabilities Reference
 
-Extensions access the ambient cluster environment through the static `Exo` holder:
+Extensions access the ambient server environment through the static `Exo` holder:
 
 | Capability | Property | Usage Example |
 |---|---|---|

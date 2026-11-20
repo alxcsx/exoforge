@@ -14,7 +14,7 @@ Technical reference for .NET OS process isolation, stdio wire frames, and ahead-
 
 ## 1. Extension Wire Protocol (Host Supervisor ↔ Worker IPC)
 
-Communication between the host cluster supervisor (Elixir BEAM) and the native C# worker process (`.NET`) takes place over standard I/O (`stdin`/`stdout`) using newline-delimited JSON frames:
+Communication between the server's supervisor (Elixir BEAM) and the native C# worker process (`.NET`) takes place over standard I/O (`stdin`/`stdout`) using newline-delimited JSON frames:
 
 - **Host-to-Worker Process IPC Only**: Game clients (Unity) never speak this protocol; clients communicate over WebSocket (`:ws`) or REST (`:http`).
 - **No Reflection Over Your Actions**: Roslyn-generated entry points call your action methods directly, with no lookup by name at run time.
@@ -27,7 +27,7 @@ Communication between the host cluster supervisor (Elixir BEAM) and the native C
 | `hello` | Worker ➔ Host | Worker starts and answers within 5-second timeout, declaring what it can receive. | `protocol: 1`, `plugin: "<extension id>"` (the field keeps its early name), `capabilities: ["action", "event", "host_call_result"]` plus optional `"lifecycle"` |
 | `action` | Host ➔ Worker | A player calls an action, or a background cron triggers a scheduled task. | `id: <integer>`, `action: "method_name"`, `payload: { ... }` |
 | `action_result` | Worker ➔ Host | The C# action method finishes execution (or throws an unhandled exception). | `id: <integer>`, `status: "ok" \| "error"`, `data: { ... }` or `error: { "code": "...", "message": "..." }` |
-| `event` | Host ➔ Worker | An event that this extension subscribed to is published on the cluster event bus. | `event: "topic.name"`, `payload: { ... }` |
+| `event` | Host ➔ Worker | An event that this extension subscribed to is published on the server event bus. | `event: "topic.name"`, `payload: { ... }` |
 | `host_call` | Worker ➔ Host | Extension invokes a host capability: `emit_event`, `call_action`, `db_put`, `db_get`, `db_all`, `db_delete`, `log`, or `clock_now`. | `id: <integer>`, `op: "<operation>"`, `args: { ... }` |
 | `host_call_result` | Host ➔ Worker | The host completes the requested capability call. | `id: <integer>`, `result: <value>` or an error envelope |
 | `host_log` | Worker ➔ Host | Extension outputs logs via `Exo.Logger.Info` or an unhandled exception trace. | `level: 0..3`, `message: "..."` |
@@ -37,7 +37,7 @@ Communication between the host cluster supervisor (Elixir BEAM) and the native C
 ### Handshake & Fault Isolation Guarantees
 1. **5-Second Handshake**: If an extension does not answer `hello` with valid capabilities within 5 seconds, the host refuses the extension with a clear log reason and stops the runner; it is not restarted in a loop.
 2. **Optional Lifecycle**: An extension that declares `"lifecycle"` receives `lifecycle` after the handshake. `OnExtensionStart()` runs once per process; the host waits up to 10 seconds. A failure marks the extension crashed with `{:startup_failed, %{code: ..., message: ...}}` and stops it.
-3. **Crash Recovery**: A runtime OS process exit is supervised by the extension supervisor (`:one_for_one`) and restarted without touching the rest of the cluster. Requests waiting on the dead process receive `{:error, {:extension_crashed, reason}}`, and the registry records the crash (`ExtensionRegistry.mark_crashed/2`) so Studio can show it.
+3. **Crash Recovery**: A runtime OS process exit is supervised by the extension supervisor (`:one_for_one`) and restarted without touching the rest of the server. Requests waiting on the dead process receive `{:error, {:extension_crashed, reason}}`, and the registry records the crash (`ExtensionRegistry.mark_crashed/2`) so Studio can show it.
 
 ---
 

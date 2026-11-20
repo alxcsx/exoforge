@@ -45,13 +45,13 @@ The Studio is a web app served by the `dashboard` extension and is where a produ
 
 | Screen | Comes from | Use it to |
 |---|---|---|
-| **Overview** | `dashboard` | See cluster health, the actions that need attention (error rate, p95 latency) and recent activity. |
+| **Overview** | `dashboard` | See server health, the actions that need attention (error rate, p95 latency) and recent activity. |
 | **Extensions** | `extension_manager` | Deploy, reload or remove an extension, and open its inspector: actions, events, resources, contracts, logs and docs, plus the game versions that lock it. |
 | **Users** | `auth` | Create accounts and tokens, assign roles, list and revoke sessions. |
 | **Resources** | `resources` | Browse and edit the rows of any `[ExoResource]` table. `[ExoColumn]` decides labels, sorting, filters and input widgets. |
 | **Files** | `file_bucket` | Upload to buckets and switch a bucket between public and private. |
 | **Timeline and health** | `observability` | Paste a request id (`rid`) to see the calls, events, queries and logs of one request; turn on deep capture for one player and replay a captured request. |
-| **Developer Guide** | `docs` | This guide, plus the live catalog of every service and action registered on this cluster. |
+| **Developer Guide** | `docs` | This guide, plus the live catalog of every service and action registered on this server. |
 
 The `admin` account is an ordinary account set up by whoever runs the server; developers and trusted servers get their own accounts with a role (`exo user create <email> --role service`, then `exo user token <id>`).
 

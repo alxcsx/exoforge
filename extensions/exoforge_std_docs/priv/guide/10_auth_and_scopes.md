@@ -22,7 +22,7 @@ A caller's role is a rank, and an action's scope is the lowest rank allowed to r
 | `admin` | The administrator only. |
 | `service` | Trusted servers (a game server, a CI job), and the administrator. |
 | `global` | No particular role is required. |
-| `server` | Nobody outside the cluster: no transport can reach it, only calls from inside. |
+| `server` | Nobody outside the server: no transport can reach it, only calls from inside. |
 
 The ladder is `admin` above `studio` above `player` above `guest`: a studio account can run `studio`, `player` and `global` actions, a player can run `player` and `global`. Set the scope on the action: `[ExoAction(Scope = "studio")]`. An action with no scope needs a `player`.
 

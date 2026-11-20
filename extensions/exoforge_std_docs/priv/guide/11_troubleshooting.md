@@ -37,6 +37,19 @@ A deploy that would change a table unsafely fails that extension alone and chang
 | `schema_drift` | A `Manual` table does not match its declaration. |
 | `version_downgrade` | The deployed extension has a lower version than the table was last reconciled at. |
 | `migration_incomplete` | After the migration the table still did not match; everything was rolled back. |
+| `wrong_binary_format` | The extension was built for another operating system than the server runs (a Windows build sent to a Linux server). Nothing was stopped or replaced. Build with the target on **Auto**, or pass the server's runtime to `exo extension build --rid`, and deploy again. |
+
+## Signing in again
+
+The Unity window tells a refused session apart from a server that is down:
+
+- **"Sign in again"** means the server answered and did not accept the saved session. It expired or was revoked. Use the **Account** button and sign in; nothing else needs fixing.
+- **"Server offline"** means nothing answered. Check that the server is running and that the environment's address is right.
+- **A player that is not signed in** (the console says the server refused this player's saved session): choose **Exoforge ▸ Sessions ▸ Reset Anonymous Player Session**, or call `ExoforgeSDK.Auth.ResetSession()`, and play again. A new anonymous player is created.
+
+## Deploying several extensions
+
+When one extension calls a service another one provides, deploy the provider first. **Build & Deploy All** in the Unity window does this for you: it reads each extension's `manifest.json`, puts providers before the extensions that call them, and shows a warning if two extensions depend on each other in a circle. A service that nothing in your project provides is expected to be one of the server's own.
 
 ## Where to look
 

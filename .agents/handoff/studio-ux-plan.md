@@ -51,13 +51,13 @@ escape hatch; no new data bridge.
    guide strip, health + recent failures with rid links + live game version, remove the three duplicate error statements, fix the
    "47 calls / 0 in 30 min" contradiction); rid lookup in search/Cmd+K; deploy feedback (running/failed + reason) in Extension Manager.
 5. Observability DONE (screen: health + needs attention, failures, events, request timeline, captures). Generic panel v2 (M), still open: master/detail, Read/Write/Destructive grouping, auto-run zero-arg reads as tables, red + confirm for destructive.
-6. Unity editor (cannot be compiled or run in this environment; do with Unity open):
-   a. security: stop persisting `LastLoginPassword`, mask tokens in Settings (S)
-   b. show build/deploy errors on the Studio Extensions tab + persist the build log (S)
-   c. environment safety: coloured env chip, regenerate runtime config on switch, confirm deploy to non-local (S-M)
-   d. delete the duplicate build/deploy path and dead code (~700 lines), one Extensions UI (M)
-   e. Versions panel + `OnUpgradeRequired` editor hook; deep links to the web Studio (timeline by rid, logs) (M)
-   f. first run in 3 steps; stop reopening the wizard on every domain reload; move 30 s `WaitForExit` off the main thread (M)
+6. Unity editor DONE in code (2026-11-20, SDK 0.1.69; compiles against Unity 6000.6, see memory `compile-unity-editor-code`; behavior and rendering NOT seen, see the verification list below):
+   a. DONE: `LastLoginPassword` removed (earlier stored ones are deleted on open), tokens masked in Settings
+   b. DONE: build and deploy failures shown on the card (reason, not only a tooltip), "Deploy Failed" state, build log persisted across reloads and shown in the Extensions tab
+   c. DONE: environment chip says REMOTE (amber) for any server that is not this machine; deploying to one asks for confirmation; switching environment regenerates the runtime config from the selected environment (it used the workspace default before)
+   d. DONE as one shared `ExoforgeExtensionOps` (RID choice, failure recording, deploy error wording, confirm) used by both windows, plus ~700 lines of dead code deleted (IMGUI extension list, sandbox, unused helpers). The two windows still exist; merging them into one is a product decision, not done
+   e. PARTLY: Overview shows the served game versions and the editor reacts to `upgrade_required`; no full Versions panel (the web Studio's Game Versions screen is the place)
+   f. PARTLY: setup wizard opens once per editor session (not on every domain reload); runtime-pack restore runs off the main thread. Not done: first run in 3 steps; the 3 s `dotnet --version` probes are still synchronous
 7. Only then: observability relocation, spec language if still needed, mobile layout.
 
 ## Not verified (needs eyes)
@@ -75,3 +75,24 @@ Validated end to end on a real server with a C# sample action (`sample_plugin.lo
 - the per-action `[action]` log line was dead code for Elixir ids and noise for others; removed
 Still true and worth knowing: Elixir standard extensions log to the server console, not to the Logs tab; lines logged before the
 database is ready are in memory only.
+
+## SDK issues reported on the live server (2026-11-20)
+1. Extension crashed on deploy with `exit_before_handshake` / "syntax error: unexpected word": the uploaded file was a Windows executable (`MZ`) on a Linux server. Fixed: staging only takes the publish output of the RID just built; the server refuses a binary built for another OS before stopping the running copy.
+2. A refused Studio token said "cluster offline". Fixed: "Sign in again" state (banner, gate, pill, Overview). "cluster" is now "server" in the editor, CLI, deployer and the guide.
+3. A refused anonymous player token said nothing useful. Fixed: the console says the session was refused and names Reset Anonymous Player Session / `ExoforgeSDK.Auth.ResetSession()`.
+4. Extensions with dependencies deployed in name order. Fixed: `ExoDeployOrder` (providers first, cycle and missing-service problems reported, `Verify` for an order); both Build & Deploy All paths and Build All use it. Not done: the CLI has no push-all; the server's service list is not passed in, so a missing service is not reported in Unity.
+
+## Verification list (needs a person; "compiles" is the only thing already proven)
+Environment: a Unity project with the package built from this commit, one local server and one remote server.
+- [ ] Wrong OS: build an extension with the target set to `win-x64`, deploy to a Linux server. Expect a refusal naming `linux-musl-x64`, and the previously running version still running.
+- [ ] Stale output: build `win-x64`, then Auto while connected to a Linux server, deploy. Expect a working extension (staging ignores the old `win-x64` folder).
+- [ ] Sign-in: revoke the Studio token on the server (or let it expire with no refresh token), reopen the window. Expect "SIGN IN AGAIN" in the Extensions banner, on a gated tab, in the header pill and the Overview, and no "offline" wording. Stop the server instead: expect "SERVER OFFLINE".
+- [ ] Player token: in play mode with a revoked device token and a refresh token that fails. Expect the console warning naming the menu item; run the menu item and confirm a new anonymous player.
+- [ ] Order: two extensions where B calls A's service, names chosen so B sorts first. Build & Deploy All in both windows. Expect A built and deployed first; B's stubs generated from A's manifest. Add a circle and expect the warning.
+- [ ] Remote safety: select a non-local environment. Expect the amber "REMOTE" chip in both windows, a confirmation before any deploy, and "Cancel" really deploying nothing. Switch environment, enter play mode, confirm the game connects to the selected one (`Assets/Resources/exoforge.json`).
+- [ ] Failures on cards: break a build, then deploy to a server that refuses. Expect a red card with the first lines of the reason, and the Build Log foldout open and surviving a script reload.
+- [ ] Password: sign in, close and reopen the editor. Expect the email prefilled and the password empty. Settings shows a masked token.
+- [ ] Setup wizard: close it on a fresh project, edit a script to trigger a reload. Expect it not to reopen until the next editor start.
+- [ ] Pre-warm: press it with the network off. Expect the editor to stay responsive and a warning afterwards.
+- [ ] Game versions: Overview shows e.g. `live 1.0.0 · dev 1.1.0`, "Not set up" with none registered, and `—` without the versioning extension.
+Earlier, still unverified: Unity rendering in the light skin (hard-coded dark cards), setup wizard click counts, how `ResourceLive` is reached from game-extension tabs, the Settings modal and the command palette in the web Studio.

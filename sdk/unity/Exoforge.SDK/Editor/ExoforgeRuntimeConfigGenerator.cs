@@ -20,6 +20,30 @@ public static class ExoforgeRuntimeConfigGenerator
     /// endpoints. What ships in a player build is where the game connects — not the workspace's
     /// bootstrap tokens, and not the other environments it also knows how to reach.
     /// </summary>
+    /// <summary>
+    /// The environment picked in the editor, when the workspace knows it. The game then connects where the developer
+    /// last pointed the editor, instead of where the file's default happened to be.
+    /// </summary>
+    private static string? SelectedEnvironmentIn(string workspaceJson)
+    {
+        string selected = ExoforgeEditorConfig.SelectedEnvironment;
+        if (string.IsNullOrWhiteSpace(selected)) return null;
+
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(workspaceJson);
+            return doc.RootElement.TryGetProperty("environments", out var environments) &&
+                   environments.ValueKind == System.Text.Json.JsonValueKind.Object &&
+                   environments.TryGetProperty(selected, out _)
+                ? selected
+                : null;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
+
     public static bool Generate()
     {
         string? configPath = FindWorkspaceConfig();
@@ -29,7 +53,8 @@ public static class ExoforgeRuntimeConfigGenerator
             return false;
         }
 
-        var config = ExoforgeRuntimeConfig.FromWorkspaceJson(File.ReadAllText(configPath));
+        string workspaceJson = File.ReadAllText(configPath);
+        var config = ExoforgeRuntimeConfig.FromWorkspaceJson(workspaceJson, SelectedEnvironmentIn(workspaceJson));
 
         string destination = Path.GetFullPath(OutputPath);
 

@@ -264,7 +264,20 @@ public partial class ExoforgeControlCenter : EditorWindow
             }
         }
 
-        // 4. Remote / Immutable Extensions Section
+        // 4. The last build's output. Kept across a domain reload, so the reason a build failed is still here
+        // after Unity recompiles; the status line's "see Build Log" points at this.
+        if (!string.IsNullOrEmpty(_buildLog))
+        {
+            var logFold = new Foldout { text = "Build Log", value = _buildLog.Contains("error") || _buildLog.Contains("failed") };
+            var logText = new TextField { value = _buildLog, multiline = true, isReadOnly = true };
+            logText.style.minHeight = 90;
+            logText.style.maxHeight = 260;
+            logText.style.whiteSpace = WhiteSpace.Normal;
+            logFold.Add(logText);
+            scroll.Add(logFold);
+        }
+
+        // 5. Remote / Immutable Extensions Section
         scroll.Add(BuildRemoteExtensionsSectionToolkit());
 
         container.Add(scroll);
@@ -488,20 +501,22 @@ public partial class ExoforgeControlCenter : EditorWindow
     private VisualElement BuildExtensionCardToolkit(LocalPluginInfo plugin)
     {
         string buildError = SessionState.GetString(BuildFailureKey(plugin.Name), "");
+        string? deployError = ExoforgeExtensionOps.DeployFailure(plugin.Name);
         bool failed = buildError.Length > 0;
+        bool deployFailed = !failed && deployError != null;
         string? deployedVersion = RemotePluginVersion(plugin.Name);
         bool notDeployed = _isConnected && plugin.IsBuilt && !plugin.Modified && deployedVersion != plugin.Version;
 
         var card = new VisualElement();
-        card.style.backgroundColor = failed ? new Color(0.22f, 0.12f, 0.12f) : ExoforgeUIStyle.BgCard;
+        card.style.backgroundColor = failed || deployFailed ? new Color(0.22f, 0.12f, 0.12f) : ExoforgeUIStyle.BgCard;
         card.style.borderTopWidth = 1;
         card.style.borderBottomWidth = 1;
         card.style.borderLeftWidth = 1;
         card.style.borderRightWidth = 1;
-        card.style.borderTopColor = failed ? ExoforgeUIStyle.AccentRed : ExoforgeUIStyle.BorderSubtle;
-        card.style.borderBottomColor = failed ? ExoforgeUIStyle.AccentRed : ExoforgeUIStyle.BorderSubtle;
-        card.style.borderLeftColor = failed ? ExoforgeUIStyle.AccentRed : ExoforgeUIStyle.BorderSubtle;
-        card.style.borderRightColor = failed ? ExoforgeUIStyle.AccentRed : ExoforgeUIStyle.BorderSubtle;
+        card.style.borderTopColor = failed || deployFailed ? ExoforgeUIStyle.AccentRed : ExoforgeUIStyle.BorderSubtle;
+        card.style.borderBottomColor = failed || deployFailed ? ExoforgeUIStyle.AccentRed : ExoforgeUIStyle.BorderSubtle;
+        card.style.borderLeftColor = failed || deployFailed ? ExoforgeUIStyle.AccentRed : ExoforgeUIStyle.BorderSubtle;
+        card.style.borderRightColor = failed || deployFailed ? ExoforgeUIStyle.AccentRed : ExoforgeUIStyle.BorderSubtle;
         card.style.borderTopLeftRadius = 8;
         card.style.borderTopRightRadius = 8;
         card.style.borderBottomLeftRadius = 8;
@@ -555,6 +570,11 @@ public partial class ExoforgeControlCenter : EditorWindow
             statusPill = ExoforgeUIStyle.CreatePill("✗ Build Failed", Color.white, ExoforgeUIStyle.AccentRed, 10);
             statusPill.tooltip = buildError;
         }
+        else if (deployFailed)
+        {
+            statusPill = ExoforgeUIStyle.CreatePill("✗ Deploy Failed", Color.white, ExoforgeUIStyle.AccentRed, 10);
+            statusPill.tooltip = deployError;
+        }
         else if (!plugin.IsBuilt)
         {
             statusPill = ExoforgeUIStyle.CreatePill("○ Not Built", ExoforgeUIStyle.TextMuted, ExoforgeUIStyle.AccentGrayBg, 10);
@@ -577,6 +597,18 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
         row1.Add(statusPill);
         card.Add(row1);
+
+        // The reason, on the card: a tooltip on a pill is where an error goes to be missed.
+        if (failed || deployFailed)
+        {
+            var reason = new Label(FirstLines(failed ? buildError : deployError!, 3));
+            reason.style.fontSize = 11;
+            reason.style.color = ExoforgeUIStyle.TextPrimary;
+            reason.style.whiteSpace = WhiteSpace.Normal;
+            reason.style.marginTop = 6;
+            reason.style.marginBottom = 4;
+            card.Add(reason);
+        }
 
         // Row 2: Action Buttons
         var row2 = new VisualElement();
@@ -669,423 +701,7 @@ public partial class ExoforgeControlCenter : EditorWindow
     // Legacy IMGUI fallback
     // =========================================================================
 
-    private void DrawExtensions()
-    {
-        _pluginsScroll = EditorGUILayout.BeginScrollView(_pluginsScroll);
-
-        if (!CanReachCluster)
-        {
-            var origBg = GUI.backgroundColor;
-            GUI.backgroundColor = _isConnecting
-                ? new Color(0.90f, 0.94f, 1.0f)
-                : new Color(1.0f, 0.88f, 0.60f); // Bright highlighted warm amber
-
-            EditorGUILayout.BeginVertical(GUI.skin.box);
-            GUI.backgroundColor = origBg;
-            EditorGUILayout.Space(6);
-
-            EditorGUILayout.BeginHorizontal();
-
-            // Large Warning Badge / Icon
-            var iconStyle = new GUIStyle(EditorStyles.label)
-            {
-                fontSize = 28,
-                alignment = TextAnchor.MiddleCenter
-            };
-            GUILayout.Label(_isConnecting ? "🔄" : "⚠️", iconStyle, GUILayout.Width(46), GUILayout.Height(46));
-
-            EditorGUILayout.BeginVertical();
-            var titleStyle = new GUIStyle(EditorStyles.boldLabel)
-            {
-                fontSize = 15,
-                normal = { textColor = _isConnecting ? ExoforgeUIStyle.AccentBlue : new Color(0.85f, 0.40f, 0.0f) }
-            };
-            EditorGUILayout.LabelField(_isConnecting ? "Connecting to Server…" : (NeedsSignIn ? "SIGN IN AGAIN — LOCAL MODE ACTIVE" : "SERVER OFFLINE — LOCAL MODE ACTIVE"), titleStyle);
-
-            var descStyle = new GUIStyle(EditorStyles.wordWrappedLabel)
-            {
-                fontSize = 12,
-                normal = { textColor = ExoforgeUIStyle.TextPrimary }
-            };
-            EditorGUILayout.LabelField(
-                _isConnecting
-                    ? $"Connecting to server at {ActiveWsUrl}… Metrics, event streaming, and remote synchronization will unlock once connected."
-                    : $"The editor is not connected to the server ({ActiveWsUrl}). Scaffolding and C# extension editing are available locally, but deploying, streaming logs, metrics, and live events require a running server.",
-                descStyle);
-            EditorGUILayout.EndVertical();
-
-            EditorGUILayout.EndHorizontal();
-            EditorGUILayout.Space(6);
-            EditorGUILayout.EndVertical();
-            EditorGUILayout.Space(6);
-        }
-
-        // --- 1. SCAFFOLD NEW EXTENSION BUTTON ---
-        var origBoxBg = GUI.backgroundColor;
-        GUI.backgroundColor = ExoforgeUIStyle.ImguiHeroBoxBg;
-        EditorGUILayout.BeginVertical(GUI.skin.box);
-        GUI.backgroundColor = origBoxBg;
-        EditorGUILayout.Space(2);
-
-        EditorGUILayout.BeginHorizontal();
-        var scaffoldIconStyle = new GUIStyle(EditorStyles.label) { fontSize = 22, alignment = TextAnchor.MiddleCenter };
-        GUILayout.Label("⚡", scaffoldIconStyle, GUILayout.Width(32), GUILayout.Height(32));
-
-        EditorGUILayout.BeginVertical();
-        var mainTitleStyle = new GUIStyle(EditorStyles.boldLabel) { fontSize = 14 };
-        EditorGUILayout.LabelField("Create New Extension", mainTitleStyle);
-        EditorGUILayout.LabelField("Scaffold a new first-party C# extension module directly into your workspace.", EditorStyles.miniLabel);
-        EditorGUILayout.EndVertical();
-
-        var prevBg = GUI.backgroundColor;
-        var prevContent = GUI.contentColor;
-        GUI.backgroundColor = ExoforgeUIStyle.BrandPurple;
-        GUI.contentColor = Color.white;
-
-        var bigBtnStyle = new GUIStyle(GUI.skin.button)
-        {
-            fontSize = 12,
-            fontStyle = FontStyle.Bold,
-            alignment = TextAnchor.MiddleCenter
-        };
-
-        if (GUILayout.Button("⚡ New Extension...", bigBtnStyle, GUILayout.Width(150), GUILayout.Height(32)))
-        {
-            ExoforgeScaffoldModal.Open(onCreated: () =>
-            {
-                RefreshLocalPlugins();
-                _ = RefreshPluginsAsync();
-                ShowStatus("✓ Extension scaffolded successfully.", MessageType.Info);
-            });
-        }
-
-        GUI.backgroundColor = prevBg;
-        GUI.contentColor = prevContent;
-
-        EditorGUILayout.EndHorizontal();
-        EditorGUILayout.Space(2);
-        EditorGUILayout.EndVertical();
-
-        EditorGUILayout.Space(6);
-
-        // --- 2. GENERATE UNITY CLIENT ---
-        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-        EditorGUILayout.BeginHorizontal();
-
-        string lastSync = !string.IsNullOrEmpty(ExoforgeEditorConfig.LastSyncTime)
-            ? ExoforgeEditorConfig.LastSyncTime
-            : "Not yet generated";
-
-        EditorGUILayout.LabelField($"Unity Client  •  Last: {lastSync}", EditorStyles.miniBoldLabel);
-
-        if (GUILayout.Button("⚡ Generate Unity Client", GUILayout.Width(175), GUILayout.Height(24)))
-        {
-            _ = SyncAndGenerateClientAsync();
-        }
-        EditorGUILayout.EndHorizontal();
-        EditorGUILayout.EndVertical();
-
-        EditorGUILayout.Space(8);
-
-        // --- 3. WORKSPACE EXTENSIONS ---
-        EditorGUILayout.BeginHorizontal();
-        var secTitleStyle = new GUIStyle(EditorStyles.boldLabel) { fontSize = 13 };
-        EditorGUILayout.LabelField($"Workspace Extensions ({_localPlugins.Count})", secTitleStyle);
-
-        using (new EditorGUI.DisabledScope(_isBuilding || !_isConnected || _localPlugins.Count == 0))
-        {
-            if (GUILayout.Button(new GUIContent("🚀 Build & Deploy All", "Build all workspace extensions and deploy them to the server"), EditorStyles.miniButton, GUILayout.Width(135)))
-            {
-                _ = BuildAndDeployAllAsync();
-            }
-        }
-
-        if (GUILayout.Button(new GUIContent("⬇ Generate Stubs", "Generate type stubs for all extensions in the workspace"), EditorStyles.miniButton, GUILayout.Width(130)))
-        {
-            _ = GenerateAllStubsAsync();
-        }
-
-        if (GUILayout.Button("🔄 Refresh", EditorStyles.miniButton, GUILayout.Width(75)))
-        {
-            _ = RefreshPluginsAsync();
-        }
-        EditorGUILayout.EndHorizontal();
-
-        EditorGUILayout.BeginHorizontal();
-        GUILayout.FlexibleSpace();
-        bool autoStubs = EditorGUILayout.ToggleLeft(
-            new GUIContent("Auto-generate stubs on rebuild", "Automatically regenerate typed C# extension stubs after compiling or rebuilding an extension"),
-            ExoforgeEditorConfig.AutoGenerateStubsOnBuild,
-            GUILayout.Width(220));
-        if (autoStubs != ExoforgeEditorConfig.AutoGenerateStubsOnBuild)
-        {
-            ExoforgeEditorConfig.AutoGenerateStubsOnBuild = autoStubs;
-        }
-        EditorGUILayout.EndHorizontal();
-
-        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-        if (_localPlugins.Count == 0)
-        {
-            EditorGUILayout.Space(8);
-            EditorGUILayout.LabelField("No extensions found in workspace. Create your first extension above!", EditorStyles.centeredGreyMiniLabel);
-            EditorGUILayout.Space(8);
-        }
-        else
-        {
-            foreach (var plugin in _localPlugins)
-            {
-                string buildError = SessionState.GetString(BuildFailureKey(plugin.Name), "");
-                bool failed = buildError.Length > 0;
-                string? deployedVersion = RemotePluginVersion(plugin.Name);
-                bool notDeployed = _isConnected && plugin.IsBuilt && !plugin.Modified && deployedVersion != plugin.Version;
-
-                var origCardBg = GUI.backgroundColor;
-                if (failed)
-                {
-                    GUI.backgroundColor = new Color(1.0f, 0.88f, 0.88f);
-                }
-                else
-                {
-                    GUI.backgroundColor = ExoforgeUIStyle.ImguiCardBg;
-                }
-                EditorGUILayout.BeginVertical(GUI.skin.box);
-                GUI.backgroundColor = origCardBg;
-                EditorGUILayout.Space(3);
-
-                EditorGUILayout.BeginHorizontal();
-
-                // 1. Icon (Bigger emoji / icon)
-                var pluginIconStyle = new GUIStyle(EditorStyles.label)
-                {
-                    fontSize = 22,
-                    alignment = TextAnchor.MiddleCenter
-                };
-                GUILayout.Label(plugin.Icon, pluginIconStyle, GUILayout.Width(34), GUILayout.Height(34));
-
-                // 2. Title & ID & Type (Bigger text, bold)
-                EditorGUILayout.BeginVertical();
-                string displayTitle = !string.IsNullOrEmpty(plugin.Title) && plugin.Title != plugin.Name
-                    ? $"{plugin.Title} ({plugin.Name})"
-                    : plugin.Name;
-
-                var titleStyle = new GUIStyle(EditorStyles.boldLabel) { fontSize = 13 };
-                EditorGUILayout.LabelField(displayTitle, titleStyle);
-
-                // Subtitle: Type, Version, Size
-                string tag = BuildTag(plugin.Version);
-                string sizeStr = plugin.BinarySizeBytes > 0 ? $"{plugin.BinarySizeBytes / 1024} KB" : "";
-                string subText = $"{plugin.PluginType.ToUpperInvariant()} • {plugin.Version ?? "0.1.0"} {tag} {(sizeStr != "" ? "• " + sizeStr : "")}";
-                EditorGUILayout.LabelField(subText, EditorStyles.miniLabel);
-                EditorGUILayout.EndVertical();
-
-                // 3. Status indicator
-                if (failed)
-                {
-                    var prev = GUI.color;
-                    GUI.color = ExoforgeUIStyle.AccentRed;
-                    EditorGUILayout.LabelField(new GUIContent("✗ Build Failed", "Extension build failed. See Unity Console or Build Log for compiler errors."), EditorStyles.miniBoldLabel, GUILayout.Width(95));
-                    GUI.color = prev;
-                }
-                else if (!plugin.IsBuilt)
-                {
-                    var prev = GUI.color;
-                    GUI.color = ExoforgeUIStyle.AccentOrange;
-                    EditorGUILayout.LabelField("○ Not built", EditorStyles.miniLabel, GUILayout.Width(80));
-                    GUI.color = prev;
-                }
-                else if (plugin.Modified)
-                {
-                    var prev = GUI.color;
-                    GUI.color = ExoforgeUIStyle.AccentOrange;
-                    EditorGUILayout.LabelField("● Modified", EditorStyles.miniBoldLabel, GUILayout.Width(80));
-                    GUI.color = prev;
-                }
-                else
-                {
-                    var prev = GUI.color;
-                    GUI.color = ExoforgeUIStyle.AccentGreen;
-                    EditorGUILayout.LabelField("✓ Ready", EditorStyles.miniBoldLabel, GUILayout.Width(80));
-                    GUI.color = prev;
-                }
-
-                // Smart Lifecycle Action Button: Build (if modified/not built) or Deploy (if already built and not deployed)
-                bool needsBuild = !plugin.IsBuilt || plugin.Modified || failed;
-                bool needsDeploy = !needsBuild && notDeployed;
-
-                if (needsBuild)
-                {
-                    if (_isConnected && !failed)
-                    {
-                        using (new EditorGUI.DisabledScope(_isBuilding || !plugin.CanBuild))
-                        {
-                            var origBg = GUI.backgroundColor;
-                            GUI.backgroundColor = new Color(0.30f, 0.85f, 0.45f);
-                            if (GUILayout.Button(new GUIContent("🚀 Build & Deploy", "Compile and immediately deploy this extension to the running server"), EditorStyles.miniButton, GUILayout.Width(110), GUILayout.Height(24)))
-                            {
-                                _ = BuildPluginAsync(plugin, thenDeploy: true);
-                            }
-                            GUI.backgroundColor = origBg;
-                        }
-                    }
-
-                    string btnLabel = plugin.Modified ? "🔨 Build" : (failed ? "🔨 Retry" : "🔨 Build");
-                    using (new EditorGUI.DisabledScope(_isBuilding || !plugin.CanBuild))
-                    {
-                        var origBg = GUI.backgroundColor;
-                        GUI.backgroundColor = failed ? new Color(1.0f, 0.45f, 0.4f) : new Color(0.35f, 0.65f, 1.0f);
-                        if (GUILayout.Button(new GUIContent(btnLabel, failed ? "Retry compiling this extension" : "Compile and build this extension's C# assembly"), EditorStyles.miniButton, GUILayout.Width(65), GUILayout.Height(24)))
-                        {
-                            _ = BuildPluginAsync(plugin, thenDeploy: false);
-                        }
-                        GUI.backgroundColor = origBg;
-                    }
-                }
-                else if (needsDeploy)
-                {
-                    using (new EditorGUI.DisabledScope(_isBuilding || !_isConnected))
-                    {
-                        var origBg = GUI.backgroundColor;
-                        GUI.backgroundColor = new Color(0.30f, 0.85f, 0.45f);
-                        if (GUILayout.Button(new GUIContent("🚀 Deploy", "Deploy the built extension to the running server"), EditorStyles.miniButton, GUILayout.Width(75), GUILayout.Height(24)))
-                        {
-                            _ = DeployPluginAsync(plugin);
-                        }
-                        GUI.backgroundColor = origBg;
-                    }
-                }
-                else
-                {
-                    using (new EditorGUI.DisabledScope(true))
-                    {
-                        string statusLabel = !_isConnected ? "Built (Offline)" : "✓ Deployed";
-                        GUILayout.Button(new GUIContent(statusLabel, "Extension is built and up to date"), EditorStyles.miniButton, GUILayout.Width(85), GUILayout.Height(24));
-                    }
-                }
-
-                // 4. Secondary actions: Inspect, Edit, Folder
-                if (GUILayout.Button(new GUIContent("Inspect ↗", "Inspect and manage this extension in the Exoforge Extensions window"), EditorStyles.miniButton, GUILayout.Width(75), GUILayout.Height(24)))
-                {
-                    ExoforgeExtensionsWindow.OpenExtension(plugin.Name);
-                }
-
-                if (GUILayout.Button(new GUIContent("✏️ Edit", "Open this extension folder and main source file in the code editor"), EditorStyles.miniButton, GUILayout.Width(60), GUILayout.Height(24)))
-                {
-                    OpenExtensionInEditor(plugin.Directory);
-                }
-
-                if (GUILayout.Button("📁 Folder", EditorStyles.miniButton, GUILayout.Width(65), GUILayout.Height(24)))
-                {
-                    EditorUtility.RevealInFinder(plugin.Directory);
-                }
-
-                EditorGUILayout.EndHorizontal();
-                EditorGUILayout.Space(3);
-                EditorGUILayout.EndVertical();
-            }
-        }
-        EditorGUILayout.EndVertical();
-
-        if (!string.IsNullOrEmpty(_buildLog))
-        {
-            EditorGUILayout.Space(6);
-            _showBuildLog = EditorGUILayout.Foldout(_showBuildLog, "Build Log", true);
-            if (_showBuildLog)
-            {
-                _buildLogScroll = EditorGUILayout.BeginScrollView(_buildLogScroll, GUILayout.Height(120));
-                EditorGUILayout.TextArea(_buildLog, EditorStyles.textArea);
-                EditorGUILayout.EndScrollView();
-            }
-        }
-
-        EditorGUILayout.Space(10);
-        _showRemotePlugins = EditorGUILayout.Foldout(_showRemotePlugins, $"Advanced: Server Remote Extensions ({_remotePlugins.Count})", true);
-        if (_showRemotePlugins)
-        {
-            EditorGUI.indentLevel++;
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField($"Active Remote Extensions ({_remotePlugins.Count})", EditorStyles.boldLabel);
-            using (new EditorGUI.DisabledScope(!_isConnected))
-            {
-                if (GUILayout.Button("Refresh Remote", EditorStyles.miniButton, GUILayout.Width(100)))
-                {
-                    _ = RefreshPluginsAsync();
-                }
-            }
-            EditorGUILayout.EndHorizontal();
-
-            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            if (_remotePlugins.Count == 0)
-            {
-                EditorGUILayout.LabelField(_isConnected ? "No active remote extensions." : "Connect to view remote extensions.", EditorStyles.miniLabel);
-            }
-            else
-            {
-                foreach (var plugin in _remotePlugins)
-                {
-                    string id = plugin.TryGetProperty("id", out var idProp) && idProp.ValueKind == JsonValueKind.String ? idProp.GetString() ?? "?" : "?";
-                    string version = plugin.TryGetProperty("version", out var vProp) && vProp.ValueKind == JsonValueKind.String ? vProp.GetString() ?? "" : "";
-                    string icon = plugin.TryGetProperty("icon", out var icProp) && icProp.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(icProp.GetString())
-                        ? icProp.GetString()!
-                        : (plugin.TryGetProperty("dashboard_view", out var dv) && dv.ValueKind == JsonValueKind.Object && dv.TryGetProperty("icon", out var dvIcon) && dvIcon.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(dvIcon.GetString())
-                            ? dvIcon.GetString()!
-                            : "🧩");
-                    string title = plugin.TryGetProperty("title", out var tProp) && tProp.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(tProp.GetString())
-                        ? tProp.GetString()!
-                        : (plugin.TryGetProperty("dashboard_view", out var dv2) && dv2.ValueKind == JsonValueKind.Object && dv2.TryGetProperty("title", out var dvTitle) && dvTitle.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(dvTitle.GetString())
-                            ? dvTitle.GetString()!
-                            : id);
-
-                    var origRemBg = GUI.backgroundColor;
-                    GUI.backgroundColor = ExoforgeUIStyle.ImguiCardBg;
-                    EditorGUILayout.BeginVertical(GUI.skin.box);
-                    GUI.backgroundColor = origRemBg;
-                    EditorGUILayout.BeginHorizontal();
-
-                    var remIconStyle = new GUIStyle(EditorStyles.label) { fontSize = 20, alignment = TextAnchor.MiddleCenter };
-                    GUILayout.Label(icon, remIconStyle, GUILayout.Width(30), GUILayout.Height(30));
-
-                    EditorGUILayout.BeginVertical();
-                    EditorGUILayout.LabelField(title, EditorStyles.boldLabel);
-                    bool isSystem = (plugin.TryGetProperty("system", out var sysProp) && sysProp.ValueKind == JsonValueKind.True)
-                        || (plugin.TryGetProperty("category", out var catProp) && string.Equals(catProp.GetString(), "System", StringComparison.OrdinalIgnoreCase));
-                    string badgeText = isSystem ? "SYSTEM" : "REMOTE";
-                    string remSub = (title != id && !string.IsNullOrEmpty(title)) ? $"{id} • {badgeText} • {version}" : $"{badgeText} • {version}";
-                    EditorGUILayout.LabelField(remSub, EditorStyles.miniLabel);
-                    EditorGUILayout.EndVertical();
-
-                    if (GUILayout.Button(
-                            new GUIContent("Inspect ↗", "Inspect this extension in the Exoforge Extensions window"),
-                            EditorStyles.miniButton, GUILayout.Width(75), GUILayout.Height(24)))
-                    {
-                        ExoforgeExtensionsWindow.OpenExtension(id);
-                    }
-                    using (new EditorGUI.DisabledScope(!_isConnected))
-                    {
-                        if (GUILayout.Button("Remove", EditorStyles.miniButton, GUILayout.Width(65), GUILayout.Height(24)))
-                        {
-                            bool confirmed = EditorUtility.DisplayDialog(
-                                "Remove extension",
-                                $"Remove '{id}' from the server?\n\nIts files stay on the server; the extension stops running.",
-                                "Remove", "Cancel");
-
-                            if (confirmed)
-                            {
-                                _ = RemovePluginAsync(id);
-                            }
-                        }
-                    }
-                    EditorGUILayout.EndHorizontal();
-                    EditorGUILayout.EndVertical();
-                }
-            }
-            EditorGUILayout.EndVertical();
-            EditorGUI.indentLevel--;
-        }
-
-        EditorGUILayout.EndScrollView();
-    }
-
-    private static string BuildFailureKey(string pluginName) => $"Exoforge_BuildFailed_{pluginName}";
+    private static string BuildFailureKey(string pluginName) => ExoforgeExtensionOps.BuildFailureKey(pluginName);
 
     /// <summary>Compact build tag from a version's SemVer build metadata (1.0.0+42.ab12cd34 → #42).</summary>
     private static string BuildTag(string? version)
@@ -1123,44 +739,12 @@ public partial class ExoforgeControlCenter : EditorWindow
         return normalized.Contains("/bin/") || normalized.Contains("/obj/");
     }
 
-    private async Task BuildAllAsync()
+    /// <summary>The first lines of a long message (a compiler log, a stack trace), enough to say what went wrong.</summary>
+    private static string FirstLines(string text, int count)
     {
-        if (_isBuilding) return;
-
-        var buildable = _localPlugins.Where(p => p.CanBuild).ToList();
-        if (buildable.Count == 0)
-        {
-            ShowStatus("No buildable extensions found.", MessageType.Info);
-            return;
-        }
-
-        var targets = buildable.Where(p => !p.IsBuilt || p.Modified).ToList();
-        if (targets.Count == 0)
-        {
-            targets = buildable;
-        }
-
-        targets = InDeployOrder(targets);
-
-        ShowStatus($"Building {targets.Count} extension(s)…", MessageType.Info);
-        int failCount = 0;
-        foreach (var plugin in targets)
-        {
-            await BuildPluginAsync(plugin, thenDeploy: false);
-            if (SessionState.GetString(BuildFailureKey(plugin.Name), "").Length > 0)
-            {
-                failCount++;
-            }
-        }
-
-        if (failCount == 0)
-        {
-            ShowStatus($"✓ Built {targets.Count} extension(s).", MessageType.Info);
-        }
-        else
-        {
-            ShowStatus($"Build completed: {targets.Count - failCount} succeeded, {failCount} failed — see Unity Console or Build Log.", MessageType.Error);
-        }
+        var lines = text.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).Take(count);
+        string joined = string.Join("\n", lines);
+        return joined.Length > 400 ? joined.Substring(0, 400) + "…" : joined;
     }
 
     /// <summary>
@@ -1230,8 +814,14 @@ public partial class ExoforgeControlCenter : EditorWindow
             return;
         }
 
+        if (!ExoforgeExtensionOps.ConfirmDeploy(ActiveEnvironment?.Name ?? "default", ActiveWsUrl, deployable.Count))
+        {
+            ShowStatus("Deploy cancelled.", MessageType.Info);
+            return;
+        }
+
         _isBuilding = true;
-        ShowStatus($"Deploying {deployable.Count} extension(s) to server…", MessageType.Info);
+        ShowStatus($"Deploying {deployable.Count} extension(s) to server, dependencies first…", MessageType.Info);
         Repaint();
 
         int successCount = 0;
@@ -1245,11 +835,14 @@ public partial class ExoforgeControlCenter : EditorWindow
                 try
                 {
                     await deployer.UploadExtensionAsync(plugin.Name, existingClient: _editorClient);
+                    ExoforgeExtensionOps.ClearDeployFailure(plugin.Name);
                     successCount++;
                 }
                 catch (Exception ex)
                 {
-                    errors.Add($"{plugin.Name}: {ex.Message}");
+                    string msg = ExoforgeExtensionOps.DescribeDeployError(ex);
+                    ExoforgeExtensionOps.RecordDeployFailure(plugin.Name, msg);
+                    errors.Add($"{plugin.Name}: {msg}");
                 }
             }
 
@@ -1286,7 +879,6 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
 
         _isBuilding = true;
-        _showBuildLog = true;
         _buildLog = $"Building {plugin.Name} ({plugin.PluginType})...\n";
         ShowStatus($"Building '{plugin.Name}'… (see Build Log)", MessageType.Info);
         Repaint();
@@ -1294,33 +886,13 @@ public partial class ExoforgeControlCenter : EditorWindow
         try
         {
             var deployer = new ExoDeployer(Workspace);
-            string? configuredRid = string.IsNullOrWhiteSpace(ExoforgeEditorConfig.TargetBuildRid) ? null : ExoforgeEditorConfig.TargetBuildRid.Trim();
-            string? overrideRid = string.IsNullOrWhiteSpace(_buildRid) ? null : _buildRid.Trim();
-
-            string effectiveRid;
-            if (!string.IsNullOrEmpty(overrideRid) && !string.Equals(overrideRid, "auto", StringComparison.OrdinalIgnoreCase))
-            {
-                effectiveRid = overrideRid;
-            }
-            else if (!string.IsNullOrEmpty(configuredRid) && !string.Equals(configuredRid, "auto", StringComparison.OrdinalIgnoreCase))
-            {
-                effectiveRid = configuredRid;
-            }
-            else if (thenDeploy)
-            {
-                // When deploying to server: target the cluster's reported RID or standard linux-musl-x64
-                effectiveRid = !string.IsNullOrEmpty(_clusterTargetRid) ? _clusterTargetRid : ExoforgeDotnetValidator.StandardServerRid;
-            }
-            else
-            {
-                // Local build: use host RID
-                effectiveRid = ExoDeployer.HostRuntimeIdentifier();
-            }
+            string effectiveRid = ExoforgeExtensionOps.ResolveRid(_buildRid, ExoforgeEditorConfig.TargetBuildRid, thenDeploy, _clusterTargetRid);
 
             var build = await deployer.BuildExtensionAsync(
                 plugin.Name, effectiveRid, ExoforgeEditorConfig.DotnetPath, AppendBuildLog);
 
             _buildLog = build.Output;
+            ExoforgeExtensionOps.RecordBuildLog(_buildLog);
             SessionState.EraseString(BuildFailureKey(plugin.Name));
             ShowStatus($"✓ Built '{plugin.Name}' ({build.ExtensionType}).", MessageType.Info);
             RefreshLocalPlugins();
@@ -1346,8 +918,8 @@ public partial class ExoforgeControlCenter : EditorWindow
         {
             string errorDetails = ex is InvalidOperationException ? ex.Message : ex.ToString();
             _buildLog = errorDetails;
-            SessionState.SetString(BuildFailureKey(plugin.Name), errorDetails);
-            _showBuildLog = true;
+            ExoforgeExtensionOps.RecordBuildLog(errorDetails);
+            ExoforgeExtensionOps.RecordBuildFailure(plugin.Name, errorDetails);
 
             UnityEngine.Debug.LogError($"[Exoforge] Build failed for extension '{plugin.Name}':\n{errorDetails}");
             ShowStatus($"Build failed for '{plugin.Name}' — see Unity Console or Build Log.", MessageType.Error);
@@ -1359,120 +931,6 @@ public partial class ExoforgeControlCenter : EditorWindow
             Repaint();
         }
     }
-
-    private async Task GenerateStubsAsync(LocalPluginInfo plugin)
-    {
-        try
-        {
-            var deployer = new ExoDeployer(Workspace);
-            string output = await deployer.GenerateExtensionStubsAsync(plugin.Name, existingClient: _isConnected ? _editorClient : null);
-            ShowStatus($"✓ Generated typed service stubs for '{plugin.Name}' → {output}", MessageType.Info);
-        }
-        catch (Exception ex)
-        {
-            ShowStatus($"Stub generation failed for '{plugin.Name}': {ex.Message}", MessageType.Error);
-        }
-
-        Repaint();
-    }
-
-    private async Task GenerateAllStubsAsync()
-    {
-        try
-        {
-            var deployer = new ExoDeployer(Workspace);
-            var outputs = await deployer.GenerateAllExtensionStubsAsync(existingClient: _isConnected ? _editorClient : null);
-            ShowStatus($"✓ Generated typed service stubs for {outputs.Count} extension(s).", MessageType.Info);
-        }
-        catch (Exception ex)
-        {
-            ShowStatus($"Stub generation failed: {ex.Message}", MessageType.Error);
-        }
-
-        Repaint();
-    }
-
-    private async Task DeployPluginAsync(LocalPluginInfo plugin)
-    {
-        try
-        {
-            var deployer = new ExoDeployer(Workspace);
-            await deployer.UploadExtensionAsync(plugin.Name, existingClient: _editorClient);
-            ShowStatus($"Successfully deployed '{plugin.Name}' to server.", MessageType.Info);
-            await RefreshPluginsAsync();
-            await SyncAndGenerateClientAsync();
-        }
-        catch (Exception ex)
-        {
-            string msg = ex.Message;
-            if (msg.Contains(":eacces"))
-            {
-                msg = $"{msg} (Server permission denied. The previous extension process may still be releasing file locks, or the server directory has restricted permissions. Try deploying again).";
-            }
-            ShowStatus($"Deploy failed: {msg}", MessageType.Error);
-        }
-
-        Repaint();
-    }
-
-    /// <summary>The first action of a plugin's first service, or null when it exposes none.</summary>
-    private ActionSpec? FirstActionFor(string pluginId)
-    {
-        string clean = ExoScaffolder.NormalizePluginName(pluginId);
-
-        if (!_pluginServices.TryGetValue(clean, out var services) || services.Count == 0) return null;
-
-        return _serviceCatalog.TryGetValue(services[0], out var specs) && specs.Count > 0 ? specs[0] : null;
-    }
-
-    /// <summary>Jumps to the Plugins window Action Sandbox with one of this plugin's actions selected.</summary>
-    private void OpenInSandbox(string pluginId)
-    {
-        ExoforgePluginsWindow.OpenSandbox(pluginId: pluginId);
-    }
-
-    private async Task ShowPluginLogsAsync(string pluginId)
-    {
-        string clean = ExoScaffolder.NormalizePluginName(pluginId);
-
-        try
-        {
-            var deployer = new ExoDeployer(Workspace);
-            var lines = await deployer.GetExtensionLogsAsync(clean, 100, existingClient: _isConnected ? _editorClient : null);
-
-            _pluginLogs = lines.Count == 0
-                ? "(no log lines recorded — the extension may not have run yet)"
-                : string.Join("\n", lines.Select(l => $"{l.LocalTime:HH:mm:ss}  {l.LevelName,-7} {l.Message}"));
-        }
-        catch (Exception ex)
-        {
-            _pluginLogs = $"Could not load logs: {ex.Message}";
-        }
-
-        _pluginLogsFor = clean;
-        _showPluginLogs = true;
-        Repaint();
-    }
-
-    private async Task RemovePluginAsync(string pluginId)
-    {
-        try
-        {
-            var deployer = new ExoDeployer(Workspace);
-            await deployer.RemoveExtensionAsync(pluginId, existingClient: _editorClient);
-            ShowStatus($"Removed remote extension '{pluginId}'.", MessageType.Info);
-            await RefreshPluginsAsync();
-            await SyncAndGenerateClientAsync();
-        }
-        catch (Exception ex)
-        {
-            ShowStatus($"Remove failed: {ex.Message}", MessageType.Error);
-        }
-
-        Repaint();
-    }
-
-    private void DrawPlugins() => DrawExtensions();
 
     /// <summary>
     /// Locates the primary C# source file of an extension (e.g. [Name]Extension.cs or [Name]Plugin.cs).
@@ -1511,6 +969,50 @@ public partial class ExoforgeControlCenter : EditorWindow
         if (csproj.Length > 0) return csproj[0];
 
         return null;
+    }
+
+    private async Task GenerateStubsAsync(LocalPluginInfo plugin)
+    {
+        try
+        {
+            var deployer = new ExoDeployer(Workspace);
+            string output = await deployer.GenerateExtensionStubsAsync(plugin.Name, existingClient: _isConnected ? _editorClient : null);
+            ShowStatus($"✓ Generated typed service stubs for '{plugin.Name}' → {output}", MessageType.Info);
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Stub generation failed for '{plugin.Name}': {ex.Message}", MessageType.Error);
+        }
+
+        Repaint();
+    }
+
+    private async Task DeployPluginAsync(LocalPluginInfo plugin)
+    {
+        if (!ExoforgeExtensionOps.ConfirmDeploy(ActiveEnvironment?.Name ?? "default", ActiveWsUrl, 1))
+        {
+            ShowStatus("Deploy cancelled.", MessageType.Info);
+            return;
+        }
+
+        try
+        {
+            var deployer = new ExoDeployer(Workspace);
+            await deployer.UploadExtensionAsync(plugin.Name, existingClient: _editorClient);
+            ExoforgeExtensionOps.ClearDeployFailure(plugin.Name);
+            ShowStatus($"Successfully deployed '{plugin.Name}' to server.", MessageType.Info);
+            await RefreshPluginsAsync();
+            await SyncAndGenerateClientAsync();
+        }
+        catch (Exception ex)
+        {
+            string msg = ExoforgeExtensionOps.DescribeDeployError(ex);
+            ExoforgeExtensionOps.RecordDeployFailure(plugin.Name, msg);
+            ShowStatus($"Deploy failed for '{plugin.Name}': {msg}", MessageType.Error);
+            RefreshTabContent();
+        }
+
+        Repaint();
     }
 
     /// <summary>
