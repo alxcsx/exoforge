@@ -56,17 +56,6 @@ public enum ActionMode
 }
 
 /// <summary>
-/// Preferred transport mechanism for dispatching an Exoforge action.
-/// </summary>
-public enum ActionTransport
-{
-    Auto,
-    WebSocket,
-    Http,
-    Webhook
-}
-
-/// <summary>
 /// Marks a method as an invokable Exoforge Action.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method | AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface, Inherited = false, AllowMultiple = false)]
@@ -80,7 +69,6 @@ public class ExoActionAttribute : Attribute
 
     /// <summary>Defaults to "player" (requires player or higher authentication).</summary>
     public string Scope { get; set; } = "player";
-    public ActionTransport Transport { get; set; } = ActionTransport.Auto;
 
     /// <summary>
     /// The service this action belongs to, when the plugin provides more than one. Defaults to the
@@ -226,19 +214,6 @@ public class ExoResourceAttribute : Attribute
     /// that it matches what is declared here.
     /// </summary>
     public SchemaVersioningMode SchemaVersioningMode { get; set; }
-
-    /// <summary>
-    /// What a breaking change (an <see cref="ExoRowMigrationAttribute"/>) does to existing rows.
-    /// <see cref="BreakingChangeMode.Migrate"/> (the default): rows are brought forward in place, and a client built
-    /// before the change that meets one gets <c>client_outdated</c>. <see cref="BreakingChangeMode.Fork"/>: each breaking
-    /// change starts a new generation of the table (<c>name_g2000000</c>) beside the old one; a caller reads its own
-    /// generation and, where it has no row yet, the nearest older one, and writes into its own. Use Fork for shared
-    /// data (configs, globals), never for per-player data, which must not diverge between two devices.
-    /// </summary>
-    public BreakingChangeMode BreakingChanges { get; set; }
-
-    /// <summary>How reads bring a stale row forward. See <see cref="RowMigrationMode"/>.</summary>
-    public RowMigrationMode RowMigration { get; set; }
 
     public ExoResourceAttribute()
     {
@@ -581,29 +556,6 @@ public class ExoSeedAttribute : Attribute
 
 
 
-
-/// <summary>What a breaking change does to the rows of a resource (see <see cref="ExoResourceAttribute.BreakingChanges"/>).</summary>
-public enum BreakingChangeMode
-{
-    /// <summary>Rows are migrated in place; older clients meeting a migrated row get <c>client_outdated</c>.</summary>
-    Migrate = 0,
-
-    /// <summary>The table forks into a new generation; each client keeps reading and writing its own.</summary>
-    Fork = 1
-}
-
-/// <summary>How a read treats a row stamped below the newest row migration of its type.</summary>
-public enum RowMigrationMode
-{
-    /// <summary>Migrate the row and write it back once, guarded by its old stamp.</summary>
-    WriteBack = 0,
-
-    /// <summary>Migrate in memory only and never write: for hot paths that must stay read-only.</summary>
-    ReadOnly = 1,
-
-    /// <summary>Do nothing: rows are returned as stored.</summary>
-    Off = 2
-}
 
 /// <summary>Who changes a resource's table when its declaration changes.</summary>
 public enum SchemaVersioningMode

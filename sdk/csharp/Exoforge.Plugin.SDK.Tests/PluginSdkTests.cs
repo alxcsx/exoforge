@@ -338,7 +338,6 @@ public class PluginSdkTests
         var attr = new ExoActionAttribute();
         Assert.Null(attr.Name);
         Assert.Equal(ActionMode.Auto, attr.Mode);
-        Assert.Equal(ActionTransport.Auto, attr.Transport);
     }
 
     [Fact]

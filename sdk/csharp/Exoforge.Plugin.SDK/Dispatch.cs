@@ -55,25 +55,6 @@ public static class ExoDispatch
         return LockedVersion(host.PluginId, gameVersion!);
     }
 
-    /// <summary>
-    /// For a type that forks on breaking changes: the generation the caller reads and writes. A caller locked at
-    /// extension version L is on the newest generation at or below L; a caller with no lock is on the newest.
-    /// </summary>
-    internal static long CallerGeneration(Type resource)
-    {
-        long[] generations = RowMigrations.Generations(resource);
-        if (generations.Length == 0) return 0;
-        if (CallerLockedVersion() is not long locked) return generations[generations.Length - 1];
-
-        long chosen = 0;
-        foreach (long generation in generations)
-        {
-            if (generation <= locked) chosen = generation;
-        }
-
-        return chosen;
-    }
-
     private static long? LockedVersion(string pluginId, string gameVersion)
     {
         long now = System.Diagnostics.Stopwatch.GetTimestamp() / (System.Diagnostics.Stopwatch.Frequency / 1000);

@@ -17,29 +17,11 @@ public class VersionedDataTests : IDisposable
     [ExoResource("gadgets")]
     public record Gadget(string Id = "", string Label = "");
 
-    [ExoResource("readonly_gadgets", RowMigration = RowMigrationMode.ReadOnly)]
-    public record ReadOnlyGadget(string Id = "", string Label = "");
-
-    [ExoResource("off_gadgets", RowMigration = RowMigrationMode.Off)]
-    public record OffGadget(string Id = "", string Label = "");
-
-    [ExoResource("balance", BreakingChanges = BreakingChangeMode.Fork)]
-    public record Balance(string Id = "", string Gold = "");
-
     public static class Migrations
     {
         [ExoRowMigration(typeof(Gadget), To = "2.0.0")]
         public static Gadget Up(JsonElement old) => new(old.GetProperty("id").GetString()!, old.GetProperty("nm").GetString()!);
 
-        [ExoRowMigration(typeof(ReadOnlyGadget), To = "2.0.0")]
-        public static ReadOnlyGadget UpRo(JsonElement old) => new(old.GetProperty("id").GetString()!, old.GetProperty("nm").GetString()!);
-
-        [ExoRowMigration(typeof(OffGadget), To = "2.0.0")]
-        public static OffGadget UpOff(JsonElement old) => new(old.GetProperty("id").GetString()!, old.GetProperty("nm").GetString()!);
-
-        // 1.x kept gold as a number under `g`; 2.0.0 stores it as text under `gold`.
-        [ExoRowMigration(typeof(Balance), To = "2.0.0")]
-        public static Balance UpBalance(JsonElement old) => new(old.GetProperty("id").GetString()!, old.GetProperty("g").GetInt32().ToString());
     }
 
     private sealed class Transport : IPluginTransport
@@ -122,92 +104,13 @@ public class VersionedDataTests : IDisposable
     }
 
     [Fact]
-    public void The_read_modes_decide_whether_a_stale_row_is_migrated_and_written()
-    {
-        var (context, transport) = Setup();
-        transport.Rows["readonly_gadgets/g1"] = "{\"id\":\"g1\",\"nm\":\"ro\",\"_v\":1000000}";
-        transport.Rows["off_gadgets/g1"] = "{\"id\":\"g1\",\"nm\":\"off\",\"_v\":1000000}";
-
-        Assert.Equal("ro", context.Database.Get<ReadOnlyGadget>("readonly_gadgets", "g1")!.Label);
-        Assert.Empty(transport.Puts);
-
-        Assert.Equal("", context.Database.Get<OffGadget>("off_gadgets", "g1")!.Label);
-        Assert.Empty(transport.Puts);
-    }
-
-    [Fact]
-    public void Sql_reads_of_a_typed_resource_migrate_and_QueryRaw_does_not()
+    public void Sql_reads_of_a_typed_resource_migrate()
     {
         var (context, transport) = Setup();
         transport.SqlRows = "[{\"id\":\"g1\",\"nm\":\"q\",\"_v\":1000000}]";
 
         Assert.Equal("q", Assert.Single(context.Database.Query<Gadget>("SELECT * FROM gadgets")).Label);
         Assert.Single(transport.Puts);
-
-        transport.Puts.Clear();
-        Assert.Equal("", Assert.Single(context.Database.QueryRaw<Gadget>("SELECT * FROM gadgets")).Label);
-        Assert.Empty(transport.Puts);
     }
 
-    [Fact]
-    public void A_forked_resource_reads_its_own_generation_then_the_nearest_older_and_writes_into_its_own()
-    {
-        var (context, transport) = Setup();   // no game version: the newest generation
-        transport.Rows["balance/b1"] = "{\"id\":\"b1\",\"g\":50,\"_v\":1000000}";
-
-        // nothing in balance_g2000000 yet: the old row, derived through the breaking migration, in memory
-        Assert.Equal(new Balance("b1", "50"), context.Database.Get<Balance>("balance", "b1"));
-        Assert.Empty(transport.Puts);
-
-        // a write lands in the caller's generation and leaves the old table alone
-        context.Database.Put("balance", "b1", new Balance("b1", "75"));
-        var put = Assert.Single(transport.Puts);
-        Assert.Equal("balance_g2000000", put.Table);
-
-        // once the generation has its row, that row wins
-        transport.Rows["balance_g2000000/b1"] = "{\"id\":\"b1\",\"gold\":\"75\"}";
-        Assert.Equal("75", context.Database.Get<Balance>("balance", "b1")!.Gold);
-    }
-
-    [Fact]
-    public void A_forked_resources_older_client_stays_on_the_original_table()
-    {
-        var (context, transport) = Setup("1.0", "1.0.0");
-        transport.Rows["balance/b1"] = "{\"id\":\"b1\",\"gold\":\"50\"}";
-
-        context.Database.Put("balance", "b1", new Balance("b1", "60"));
-        Assert.Equal("balance", Assert.Single(transport.Puts).Table);
-    }
-
-    [Fact]
-    public void All_on_a_forked_resource_merges_generations_without_repeating_a_key()
-    {
-        var (context, transport) = Setup();
-        transport.Rows["balance/b1"] = "{\"id\":\"b1\",\"g\":1}";
-        transport.Rows["balance/b2"] = "{\"id\":\"b2\",\"g\":2}";
-        transport.Rows["balance_g2000000/b1"] = "{\"id\":\"b1\",\"gold\":\"9\"}";
-
-        var all = context.Database.All<Balance>("balance");
-
-        Assert.Equal(2, all.Count);
-        Assert.Contains(new Balance("b1", "9"), all);
-        Assert.Contains(new Balance("b2", "2"), all);
-    }
-
-    [Fact]
-    public void Duplicate_copies_only_what_the_newest_generation_lacks_and_sync_copies_named_columns()
-    {
-        var (context, transport) = Setup();
-        transport.Rows["balance/b1"] = "{\"id\":\"b1\",\"g\":1}";
-        transport.Rows["balance/b2"] = "{\"id\":\"b2\",\"g\":2}";
-        transport.Rows["balance_g2000000/b1"] = "{\"id\":\"b1\",\"gold\":\"9\"}";
-
-        Assert.Equal(1, context.Database.DuplicateGeneration<Balance>());
-        var put = Assert.Single(transport.Puts);
-        Assert.Equal(("balance_g2000000", "b2"), (put.Table, put.Key));
-
-        transport.Puts.Clear();
-        Assert.Equal(1, context.Database.SyncGeneration<Balance>("gold"));
-        Assert.All(transport.Puts, p => Assert.Equal("balance_g2000000", p.Table));
-    }
 }

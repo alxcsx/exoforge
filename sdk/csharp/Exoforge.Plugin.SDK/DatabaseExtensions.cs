@@ -161,29 +161,6 @@ public static class DatabaseExtensions
     public static string TableName<T>() => EntityMetadata<T>.TableName;
 
     /// <summary>
-    /// For a resource that forks on breaking changes: copies the rows only an older generation has into the
-    /// caller's generation. Call it from a studio action when a new generation should start as a copy.
-    /// </summary>
-    public static int DuplicateGeneration<T>(this IDatabase db) =>
-        db is HostDatabase host ? host.DuplicateGeneration<T>() : throw new NotSupportedException("Generations need the host database.");
-
-    /// <summary>
-    /// Copies the named properties (the columns two generations share) from the older generation's row into the
-    /// caller's generation row, for every row both have. Returns how many rows changed.
-    /// </summary>
-    public static int SyncGeneration<T>(this IDatabase db, params string[] properties) =>
-        db is HostDatabase host ? host.SyncGeneration<T>(properties) : throw new NotSupportedException("Generations need the host database.");
-
-    /// <summary>
-    /// <c>Query&lt;T&gt;</c> that returns rows as stored: no row migration and no <c>client_outdated</c> check.
-    /// For a hot path that must not pay for either.
-    /// </summary>
-    public static IReadOnlyList<T> QueryRaw<T>(this IDatabase db, string sql, params object?[] args)
-    {
-        using (RowMigrations.Suppress()) return db.Query<T>(sql, args);
-    }
-
-    /// <summary>
     /// Runs an interpolated SQL query, turning each interpolation into a positional parameter
     /// (<c>$1</c>, <c>$2</c>, ...) passed as arguments to <see cref="IDatabase.Query{T}"/>.
     /// Only the format string's literal segments become SQL text, so interpolated values are never

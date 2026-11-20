@@ -787,28 +787,43 @@ public static class PluginHost
 
             try
             {
-                object? result;
+                bool known = true;
 
-                if (_dispatch != null)
+                object? Core()
                 {
-                    if (!_dispatch.TryInvoke(instance!, action, payload, out result))
+                    object? invoked;
+
+                    if (_dispatch != null)
                     {
-                        Write($"{{\"type\":\"action_result\",\"id\":{id},\"status\":\"error\",\"error\":\"unknown_action\"}}");
-                        return;
+                        if (!_dispatch.TryInvoke(instance!, action, payload, out invoked))
+                        {
+                            known = false;
+                            return null;
+                        }
                     }
+                    else
+                    {
+                        if (actions == null || !actions.TryGetValue(action, out var entry))
+                        {
+                            known = false;
+                            return null;
+                        }
+
+                        invoked = entry.Method.Invoke(instance, BindArguments(entry.Params, payload));
+                    }
+
+                    return AwaitResult(invoked);
                 }
-                else
+
+                object? result = ExoPlugs.RunAction(
+                    new ActionCall(action, payload, callerPlayerId, (IReadOnlyList<string>?)callerScopes ?? Array.Empty<string>(), callerGameVersion),
+                    Core);
+
+                if (!known)
                 {
-                    if (actions == null || !actions.TryGetValue(action, out var entry))
-                    {
-                        Write($"{{\"type\":\"action_result\",\"id\":{id},\"status\":\"error\",\"error\":\"unknown_action\"}}");
-                        return;
-                    }
-
-                    result = entry.Method.Invoke(instance, BindArguments(entry.Params, payload));
+                    Write($"{{\"type\":\"action_result\",\"id\":{id},\"status\":\"error\",\"error\":\"unknown_action\"}}");
+                    return;
                 }
-
-                result = AwaitResult(result);
 
                 Write($"{{\"type\":\"action_result\",\"id\":{id},\"status\":\"ok\",\"data\":{ToJson(result)}}}");
             }

@@ -31,12 +31,8 @@ version still locks the extension below it. Data that needs a per-row transform 
 Do not use a declarative and a row migration for the same version. An extension with row migrations also runs a background sweeper that migrates rows nobody reads (100 every 2 s) until none are below the newest step, so old columns can be dropped without waiting for players to return. An action can keep older revisions for clients still on an older game version: `[ExoAction("score", FromVersion = "2.0.0")]` on the new method, the old one stays under the same name; a caller whose game version locks the extension below `FromVersion` gets the older revision, everyone else (including no game version) the newest, and the manifest describes the newest. Delete a revision once no served game version locks the extension below the next.
 A breaking change (one `ALTER` cannot do) is an `[ExoRowMigration]`, and what it does depends on the resource: by default rows migrate in
 place and a client whose game version locks the extension below the migration, meeting a migrated row, gets `client_outdated` (the client
-raises the same `OnUpgradeRequired` path as `upgrade_required`); safe, declarative changes never do that. `[ExoResource(BreakingChanges =
-BreakingChangeMode.Fork)]` is for shared data (configs, globals): each breaking change starts a new table generation (`balance_g2000000`)
-beside the old one, a caller reads its own generation and falls back to the nearest older row (brought forward in memory), writes into its
-own, and `Exo.Database.DuplicateGeneration<T>()` / `SyncGeneration<T>(columns)` copy rows or shared columns between generations (delete
-affects only the caller's generation). Never fork per-player data. `[ExoResource(RowMigration = RowMigrationMode.WriteBack | ReadOnly | Off)]`
-chooses how reads treat a stale row, and `db.QueryRaw<T>` skips migration for one query. Locks of a `dev` game version can still change
+raises the same `OnUpgradeRequired` path as `upgrade_required`); safe, declarative changes never do that. Anything beyond that (versioned shared configs, audit trails, per-version rules) is a plug, not a core feature: `ExoPlugs.Use(IActionPlug)` wraps every action and
+`ExoPlugs.Use(IDatabasePlug)` wraps the key-value database calls, registered from `OnExtensionStart()`. Locks of a `dev` game version can still change
 (`versioning.set_locks`); live, outdated and blocked ones are immutable. A resource can opt out with
 `[ExoResource(..., SchemaVersioningMode = SchemaVersioningMode.Manual)]` (default `Auto`): Exoforge then never alters the table and adds
 no `_v`; at deploy it only checks the table matches the declaration (a drift fails that extension alone, never rebuilt, even in `reset`

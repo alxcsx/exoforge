@@ -61,9 +61,7 @@ internal sealed record ResourceModel(
     string? TypeName,
     bool Singleton = false,
     bool AllowPlayerRead = false,
-    bool ManualSchema = false,
-    bool Fork = false,
-    long Generation = 0);
+    bool ManualSchema = false);
 
 /// <summary>One step of a migration, ready to write: the operation and its arguments as JSON values.</summary>
 internal sealed record MigrationOp(string Op, string? Column, string? From, string? To, string? ValueJson);
@@ -249,11 +247,6 @@ internal static class ManifestEmitter
                 if (resource.ManualSchema)
                 {
                     sb.Append("\"schema_versioning_mode\": \"manual\", ");
-                }
-                // A resource that forks on breaking changes names its newest generation; its source (the table) already carries it.
-                if (resource.Fork)
-                {
-                    sb.Append($"\"breaking_changes\": \"fork\", \"generation\": {resource.Generation.ToString(CultureInfo.InvariantCulture)}, ");
                 }
                 // The shape `Exoforge.Std.Resources.normalize_source/1` reads. A bare string would not
                 // match, and a resource with no source is stored as an opaque key-value document.

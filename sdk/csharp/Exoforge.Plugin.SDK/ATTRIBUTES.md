@@ -84,7 +84,6 @@ By default, `Mode` is set to `ActionMode.Auto`, which is recommended for almost 
 | `name` (positional) | `string?` | Optional (method name) | Wire action name. When omitted, automatically converted from method PascalCase to `snake_case` (e.g. `TransferItem` → `transfer_item`). |
 | `Mode` | `ActionMode` | Optional (`ActionMode.Auto`) | Execution mode (`Auto`, `Sync`, `Async`, `Cast`). `Auto` infers from return type: `Task`/`Task<T>` becomes `:async`, concrete returns become `:sync`. Set `Cast` for fire-and-forget. |
 | `Scope` | `string` | Optional (`"global"`) | Minimum authorization scope required to invoke (`"guest"`, `"player"`, `"admin"`, `"studio"`). Enforced by ActionDispatcher before IPC invocation. |
-| `Transport` | `ActionTransport` | Optional (`ActionTransport.Auto`) | Preferred transport mechanism (`Auto`, `WebSocket`, `Http`, `Webhook`). |
 | `Service` | `string?` | Optional (`null`) | The owning service name when a single extension provides multiple `[ExoService]` contracts. Defaults to the primary service. |
 
 ### Example
@@ -249,8 +248,6 @@ public record PlayerScoreRecord(
 public static Pet Up(JsonElement oldRow) => new(...);
 
 // Per resource.
-[ExoResource("pets", RowMigration = RowMigrationMode.ReadOnly)]          // WriteBack (default) | ReadOnly | Off
-[ExoResource("balance", BreakingChanges = BreakingChangeMode.Fork)]       // shared data: a table per generation
 [ExoResource("items", SchemaVersioningMode = SchemaVersioningMode.Manual)] // the studio owns the table
 
 // An action revision: old clients (game version locks the extension below 2.0.0) get the previous method.
@@ -258,5 +255,24 @@ public static Pet Up(JsonElement oldRow) => new(...);
 [ExoAction("score", FromVersion = "2.0.0")] public int ScoreV2(int a, int b) => a + b;
 ```
 
-`db.QueryRaw<T>(sql, args)` reads without row migration. `db.DuplicateGeneration<T>()` and `db.SyncGeneration<T>("col")`
-copy rows or shared columns into the caller's generation of a forking resource.
+A client whose game version locks the extension below a row migration, meeting a row already migrated, gets `client_outdated`.
+
+## Plugs
+
+Optional workflows are middleware, registered once (for example from `OnExtensionStart()`):
+
+```csharp
+public sealed class RequireRecentClient : IActionPlug
+{
+    public object? Invoke(ActionCall call, Func<object?> next) =>
+        call.GameVersion == "0.9" ? throw new ExoActionException("upgrade_required", "Update the game") : next();
+}
+
+public sealed class KeyPerGameVersion : IDatabasePlug   // override only what you need
+{
+    public bool Put(string table, string key, string json, Func<string, string, string, bool> next) => next(table, key, json);
+}
+
+ExoPlugs.Use(new RequireRecentClient());
+ExoPlugs.Use(new KeyPerGameVersion());
+```

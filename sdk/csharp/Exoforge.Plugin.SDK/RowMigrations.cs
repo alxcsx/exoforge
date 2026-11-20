@@ -20,7 +20,7 @@ internal static class RowMigrations
     internal const string StampKey = "_v";
     internal const string GuardKey = "_if_v";
 
-    internal sealed class Step
+    private sealed class Step
     {
         public Step(long to, MethodInfo method)
         {
@@ -32,41 +32,7 @@ internal static class RowMigrations
         public MethodInfo Method { get; }
     }
 
-    /// <summary>What reads need to know about a record type, found once.</summary>
-    internal sealed class Info
-    {
-        public Info(Step[] steps, RowMigrationMode mode, bool fork)
-        {
-            Steps = steps;
-            Mode = mode;
-            Fork = fork;
-        }
-
-        public Step[] Steps { get; }
-        public RowMigrationMode Mode { get; }
-        public bool Fork { get; }
-
-        /// <summary>True when reads have anything to do for this type.</summary>
-        public bool Active => Steps.Length > 0 && Mode != RowMigrationMode.Off;
-    }
-
-    private static readonly ConcurrentDictionary<Type, Info> Cache = new();
-
-    private static readonly System.Threading.AsyncLocal<bool> SuppressedScope = new();
-
-    /// <summary>True inside <see cref="Suppress"/>: reads return rows as stored (the QueryRaw escape hatch).</summary>
-    internal static bool Suppressed => SuppressedScope.Value;
-
-    internal static IDisposable Suppress()
-    {
-        SuppressedScope.Value = true;
-        return new Scope();
-    }
-
-    private sealed class Scope : IDisposable
-    {
-        public void Dispose() => SuppressedScope.Value = false;
-    }
+    private static readonly ConcurrentDictionary<Type, Step[]> Cache = new();
 
     /// <summary>Methods registered by hand (tests, or an assembly the scan does not see).</summary>
     private static readonly ConcurrentDictionary<Type, List<Step>> Registered = new();
@@ -83,7 +49,7 @@ internal static class RowMigrations
         Cache.Clear();
     }
 
-    internal static Info InfoFor(Type resource) =>
+    private static Step[] StepsFor(Type resource) =>
         Cache.GetOrAdd(resource, type =>
         {
             var steps = new List<Step>();
@@ -100,14 +66,8 @@ internal static class RowMigrations
                 }
             }
 
-            var resourceAttr = type.GetCustomAttribute<ExoResourceAttribute>();
-            return new Info(
-                steps.OrderBy(s => s.To).ToArray(),
-                resourceAttr?.RowMigration ?? RowMigrationMode.WriteBack,
-                resourceAttr?.BreakingChanges == BreakingChangeMode.Fork);
+            return steps.OrderBy(s => s.To).ToArray();
         });
-
-    private static Step[] StepsFor(Type resource) => InfoFor(resource).Steps;
 
     private static IEnumerable<Type> SafeTypes(Assembly assembly)
     {
@@ -126,12 +86,13 @@ internal static class RowMigrations
     /// </summary>
     internal static long? PendingFrom<T>(JsonElement row)
     {
-        var info = InfoFor(typeof(T));
-        if (!info.Active || Suppressed) return null;
-        if (StampOf(row) is not long stamp) return null;
+        var steps = StepsFor(typeof(T));
+        if (steps.Length == 0 || StampOf(row) is not long stamp) return null;
 
-        return info.Steps.Any(s => s.To > stamp) ? stamp : null;
+        return steps.Any(s => s.To > stamp) ? stamp : null;
     }
+
+    internal static bool HasSteps<T>() => StepsFor(typeof(T)).Length > 0;
 
     /// <summary>The stored <c>_v</c> of a row, or null when it has none.</summary>
     internal static long? StampOf(JsonElement row)
@@ -181,10 +142,7 @@ internal static class RowMigrations
     }
 
     /// <summary>The record types that have a row migration, in the record's assembly or the entry assembly.</summary>
-    internal static Type[] MigratedTypes() =>
-        MigratedTypesAll().Where(t => InfoFor(t) is { Fork: false, Mode: RowMigrationMode.WriteBack }).ToArray();
-
-    private static Type[] MigratedTypesAll()
+    internal static Type[] MigratedTypes()
     {
         var types = new HashSet<Type>(Registered.Keys);
         var entry = Assembly.GetEntryAssembly();
@@ -205,8 +163,6 @@ internal static class RowMigrations
     /// <summary>The newest stamp any row migration of the type leads to.</summary>
     internal static long TargetOf(Type resource) => StepsFor(resource).Max(s => s.To);
 
-    /// <summary>The generation numbers (the row migrations' <c>To</c>) a forking type has, ascending; generation 0 is the original table.</summary>
-    internal static long[] Generations(Type resource) => StepsFor(resource).Select(s => s.To).Distinct().ToArray();
 
     /// <summary>The record as JSON with the guard set, for the write-back.</summary>
     internal static string WithGuard(object upgraded, long stamp)

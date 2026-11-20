@@ -244,26 +244,4 @@ public class MigrationManifestTests
         var score = Assert.Single(actions.Where(a => a!["name"]!.GetValue<string>() == "score"))!;
         Assert.Equal(2, score["arity"]!.GetValue<int>());
     }
-
-    [Fact]
-    public void A_Forking_Resource_Names_Its_Newest_Generation_As_Its_Table()
-    {
-        var (manifest, diagnostics) = Run(Preamble + """
-
-            [ExoResource("balance", BreakingChanges = BreakingChangeMode.Fork)]
-            public class Item { public string Id { get; set; } = ""; }
-
-            public static class Up
-            {
-                [ExoRowMigration(typeof(Item), To = "2.0.0")] public static Item V2(System.Text.Json.JsonElement old) => new();
-                [ExoRowMigration(typeof(Item), To = "3.1.0")] public static Item V3(System.Text.Json.JsonElement old) => new();
-            }
-            """);
-
-        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
-        var resource = manifest["services"]!.AsArray()[0]!["resources"]!.AsArray()[0]!;
-        Assert.Equal("fork", resource["breaking_changes"]!.GetValue<string>());
-        Assert.Equal(3_001_000, resource["generation"]!.GetValue<long>());
-        Assert.Equal("balance_g3001000", resource["source"]!["table"]!.GetValue<string>());
-    }
 }
