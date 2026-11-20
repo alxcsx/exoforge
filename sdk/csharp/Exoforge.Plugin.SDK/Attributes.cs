@@ -210,6 +210,13 @@ public class ExoResourceAttribute : Attribute
     /// </summary>
     public bool AllowPlayerRead { get; set; }
 
+    /// <summary>
+    /// The version of this resource's shape. Starts at 1; raise it by one when a change cannot be applied
+    /// automatically (a rename, a type change, a dropped column) and describe the change in an
+    /// <see cref="ExoMigrationAttribute"/> class from the old version to the new one.
+    /// </summary>
+    public int Version { get; set; } = 1;
+
     public ExoResourceAttribute()
     {
     }
@@ -550,3 +557,86 @@ public class ExoSeedAttribute : Attribute
 
 
 
+
+
+/// <summary>The column types a migration can convert a column to. They are the manifest's logical storage types.</summary>
+public enum ExoType
+{
+    Text, Int16, Int32, Int64, Float32, Float64, Decimal, Bool, Uuid, Timestamp, Bytes, Json
+}
+
+/// <summary>
+/// Describes how a resource's table changes from one version to the next, as a list of operations given by
+/// the attributes on the same class (<see cref="ExoRenameAttribute"/>, <see cref="ExoConvertAttribute"/>,
+/// <see cref="ExoFillAttribute"/>, <see cref="ExoDropAttribute"/>, <see cref="ExoSetNotNullAttribute"/>),
+/// applied in the order they are written. Put each migration in its own file. Nothing here runs: the generator
+/// reads the attributes, and the server applies them as plain <c>ALTER TABLE</c> statements.
+/// </summary>
+/// <example>
+/// <code>
+/// [ExoMigration(typeof(Item), From = 1, To = 2)]
+/// [ExoRename("nm", "name")]
+/// [ExoConvert("price", ExoType.Decimal)]
+/// public static class ItemsV2 { }
+/// </code>
+/// </example>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, Inherited = false, AllowMultiple = false)]
+public sealed class ExoMigrationAttribute : Attribute
+{
+    public Type Resource { get; }
+
+    /// <summary>The version this migration starts from.</summary>
+    public int From { get; set; }
+
+    /// <summary>The version it leads to; always <c>From + 1</c>.</summary>
+    public int To { get; set; }
+
+    public ExoMigrationAttribute(Type resource) => Resource = resource;
+}
+
+/// <summary>Renames a column (<c>ALTER TABLE .. RENAME COLUMN</c>).</summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, Inherited = false, AllowMultiple = true)]
+public sealed class ExoRenameAttribute : Attribute
+{
+    public string From { get; }
+    public string To { get; }
+    public ExoRenameAttribute(string from, string to) { From = from; To = to; }
+}
+
+/// <summary>
+/// Changes a column's type with the conversion PostgreSQL defines between the two
+/// (<c>ALTER COLUMN .. TYPE .. USING column::type</c>). A conversion it does not define needs a migration function.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, Inherited = false, AllowMultiple = true)]
+public sealed class ExoConvertAttribute : Attribute
+{
+    public string Column { get; }
+    public ExoType To { get; }
+    public ExoConvertAttribute(string column, ExoType to) { Column = column; To = to; }
+}
+
+/// <summary>Adds a column that every existing row gets <paramref name="value"/> for (<c>ADD COLUMN .. NOT NULL DEFAULT</c>).</summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, Inherited = false, AllowMultiple = true)]
+public sealed class ExoFillAttribute : Attribute
+{
+    public string Column { get; }
+    public object? Value { get; }
+    public ExoFillAttribute(string column, object? value) { Column = column; Value = value; }
+}
+
+/// <summary>Drops a column and the data in it (<c>DROP COLUMN</c>).</summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, Inherited = false, AllowMultiple = true)]
+public sealed class ExoDropAttribute : Attribute
+{
+    public string Column { get; }
+    public ExoDropAttribute(string column) => Column = column;
+}
+
+/// <summary>Makes a column <c>NOT NULL</c>, first giving rows that have none <see cref="Fill"/>.</summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, Inherited = false, AllowMultiple = true)]
+public sealed class ExoSetNotNullAttribute : Attribute
+{
+    public string Column { get; }
+    public object? Fill { get; set; }
+    public ExoSetNotNullAttribute(string column) => Column = column;
+}

@@ -266,7 +266,8 @@ namespace Exoforge.Plugin.SDK
         List<ServiceModel> Models,
         List<InputTypeModel> InputTypes,
         List<string> WebhookValidationErrors,
-        List<string> ResourceValidationErrors);
+        List<string> ResourceValidationErrors,
+        List<MigrationModel>? Migrations = null);
 
 
     // ---- service extraction ----
@@ -486,7 +487,8 @@ namespace Exoforge.Plugin.SDK
                 MarkPrimaryKey(columns, resolvedPk),
                 declared.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                 isSingleton,
-                NamedBool(attr, "AllowPlayerRead")));
+                NamedBool(attr, "AllowPlayerRead"),
+                NamedInt(attr, "Version", 1)));
         }
 
         foreach (var candidate in AllTypes(compilation.Assembly.GlobalNamespace))
@@ -789,7 +791,8 @@ namespace Exoforge.Plugin.SDK
             services,
             inputTypes,
             webhookValidationErrors,
-            resourceValidationErrors);
+            resourceValidationErrors,
+            CollectMigrations(compilation, resourceValidationErrors));
     }
 
     private static ImmutableArray<ServiceEmit> ExtractReferencedContracts(Compilation compilation, CancellationToken ct)
@@ -1040,7 +1043,8 @@ namespace Exoforge.Plugin.SDK
             MarkPrimaryKey(columns, resolvedPk),
             resourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             isSingleton,
-            NamedBool(resAttr, "AllowPlayerRead"));
+            NamedBool(resAttr, "AllowPlayerRead"),
+            NamedInt(resAttr, "Version", 1));
     }
 
     private static List<ColumnModel> MarkPrimaryKey(List<ColumnModel> columns, string primaryKey) =>
@@ -1344,16 +1348,23 @@ namespace Exoforge.Plugin.SDK
 
         var models = new List<ServiceModel>();
         var inputTypes = new List<InputTypeModel>();
+        var migrations = new List<MigrationModel>();
         foreach (var emit in ordered)
         {
             models.AddRange(emit.Models);
             inputTypes.AddRange(emit.InputTypes);
+
+            // Every root finds the same migrations in the same assembly: one copy of each.
+            foreach (var migration in emit.Migrations ?? new List<MigrationModel>())
+            {
+                if (!migrations.Any(m => m.Resource == migration.Resource && m.From == migration.From)) migrations.Add(migration);
+            }
         }
 
         string final = ManifestEmitter.Finalize(
             ManifestEmitter.Manifest(
                 primary.Id, provides, dependencies, models,
-                primary.Category, primary.Title, primary.Icon, primary.System, inputTypes, dbRead),
+                primary.Category, primary.Title, primary.Icon, primary.System, inputTypes, dbRead, migrations),
             primary.Id, primary.Version, settings.PluginType, settings.BuildStamp);
 
         try
@@ -1493,7 +1504,7 @@ namespace Exoforge.Generated
         type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T };
 
     // `File.cs:42`: the file name and line of a property, for messages that point a developer at a column.
-    private static string? DeclOf(IPropertySymbol property)
+    private static string? DeclOf(ISymbol property)
     {
         var location = property.Locations.FirstOrDefault(l => l.IsInSource);
         if (location is null) return null;
@@ -1914,6 +1925,109 @@ namespace Exoforge.Generated
         }
 
         return null;
+    }
+
+    private static int NamedInt(AttributeData? attr, string name, int fallback)
+    {
+        if (attr is null) return fallback;
+
+        foreach (var arg in attr.NamedArguments)
+        {
+            if (arg.Key == name && arg.Value.Value is int value) return value;
+        }
+
+        return fallback;
+    }
+
+    // The logical type names a migration can convert to, in the order of the SDK's ExoType enum.
+    private static readonly string[] MigrationTypes =
+        { "text", "int16", "int32", "int64", "float32", "float64", "decimal", "bool", "uuid", "timestamp", "bytes", "json" };
+
+    private static List<MigrationModel> CollectMigrations(Compilation compilation, List<string> errors)
+    {
+        var found = new List<MigrationModel>();
+
+        foreach (var type in AllTypes(compilation.Assembly.GlobalNamespace))
+        {
+            var attr = type.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name is "ExoMigrationAttribute" or "ExoMigration");
+            if (attr is null) continue;
+
+            string where = type.Name;
+            var resourceType = attr.ConstructorArguments.Length > 0 ? attr.ConstructorArguments[0].Value as INamedTypeSymbol : null;
+            var resourceAttr = resourceType is null ? null : FindResourceAttribute(resourceType.GetAttributes());
+
+            if (resourceType is null || resourceAttr is null)
+            {
+                errors.Add($"Migration '{where}': typeof(...) must name an [ExoResource] type.");
+                continue;
+            }
+
+            int from = NamedInt(attr, "From", 0);
+            int to = NamedInt(attr, "To", 0);
+            if (from < 1 || to != from + 1)
+            {
+                errors.Add($"Migration '{where}': From = {from}, To = {to}. A migration goes from one version to the next (To = From + 1, starting at 1).");
+                continue;
+            }
+
+            string resource = NamedString(resourceAttr, "Name") ?? PositionalString(resourceAttr, 0) ?? ToSnakeCase(resourceType.Name);
+            var ops = new List<MigrationOp>();
+
+            foreach (var op in type.GetAttributes())
+            {
+                var args = op.ConstructorArguments;
+                switch (op.AttributeClass?.Name)
+                {
+                    case "ExoRenameAttribute" when args.Length == 2:
+                        ops.Add(new MigrationOp("rename", null, ToSnakeCase(args[0].Value as string ?? ""), ToSnakeCase(args[1].Value as string ?? ""), null));
+                        break;
+                    case "ExoConvertAttribute" when args.Length == 2:
+                        int typeIndex = args[1].Value is int i ? i : -1;
+                        if (typeIndex < 0 || typeIndex >= MigrationTypes.Length)
+                        {
+                            errors.Add($"Migration '{where}': unknown ExoType in [ExoConvert].");
+                            break;
+                        }
+                        ops.Add(new MigrationOp("convert", ToSnakeCase(args[0].Value as string ?? ""), null, MigrationTypes[typeIndex], null));
+                        break;
+                    case "ExoFillAttribute" when args.Length == 2:
+                        ops.Add(new MigrationOp("fill", ToSnakeCase(args[0].Value as string ?? ""), null, null, JsonValueOf(args[1])));
+                        break;
+                    case "ExoDropAttribute" when args.Length == 1:
+                        ops.Add(new MigrationOp("drop", ToSnakeCase(args[0].Value as string ?? ""), null, null, null));
+                        break;
+                    case "ExoSetNotNullAttribute" when args.Length == 1:
+                        var fill = op.NamedArguments.Where(n => n.Key == "Fill").Select(n => (TypedConstant?)n.Value).FirstOrDefault();
+                        ops.Add(new MigrationOp("set_not_null", ToSnakeCase(args[0].Value as string ?? ""), null, null, fill is null ? null : JsonValueOf(fill.Value)));
+                        break;
+                }
+            }
+
+            if (found.Any(m => m.Resource == resource && m.From == from))
+            {
+                errors.Add($"Resource '{resource}' has two migrations from version {from}: '{where}' and another. Keep one.");
+                continue;
+            }
+
+            found.Add(new MigrationModel(resource, from, to, ops, DeclOf(type)));
+        }
+
+        return found;
+    }
+
+    private static string JsonValueOf(TypedConstant constant)
+    {
+        object? value = constant.Value;
+        return value switch
+        {
+            null => "null",
+            string s => ManifestEmitter.Str(s),
+            bool b => b ? "true" : "false",
+            float f => f.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+            double d => d.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+            IFormattable n => n.ToString(null, System.Globalization.CultureInfo.InvariantCulture),
+            _ => ManifestEmitter.Str(value.ToString() ?? ""),
+        };
     }
 
     private static bool NamedBool(AttributeData? attr, string name)
