@@ -195,7 +195,7 @@ namespace Exoforge.Unity.Editor
             _stepContainer!.Add(desc);
 
             var baseField = new TextField("Instance URL") { value = _baseUrl };
-            baseField.tooltip = "Enter your cluster host (e.g. https://my-cluster.exoforge.app)";
+            baseField.tooltip = "Enter your server host (e.g. https://my-cluster.exoforge.app)";
             baseField.style.marginBottom = 8;
             _stepContainer.Add(baseField);
 
@@ -240,12 +240,12 @@ namespace Exoforge.Unity.Editor
             {
                 if (string.IsNullOrWhiteSpace(_wsUrl))
                 {
-                    _statusLabel?.SetText("⚠️ Please enter a cluster URL first.");
+                    _statusLabel?.SetText("⚠️ Please enter a server URL first.");
                     if (_statusLabel != null) _statusLabel.style.color = ExoforgeUIStyle.AccentOrange;
                     return;
                 }
 
-                _statusLabel?.SetText("Pinging cluster...");
+                _statusLabel?.SetText("Pinging server...");
                 _statusLabel!.style.color = ExoforgeUIStyle.AccentBlue;
                 try
                 {
@@ -299,7 +299,7 @@ namespace Exoforge.Unity.Editor
             {
                 if (string.IsNullOrWhiteSpace(_baseUrl) || string.IsNullOrWhiteSpace(_wsUrl))
                 {
-                    _statusLabel?.SetText("⚠️ Please enter your Exoforge cluster URL before continuing, or select 'Work Offline'.");
+                    _statusLabel?.SetText("⚠️ Please enter your Exoforge server URL before continuing, or select 'Work Offline'.");
                     if (_statusLabel != null) _statusLabel.style.color = ExoforgeUIStyle.AccentOrange;
                     return;
                 }

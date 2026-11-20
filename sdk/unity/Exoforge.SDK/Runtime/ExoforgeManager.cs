@@ -533,7 +533,13 @@ namespace Exoforge.Client.Unity
                     }
                     else
                     {
-                        Debug.LogWarning($"[Exoforge] Connected, but authentication failed: {auth.Error}");
+                        // Say what to do, not only what failed: the saved session belongs to a player (or to the
+                        // Studio) the server no longer accepts, and signing in again is the whole remedy.
+                        string reason = auth.Error is { } e && !string.IsNullOrWhiteSpace(e.ToString()) ? $" ({e})" : "";
+                        Debug.LogWarning(useStudioConnection
+                            ? $"[Exoforge] The server refused the Studio session{reason}. Sign in again with the Account button in the Exoforge Studio window."
+                            : $"[Exoforge] The server refused this player's saved session{reason}, so the game is not signed in. " +
+                              "Reset it with Exoforge ▸ Sessions ▸ Reset Anonymous Player Session (or ExoforgeSDK.Auth.ResetSession() in code) and play again.");
                         _readyTcs.TrySetResult(true);
                         OnReady?.Invoke();
                     }

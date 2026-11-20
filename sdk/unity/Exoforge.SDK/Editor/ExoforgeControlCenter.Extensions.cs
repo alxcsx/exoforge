@@ -64,7 +64,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             warnIcon.style.marginRight = 8;
             warnHeader.Add(warnIcon);
 
-            var warnTitle = new Label(_isConnecting ? "CONNECTING TO CLUSTER..." : "CLUSTER OFFLINE — LOCAL MODE ACTIVE");
+            var warnTitle = new Label(_isConnecting ? "CONNECTING TO SERVER..." : (NeedsSignIn ? "SIGN IN AGAIN — LOCAL MODE ACTIVE" : "SERVER OFFLINE — LOCAL MODE ACTIVE"));
             warnTitle.style.fontSize = 13;
             warnTitle.style.unityFontStyleAndWeight = FontStyle.Bold;
             warnTitle.style.color = _isConnecting ? ExoforgeUIStyle.AccentBlue : ExoforgeUIStyle.AccentOrange;
@@ -73,8 +73,10 @@ public partial class ExoforgeControlCenter : EditorWindow
 
             var warnDesc = new Label(
                 _isConnecting
-                    ? $"Connecting to cluster at {ActiveWsUrl}… Metrics, event streaming, and remote synchronization will unlock once connected."
-                    : $"Exoforge is a BaaS system. The editor is not connected to {ActiveWsUrl}. Developing and editing extensions is available locally, but deploying, streaming logs, metrics, and live events require an online cluster.");
+                    ? $"Connecting to server at {ActiveWsUrl}… Metrics, event streaming, and remote synchronization will unlock once connected."
+                    : NeedsSignIn
+                        ? $"The server at {ActiveWsUrl} did not accept your saved session, so it may have expired or been revoked. Sign in again with the Account button to deploy and see live data. Editing extensions still works."
+                        : $"Exoforge is a BaaS system. The editor is not connected to {ActiveWsUrl}. Developing and editing extensions is available locally, but deploying, streaming logs, metrics, and live events require an online server.");
             warnDesc.style.fontSize = 11;
             warnDesc.style.color = ExoforgeUIStyle.TextPrimary;
             warnDesc.style.whiteSpace = WhiteSpace.Normal;
@@ -115,7 +117,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             syncHeader.Add(syncIcon);
 
             string targetVer = RemoteSdkVersion ?? RemoteVersion;
-            string titleText = $"SDK VERSION OUT OF SYNC — CLUSTER v{targetVer} (INSTALLED: v{ExoforgePackageVersion.SdkVersion})";
+            string titleText = $"SDK VERSION OUT OF SYNC — SERVER v{targetVer} (INSTALLED: v{ExoforgePackageVersion.SdkVersion})";
 
             var syncTitle = new Label(titleText);
             syncTitle.style.fontSize = 13;
@@ -124,7 +126,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             syncHeader.Add(syncTitle);
             outOfSyncCard.Add(syncHeader);
 
-            var syncDesc = new Label("Your Unity SDK version differs from the connected cluster. You can still list, inspect, and develop extensions, but some contracts or features may require updating the package.");
+            var syncDesc = new Label("Your Unity SDK version differs from the connected server. You can still list, inspect, and develop extensions, but some contracts or features may require updating the package.");
             syncDesc.style.fontSize = 11;
             syncDesc.style.color = ExoforgeUIStyle.TextPrimary;
             syncDesc.style.whiteSpace = WhiteSpace.Normal;
@@ -137,7 +139,7 @@ public partial class ExoforgeControlCenter : EditorWindow
 
             if (SdkStatus == SdkCompatibilityStatus.UpdateAvailable)
             {
-                var updateBtn = ExoforgeUIStyle.CreateModernButton("⬇️ Download / Update SDK from Cluster", () => _ = DownloadOrUpdateSdkAsync(), bg: ExoforgeUIStyle.BrandPurple, height: 26);
+                var updateBtn = ExoforgeUIStyle.CreateModernButton("⬇️ Download / Update SDK from Server", () => _ = DownloadOrUpdateSdkAsync(), bg: ExoforgeUIStyle.BrandPurple, height: 26);
                 updateBtn.style.marginRight = 8;
                 syncActionRow.Add(updateBtn);
             }
@@ -310,7 +312,7 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         section.Add(headerRow);
 
-        var descLabel = new Label("Pre-installed and remote server extensions running on the connected cluster (read-only / immutable).");
+        var descLabel = new Label("Pre-installed and remote server extensions running on the connected server (read-only / immutable).");
         descLabel.style.fontSize = 11;
         descLabel.style.color = ExoforgeUIStyle.TextMuted;
         descLabel.style.marginBottom = 10;
@@ -337,7 +339,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             offlineBox.style.borderLeftColor = ExoforgeUIStyle.BorderSubtle;
             offlineBox.style.borderRightColor = ExoforgeUIStyle.BorderSubtle;
 
-            var offMsg = new Label("Connect to the cluster to view active remote and immutable extensions.");
+            var offMsg = new Label("Connect to the server to view active remote and immutable extensions.");
             offMsg.style.fontSize = 11;
             offMsg.style.color = ExoforgeUIStyle.TextSecondary;
             offlineBox.Add(offMsg);
@@ -368,7 +370,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             emptyBox.style.borderBottomLeftRadius = 6;
             emptyBox.style.borderBottomRightRadius = 6;
 
-            var emptyMsg = new Label("No remote extensions reported by the cluster.");
+            var emptyMsg = new Label("No remote extensions reported by the server.");
             emptyMsg.style.fontSize = 11;
             emptyMsg.style.color = ExoforgeUIStyle.TextSecondary;
             emptyBox.Add(emptyMsg);
@@ -698,7 +700,7 @@ public partial class ExoforgeControlCenter : EditorWindow
                 fontSize = 15,
                 normal = { textColor = _isConnecting ? ExoforgeUIStyle.AccentBlue : new Color(0.85f, 0.40f, 0.0f) }
             };
-            EditorGUILayout.LabelField(_isConnecting ? "Connecting to Cluster…" : "CLUSTER OFFLINE — LOCAL MODE ACTIVE", titleStyle);
+            EditorGUILayout.LabelField(_isConnecting ? "Connecting to Server…" : (NeedsSignIn ? "SIGN IN AGAIN — LOCAL MODE ACTIVE" : "SERVER OFFLINE — LOCAL MODE ACTIVE"), titleStyle);
 
             var descStyle = new GUIStyle(EditorStyles.wordWrappedLabel)
             {
@@ -707,8 +709,8 @@ public partial class ExoforgeControlCenter : EditorWindow
             };
             EditorGUILayout.LabelField(
                 _isConnecting
-                    ? $"Connecting to cluster at {ActiveWsUrl}… Metrics, event streaming, and remote synchronization will unlock once connected."
-                    : $"The editor is not connected to the cluster ({ActiveWsUrl}). Scaffolding and C# extension editing are available locally, but deploying, streaming logs, metrics, and live events require a running cluster.",
+                    ? $"Connecting to server at {ActiveWsUrl}… Metrics, event streaming, and remote synchronization will unlock once connected."
+                    : $"The editor is not connected to the server ({ActiveWsUrl}). Scaffolding and C# extension editing are available locally, but deploying, streaming logs, metrics, and live events require a running server.",
                 descStyle);
             EditorGUILayout.EndVertical();
 
@@ -792,7 +794,7 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         using (new EditorGUI.DisabledScope(_isBuilding || !_isConnected || _localPlugins.Count == 0))
         {
-            if (GUILayout.Button(new GUIContent("🚀 Build & Deploy All", "Build all workspace extensions and deploy them to the cluster"), EditorStyles.miniButton, GUILayout.Width(135)))
+            if (GUILayout.Button(new GUIContent("🚀 Build & Deploy All", "Build all workspace extensions and deploy them to the server"), EditorStyles.miniButton, GUILayout.Width(135)))
             {
                 _ = BuildAndDeployAllAsync();
             }
@@ -918,7 +920,7 @@ public partial class ExoforgeControlCenter : EditorWindow
                         {
                             var origBg = GUI.backgroundColor;
                             GUI.backgroundColor = new Color(0.30f, 0.85f, 0.45f);
-                            if (GUILayout.Button(new GUIContent("🚀 Build & Deploy", "Compile and immediately deploy this extension to the running cluster"), EditorStyles.miniButton, GUILayout.Width(110), GUILayout.Height(24)))
+                            if (GUILayout.Button(new GUIContent("🚀 Build & Deploy", "Compile and immediately deploy this extension to the running server"), EditorStyles.miniButton, GUILayout.Width(110), GUILayout.Height(24)))
                             {
                                 _ = BuildPluginAsync(plugin, thenDeploy: true);
                             }
@@ -944,7 +946,7 @@ public partial class ExoforgeControlCenter : EditorWindow
                     {
                         var origBg = GUI.backgroundColor;
                         GUI.backgroundColor = new Color(0.30f, 0.85f, 0.45f);
-                        if (GUILayout.Button(new GUIContent("🚀 Deploy", "Deploy the built extension to the running cluster"), EditorStyles.miniButton, GUILayout.Width(75), GUILayout.Height(24)))
+                        if (GUILayout.Button(new GUIContent("🚀 Deploy", "Deploy the built extension to the running server"), EditorStyles.miniButton, GUILayout.Width(75), GUILayout.Height(24)))
                         {
                             _ = DeployPluginAsync(plugin);
                         }
@@ -996,7 +998,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
 
         EditorGUILayout.Space(10);
-        _showRemotePlugins = EditorGUILayout.Foldout(_showRemotePlugins, $"Advanced: Cluster Remote Extensions ({_remotePlugins.Count})", true);
+        _showRemotePlugins = EditorGUILayout.Foldout(_showRemotePlugins, $"Advanced: Server Remote Extensions ({_remotePlugins.Count})", true);
         if (_showRemotePlugins)
         {
             EditorGUI.indentLevel++;
@@ -1063,7 +1065,7 @@ public partial class ExoforgeControlCenter : EditorWindow
                         {
                             bool confirmed = EditorUtility.DisplayDialog(
                                 "Remove extension",
-                                $"Remove '{id}' from the cluster?\n\nIts files stay on the server; the extension stops running.",
+                                $"Remove '{id}' from the server?\n\nIts files stay on the server; the extension stops running.",
                                 "Remove", "Cancel");
 
                             if (confirmed)
@@ -1138,6 +1140,8 @@ public partial class ExoforgeControlCenter : EditorWindow
             targets = buildable;
         }
 
+        targets = InDeployOrder(targets);
+
         ShowStatus($"Building {targets.Count} extension(s)…", MessageType.Info);
         int failCount = 0;
         foreach (var plugin in targets)
@@ -1159,16 +1163,32 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
     }
 
+    /// <summary>
+    /// Providers before the extensions that call them, so a caller starts with its dependencies already running and
+    /// its stubs can be generated from their manifests. A problem (a circle, a service nobody provides) is shown,
+    /// and the order is still returned so one bad link does not stop the rest.
+    /// </summary>
+    private List<LocalPluginInfo> InDeployOrder(List<LocalPluginInfo> plugins)
+    {
+        var plan = ExoDeployOrder.Plan(ExoDeployOrder.ReadNodes(Workspace.ExtensionsPath, plugins.Select(p => p.Name)));
+        if (!plan.IsClean)
+        {
+            ShowStatus(string.Join(" ", plan.Problems), MessageType.Warning);
+        }
+
+        return plan.Order.Select(name => plugins.First(p => p.Name == name)).ToList();
+    }
+
     private async Task BuildAndDeployAllAsync()
     {
         if (_isBuilding) return;
         if (!_isConnected)
         {
-            ShowStatus("Cannot deploy: not connected to cluster.", MessageType.Warning);
+            ShowStatus("Cannot deploy: not connected to server.", MessageType.Warning);
             return;
         }
 
-        var targets = _localPlugins.Where(p => p.CanBuild).ToList();
+        var targets = InDeployOrder(_localPlugins.Where(p => p.CanBuild).ToList());
         if (targets.Count == 0)
         {
             ShowStatus("No buildable workspace extensions found.", MessageType.Warning);
@@ -1189,11 +1209,11 @@ public partial class ExoforgeControlCenter : EditorWindow
         if (_isBuilding) return;
         if (!_isConnected)
         {
-            ShowStatus("Cannot deploy: not connected to cluster.", MessageType.Warning);
+            ShowStatus("Cannot deploy: not connected to server.", MessageType.Warning);
             return;
         }
 
-        var unbuilt = _localPlugins.Where(p => p.CanBuild && (!p.IsBuilt || p.Modified)).ToList();
+        var unbuilt = InDeployOrder(_localPlugins.Where(p => p.CanBuild && (!p.IsBuilt || p.Modified)).ToList());
         if (unbuilt.Count > 0)
         {
             ShowStatus($"Building {unbuilt.Count} unbuilt/modified extension(s) before deploy…", MessageType.Info);
@@ -1203,7 +1223,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             }
         }
 
-        var deployable = _localPlugins.Where(p => p.IsBuilt && SessionState.GetString(BuildFailureKey(p.Name), "").Length == 0).ToList();
+        var deployable = InDeployOrder(_localPlugins.Where(p => p.IsBuilt && SessionState.GetString(BuildFailureKey(p.Name), "").Length == 0).ToList());
         if (deployable.Count == 0)
         {
             ShowStatus("No built extensions available to deploy.", MessageType.Warning);
@@ -1211,7 +1231,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
 
         _isBuilding = true;
-        ShowStatus($"Deploying {deployable.Count} extension(s) to cluster…", MessageType.Info);
+        ShowStatus($"Deploying {deployable.Count} extension(s) to server…", MessageType.Info);
         Repaint();
 
         int successCount = 0;
@@ -1238,7 +1258,7 @@ public partial class ExoforgeControlCenter : EditorWindow
 
             if (errors.Count == 0)
             {
-                ShowStatus($"✓ Successfully deployed all {successCount} extension(s) to cluster.", MessageType.Info);
+                ShowStatus($"✓ Successfully deployed all {successCount} extension(s) to server.", MessageType.Info);
             }
             else
             {
@@ -1378,7 +1398,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         {
             var deployer = new ExoDeployer(Workspace);
             await deployer.UploadExtensionAsync(plugin.Name, existingClient: _editorClient);
-            ShowStatus($"Successfully deployed '{plugin.Name}' to cluster.", MessageType.Info);
+            ShowStatus($"Successfully deployed '{plugin.Name}' to server.", MessageType.Info);
             await RefreshPluginsAsync();
             await SyncAndGenerateClientAsync();
         }

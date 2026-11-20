@@ -420,7 +420,7 @@ namespace Exoforge.Unity.Editor
                 9
             );
             versionPill.tooltip = $"Exoforge Unity SDK: v{ExoforgePackageVersion.SdkVersion}\nCommit: {ExoforgePackageVersion.BuildHash}\nBuild Date: {ExoforgePackageVersion.BuildDate}" +
-                (IsConnected && ExoforgeControlCenter.RemoteVersion != "—" ? $"\n\nConnected Cluster:\nv{ExoforgeControlCenter.RemoteVersion} ({ExoforgeControlCenter.RemoteCommitHash})\nBuilt: {ExoforgeControlCenter.RemoteBuildDate}" : "");
+                (IsConnected && ExoforgeControlCenter.RemoteVersion != "—" ? $"\n\nConnected Server:\nv{ExoforgeControlCenter.RemoteVersion} ({ExoforgeControlCenter.RemoteCommitHash})\nBuilt: {ExoforgeControlCenter.RemoteBuildDate}" : "");
             brandContainer.Add(versionPill);
 
             var divider = new VisualElement();
@@ -468,7 +468,7 @@ namespace Exoforge.Unity.Editor
             _connectionDot = ExoforgeUIStyle.CreateStatusDot(IsConnected ? ExoforgeUIStyle.AccentGreen : ExoforgeUIStyle.AccentGray, 8f);
             _connectionPill.Add(_connectionDot);
 
-            _connectionStatusLabel = new Label(IsConnected ? "Online" : (ExoforgeControlCenter.IsConnecting ? "Connecting..." : "Offline"));
+            _connectionStatusLabel = new Label(IsConnected ? "Online" : (ExoforgeControlCenter.IsConnecting ? "Connecting..." : (ExoforgeControlCenter.NeedsSignIn ? "Sign in" : "Offline")));
             _connectionStatusLabel.style.fontSize = 11;
             _connectionStatusLabel.style.color = ExoforgeUIStyle.TextHeaderPrimary;
             _connectionPill.Add(_connectionStatusLabel);
@@ -657,7 +657,7 @@ namespace Exoforge.Unity.Editor
             if (_connectionDot != null && _connectionStatusLabel != null && _connectBtn != null)
             {
                 _connectionDot.style.backgroundColor = IsConnected ? ExoforgeUIStyle.AccentGreen : ExoforgeUIStyle.AccentGray;
-                _connectionStatusLabel.text = IsConnected ? "Online" : (ExoforgeControlCenter.IsConnecting ? "Connecting..." : "Offline");
+                _connectionStatusLabel.text = IsConnected ? "Online" : (ExoforgeControlCenter.IsConnecting ? "Connecting..." : (ExoforgeControlCenter.NeedsSignIn ? "Sign in" : "Offline"));
                 _connectionStatusLabel.style.color = ExoforgeUIStyle.TextHeaderPrimary;
                 _connectBtn.text = IsConnected ? "Disconnect" : "⚡ Connect";
                 _connectBtn.style.backgroundColor = IsConnected ? ExoforgeUIStyle.BgHeaderBtn : ExoforgeUIStyle.BrandPurple;
@@ -867,7 +867,7 @@ namespace Exoforge.Unity.Editor
                 string emptyMsg = _currentScopeFilter switch
                 {
                     ScopeFilter.Workspace => "No workspace extensions found.",
-                    ScopeFilter.Remote => "No remote cluster extensions found.",
+                    ScopeFilter.Remote => "No remote server extensions found.",
                     _ => "No extensions match your filter."
                 };
                 var emptyLabel = new Label(emptyMsg);
@@ -1285,7 +1285,7 @@ namespace Exoforge.Unity.Editor
                         RebuildUI();
                     }
                 }, height: 22);
-                logsBtn.tooltip = "View live runtime logs emitted by this extension on the cluster";
+                logsBtn.tooltip = "View live runtime logs emitted by this extension on the server";
                 logsBtn.style.marginRight = 6;
                 toolbar.Add(logsBtn);
 
@@ -1698,20 +1698,20 @@ namespace Exoforge.Unity.Editor
                 ExoforgeUIStyle.ApplyCard(offlineBox);
                 offlineBox.style.marginTop = 12;
 
-                var offlineTitle = new Label("Live Cluster Disconnected");
+                var offlineTitle = new Label("Live Server Disconnected");
                 offlineTitle.style.fontSize = 13;
                 offlineTitle.style.unityFontStyleAndWeight = FontStyle.Bold;
                 offlineTitle.style.color = ExoforgeUIStyle.AccentOrange;
                 offlineBox.Add(offlineTitle);
 
-                var offlineDesc = new Label("Connect to your local or remote Exoforge cluster to browse live records, insert test data, edit values in place, and purge tables.");
+                var offlineDesc = new Label("Connect to your local or remote Exoforge server to browse live records, insert test data, edit values in place, and purge tables.");
                 offlineDesc.style.fontSize = 11;
                 offlineDesc.style.color = ExoforgeUIStyle.TextSecondary;
                 offlineDesc.style.marginTop = 4;
                 offlineDesc.style.marginBottom = 10;
                 offlineBox.Add(offlineDesc);
 
-                var connectNowBtn = ExoforgeUIStyle.CreateModernButton("⚡ Connect to Cluster", async () =>
+                var connectNowBtn = ExoforgeUIStyle.CreateModernButton("⚡ Connect to Server", async () =>
                 {
                     await ExoforgeControlCenter.ConnectSharedAsync();
                     if (IsConnected && !string.IsNullOrEmpty(_selectedResourceName))
@@ -2727,7 +2727,7 @@ namespace Exoforge.Unity.Editor
                         }
                     catch (Exception ex)
                     {
-                        Debug.LogWarning($"[Exoforge Plugins] Failed to fetch cluster manifest export: {ex.Message}");
+                        Debug.LogWarning($"[Exoforge Plugins] Failed to fetch server manifest export: {ex.Message}");
                     }
                 }
 
@@ -2946,7 +2946,7 @@ namespace Exoforge.Unity.Editor
             var client = GetClient();
             if (client == null || !client.IsConnected)
             {
-                _sandboxResult = "Error: Not connected to cluster.";
+                _sandboxResult = "Error: Not connected to server.";
                 RebuildDetailPaneOnly();
                 return;
             }
@@ -3060,7 +3060,7 @@ namespace Exoforge.Unity.Editor
         {
             if (!IsConnected)
             {
-                ShowStatus("Cannot deploy: not connected to cluster.");
+                ShowStatus("Cannot deploy: not connected to server.");
                 return;
             }
 
@@ -3071,13 +3071,22 @@ namespace Exoforge.Unity.Editor
                 return;
             }
 
+            // Providers first: a caller starts with its dependencies running and its stubs readable from their manifests.
+            var plan = ExoDeployOrder.Plan(ExoDeployOrder.ReadNodes(
+                ExoWorkspace.Load(ExoforgeEditorConfig.GetAbsoluteWorkspacePath()).ExtensionsPath, wsPlugins.Select(p => p.Name)));
+            wsPlugins = plan.Order.Select(name => wsPlugins.First(p => p.Name == name)).ToList();
+            if (!plan.IsClean)
+            {
+                Debug.LogWarning("[Exoforge] " + string.Join(" ", plan.Problems));
+            }
+
             ShowStatus($"Building {wsPlugins.Count} workspace extension(s)…");
             foreach (var p in wsPlugins)
             {
                 await BuildPluginAsync(p);
             }
 
-            ShowStatus($"Deploying {wsPlugins.Count} workspace extension(s) to cluster…");
+            ShowStatus($"Deploying {wsPlugins.Count} workspace extension(s) to server…");
             int success = 0;
             var ws = ExoWorkspace.Load(ExoforgeEditorConfig.GetAbsoluteWorkspacePath());
             var deployer = new ExoDeployer(ws);
@@ -3102,17 +3111,17 @@ namespace Exoforge.Unity.Editor
         {
             if (!IsConnected)
             {
-                ShowStatus("Cannot deploy: not connected to cluster.");
+                ShowStatus("Cannot deploy: not connected to server.");
                 return;
             }
 
-            ShowStatus($"Deploying '{plugin.Name}' to cluster…");
+            ShowStatus($"Deploying '{plugin.Name}' to server…");
             try
             {
                 var ws = ExoWorkspace.Load(ExoforgeEditorConfig.GetAbsoluteWorkspacePath());
                 var deployer = new ExoDeployer(ws);
                 await deployer.UploadExtensionAsync(plugin.Name, existingClient: GetClient());
-                ShowStatus($"✓ Successfully deployed '{plugin.Name}' to cluster.");
+                ShowStatus($"✓ Successfully deployed '{plugin.Name}' to server.");
                 await RefreshPluginsDataAsync();
                 int changed = await deployer.SyncContractsAsync(outputPathOverride: ExoforgeEditorConfig.GetAbsoluteGeneratedScriptPath(), existingClient: GetClient(), includeStudio: true);
                 if (changed > 0)

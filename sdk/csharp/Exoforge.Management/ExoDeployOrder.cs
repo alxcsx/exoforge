@@ -1,0 +1,150 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text.Json.Nodes;
+
+namespace Exoforge.Management;
+
+/// <summary>An extension as the deploy order sees it: the services it provides and the services it calls.</summary>
+public sealed class DeployNode
+{
+    public DeployNode(string name, IReadOnlyCollection<string> provides, IReadOnlyCollection<string> dependencies)
+    {
+        Name = name;
+        Provides = provides;
+        Dependencies = dependencies;
+    }
+
+    public string Name { get; }
+    public IReadOnlyCollection<string> Provides { get; }
+    public IReadOnlyCollection<string> Dependencies { get; }
+}
+
+/// <summary>
+/// The order to build and deploy a set of extensions in. An extension that calls a service another one provides
+/// goes after it, so the provider is already running (and its manifest already written, for the stubs) when the
+/// caller starts. Services nobody in the set provides are the server's, and are only checked when the caller
+/// says which ones the server has.
+/// </summary>
+public sealed class DeployPlan
+{
+    public DeployPlan(IReadOnlyList<string> order, IReadOnlyList<string> problems)
+    {
+        Order = order;
+        Problems = problems;
+    }
+
+    public IReadOnlyList<string> Order { get; }
+    public IReadOnlyList<string> Problems { get; }
+    public bool IsClean => Problems.Count == 0;
+}
+
+public static class ExoDeployOrder
+{
+    /// <param name="serverServices">The services the server already runs; null when unknown (nothing is reported missing).</param>
+    public static DeployPlan Plan(IEnumerable<DeployNode> nodes, IReadOnlyCollection<string>? serverServices = null)
+    {
+        var list = nodes.OrderBy(n => n.Name, StringComparer.Ordinal).ToList();
+        var providerOf = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var node in list)
+        {
+            foreach (string service in node.Provides)
+            {
+                providerOf.TryAdd(service, node.Name);
+            }
+        }
+
+        var problems = new List<string>();
+        var waitsFor = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        foreach (var node in list)
+        {
+            var needs = new HashSet<string>(StringComparer.Ordinal);
+            foreach (string dependency in node.Dependencies)
+            {
+                if (providerOf.TryGetValue(dependency, out string? provider))
+                {
+                    if (provider != node.Name) needs.Add(provider);
+                }
+                else if (serverServices != null && !serverServices.Contains(dependency))
+                {
+                    problems.Add($"'{node.Name}' needs the service '{dependency}', which no extension here provides and the server does not run.");
+                }
+            }
+
+            waitsFor[node.Name] = needs;
+        }
+
+        var order = new List<string>();
+        var remaining = list.Select(n => n.Name).ToList();
+        while (remaining.Count > 0)
+        {
+            string? next = remaining.FirstOrDefault(name => waitsFor[name].All(order.Contains));
+            if (next == null)
+            {
+                problems.Add($"These extensions depend on each other in a circle: {string.Join(", ", remaining)}.");
+                order.AddRange(remaining);
+                break;
+            }
+
+            order.Add(next);
+            remaining.Remove(next);
+        }
+
+        return new DeployPlan(order, problems);
+    }
+
+    /// <summary>The problems with deploying in this exact order: an extension placed before one it calls.</summary>
+    public static IReadOnlyList<string> Verify(IReadOnlyList<string> order, IEnumerable<DeployNode> nodes)
+    {
+        var all = nodes.ToList();
+        var problems = new List<string>();
+        foreach (var node in all)
+        {
+            int at = order.ToList().IndexOf(node.Name);
+            foreach (string dependency in node.Dependencies)
+            {
+                var provider = all.FirstOrDefault(o => o.Name != node.Name && o.Provides.Contains(dependency));
+                if (provider != null && order.ToList().IndexOf(provider.Name) > at)
+                {
+                    problems.Add($"'{node.Name}' is deployed before '{provider.Name}', which provides '{dependency}'.");
+                }
+            }
+        }
+
+        return problems;
+    }
+
+    /// <summary>Reads the nodes from each extension's <c>manifest.json</c>; an extension not built yet has none and counts as having no links.</summary>
+    public static List<DeployNode> ReadNodes(string extensionsPath, IEnumerable<string> names)
+    {
+        var nodes = new List<DeployNode>();
+        foreach (string name in names)
+        {
+            var provides = new List<string>();
+            var dependencies = new List<string>();
+            string path = Path.Combine(extensionsPath, name, "manifest.json");
+            try
+            {
+                if (File.Exists(path) && JsonNode.Parse(File.ReadAllText(path)) is JsonObject manifest)
+                {
+                    provides.AddRange(Strings(manifest["provides"]));
+                    dependencies.AddRange(Strings(manifest["dependencies"]));
+                }
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                // a half-written manifest: treat as unlinked, the build will rewrite it
+            }
+
+            nodes.Add(new DeployNode(name, provides, dependencies));
+        }
+
+        return nodes;
+    }
+
+    private static IEnumerable<string> Strings(JsonNode? node) =>
+        node is JsonArray array
+            ? array.Select(item => item?.GetValue<string>() ?? "").Where(s => s.Length > 0)
+            : Enumerable.Empty<string>();
+}

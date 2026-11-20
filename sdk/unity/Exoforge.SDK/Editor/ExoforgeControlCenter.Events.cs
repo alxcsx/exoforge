@@ -108,7 +108,7 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         if (filtered.Count == 0)
         {
-            EditorGUILayout.HelpBox(_isConnected ? "Listening for live events on topic '*'..." : "Connect to cluster to monitor live broadcast events.", MessageType.None);
+            EditorGUILayout.HelpBox(_isConnected ? "Listening for live events on topic '*'..." : "Connect to server to monitor live broadcast events.", MessageType.None);
         }
         else
         {

@@ -41,7 +41,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         EditorGUILayout.Space(6);
 
         // 1. Cluster Telemetry Card
-        EditorGUILayout.LabelField("Cluster Telemetry & Node Health", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("Server Telemetry & Node Health", EditorStyles.boldLabel);
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
 
         EditorGUILayout.BeginHorizontal();
@@ -54,15 +54,15 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         EditorGUILayout.BeginHorizontal();
         DrawMetricPill("Plugins", _pluginsCount.ToString());
-        DrawMetricPill("Status", _isConnected ? "HEALTHY" : "OFFLINE");
+        DrawMetricPill("Status", _isConnected ? "HEALTHY" : (NeedsSignIn ? "SIGN IN" : "OFFLINE"));
         DrawMetricPill("Unity SDK", $"v{ExoforgePackageVersion.SdkVersion} (#{ExoforgePackageVersion.BuildHash})");
         EditorGUILayout.EndHorizontal();
 
         EditorGUILayout.Space(2);
 
         EditorGUILayout.BeginHorizontal();
-        DrawMetricPill("Cluster Version", RemoteVersion != "—" ? $"v{RemoteVersion} (#{RemoteCommitHash})" : "—");
-        DrawMetricPill("Cluster Built", RemoteBuildDate);
+        DrawMetricPill("Server Version", RemoteVersion != "—" ? $"v{RemoteVersion} (#{RemoteCommitHash})" : "—");
+        DrawMetricPill("Server Built", RemoteBuildDate);
         EditorGUILayout.EndHorizontal();
 
         if (_isConnected && RemoteProjectName != "—")
@@ -84,12 +84,12 @@ public partial class ExoforgeControlCenter : EditorWindow
         EditorGUILayout.Space(8);
 
         // 3. Cluster Operations & Developer Tools Card
-        EditorGUILayout.LabelField("Cluster Operations & Dashboard", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("Server Operations & Dashboard", EditorStyles.boldLabel);
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
 
         using (new EditorGUI.DisabledScope(!_isConnected))
         {
-            if (GUILayout.Button("🔄 Hot-Restart Cluster Supervision", GUILayout.Height(26)))
+            if (GUILayout.Button("🔄 Hot-Restart Server Supervision", GUILayout.Height(26)))
             {
                 _ = RestartClusterAsync();
             }
@@ -146,14 +146,14 @@ public partial class ExoforgeControlCenter : EditorWindow
         EditorGUILayout.EndHorizontal();
 
         EditorGUILayout.BeginHorizontal();
-        EditorGUILayout.LabelField("Cluster Engine:", EditorStyles.miniLabel, GUILayout.Width(130));
+        EditorGUILayout.LabelField("Server Engine:", EditorStyles.miniLabel, GUILayout.Width(130));
         EditorGUILayout.LabelField(RemoteVersion != "—" ? $"v{RemoteVersion} (#{RemoteCommitHash})" : "Offline", EditorStyles.label);
         EditorGUILayout.EndHorizontal();
 
         if (!string.IsNullOrEmpty(RemoteSdkVersion) && RemoteSdkVersion != "—")
         {
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Cluster SDK Package:", EditorStyles.miniLabel, GUILayout.Width(130));
+            EditorGUILayout.LabelField("Server SDK Package:", EditorStyles.miniLabel, GUILayout.Width(130));
             string packageLabel = $"v{RemoteSdkVersion}" + (RemoteSdkPackageFilename != null ? $" ({RemoteSdkPackageFilename})" : "");
             EditorGUILayout.LabelField(packageLabel, EditorStyles.label);
             EditorGUILayout.EndHorizontal();
@@ -163,26 +163,26 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         if (!_isConnected)
         {
-            EditorGUILayout.HelpBox("Connect to cluster to verify SDK version compatibility and available updates.", MessageType.None);
+            EditorGUILayout.HelpBox("Connect to server to verify SDK version compatibility and available updates.", MessageType.None);
         }
         else
         {
             switch (SdkStatus)
             {
                 case SdkCompatibilityStatus.UpToDate:
-                    EditorGUILayout.HelpBox($"✓ Unity SDK is up to date and matches the connected cluster.", MessageType.Info);
+                    EditorGUILayout.HelpBox($"✓ Unity SDK is up to date and matches the connected server.", MessageType.Info);
                     break;
 
                 case SdkCompatibilityStatus.UpdateAvailable:
-                    EditorGUILayout.HelpBox($"⚠️ An SDK update is available on the cluster (Cluster: v{RemoteSdkVersion ?? RemoteVersion}, Installed: v{ExoforgePackageVersion.SdkVersion}).", MessageType.Warning);
-                    if (GUILayout.Button("⬇️ Download / Update SDK from Cluster", GUILayout.Height(24)))
+                    EditorGUILayout.HelpBox($"⚠️ An SDK update is available on the server (Server: v{RemoteSdkVersion ?? RemoteVersion}, Installed: v{ExoforgePackageVersion.SdkVersion}).", MessageType.Warning);
+                    if (GUILayout.Button("⬇️ Download / Update SDK from Server", GUILayout.Height(24)))
                     {
                         _ = DownloadOrUpdateSdkAsync();
                     }
                     break;
 
                 case SdkCompatibilityStatus.Ahead:
-                    EditorGUILayout.HelpBox($"ℹ️ Installed SDK (v{ExoforgePackageVersion.SdkVersion}) is newer than the connected cluster (v{RemoteVersion}).", MessageType.Info);
+                    EditorGUILayout.HelpBox($"ℹ️ Installed SDK (v{ExoforgePackageVersion.SdkVersion}) is newer than the connected server (v{RemoteVersion}).", MessageType.Info);
                     break;
 
                 default:

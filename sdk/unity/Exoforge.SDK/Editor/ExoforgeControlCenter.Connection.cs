@@ -236,7 +236,7 @@ public partial class ExoforgeControlCenter : EditorWindow
 
             if (SessionState.GetBool(WasConnectedSessionKey, false) && !_isConnecting)
             {
-                ShowStatus("Connection to cluster lost. Reconnecting…", MessageType.Warning);
+                ShowStatus("Connection to server lost. Reconnecting…", MessageType.Warning);
                 _ = ReconnectWithRetryAsync(maxRetries: 6, delayMs: 1200);
             }
         };
@@ -569,7 +569,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             }
             catch (ExoActionException ex)
             {
-                UnityEngine.Debug.LogWarning($"[Exoforge] Stored session rejected by cluster: {ex.Message}");
+                UnityEngine.Debug.LogWarning($"[Exoforge] Stored session rejected by server: {ex.Message}");
                 return false;
             }
             catch (Exception)
@@ -591,7 +591,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             }
             catch (ExoActionException ex)
             {
-                UnityEngine.Debug.LogWarning($"[Exoforge] Stored session rejected by cluster: {ex.Message}");
+                UnityEngine.Debug.LogWarning($"[Exoforge] Stored session rejected by server: {ex.Message}");
                 return false;
             }
             catch (Exception)
@@ -647,7 +647,7 @@ public partial class ExoforgeControlCenter : EditorWindow
     {
         if (_editorClient == null || !_isConnected)
         {
-            ShowStatus("Not connected to cluster. Connect to view remote extensions.", MessageType.Warning);
+            ShowStatus("Not connected to server. Connect to view remote extensions.", MessageType.Warning);
             Repaint();
             return;
         }
@@ -784,12 +784,12 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
         catch (Exception ex)
         {
-            ShowStatus($"Could not read cluster telemetry: {ex.Message}", MessageType.Error);
+            ShowStatus($"Could not read server telemetry: {ex.Message}", MessageType.Error);
         }
 
         if (updated)
         {
-            ShowStatus($"✓ Extensions & telemetry updated: {_remotePlugins.Count} remote extensions, cluster node: {_nodeName}.", MessageType.Info);
+            ShowStatus($"✓ Extensions & telemetry updated: {_remotePlugins.Count} remote extensions, server node: {_nodeName}.", MessageType.Info);
         }
 
         RefreshTabContent();
@@ -805,7 +805,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
         else
         {
-            ShowStatus($"✓ Local extensions refreshed ({_localPlugins.Count} found). Connect to cluster to refresh remote extensions.", MessageType.Info);
+            ShowStatus($"✓ Local extensions refreshed ({_localPlugins.Count} found). Connect to server to refresh remote extensions.", MessageType.Info);
             RefreshTabContent();
             Repaint();
         }
@@ -982,7 +982,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         string host = ActiveHttpEndpoint;
         if (string.IsNullOrEmpty(host))
         {
-            EditorUtility.DisplayDialog("Exoforge SDK", "No active cluster HTTP endpoint is configured. Please connect to a cluster first.", "OK");
+            EditorUtility.DisplayDialog("Exoforge SDK", "No active server HTTP endpoint is configured. Please connect to a server first.", "OK");
             return;
         }
 
@@ -994,7 +994,7 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         bool download = EditorUtility.DisplayDialog(
             "Exoforge Unity SDK Package",
-            $"An SDK package is hosted on the cluster:\n• File: {filename}\n• Remote Version: {RemoteSdkVersion ?? RemoteVersion}\n• Local Version: {ExoforgePackageVersion.SdkVersion}\n\nChoose an option to install or download:",
+            $"An SDK package is hosted on the server:\n• File: {filename}\n• Remote Version: {RemoteSdkVersion ?? RemoteVersion}\n• Local Version: {ExoforgePackageVersion.SdkVersion}\n\nChoose an option to install or download:",
             "Download .tgz",
             "Open Download in Browser"
         );
@@ -1008,7 +1008,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         string savePath = EditorUtility.SaveFilePanel("Save Exoforge SDK Package", "", filename, "tgz");
         if (string.IsNullOrEmpty(savePath)) return;
 
-        EditorUtility.DisplayProgressBar("Exoforge SDK", "Downloading package archive from cluster...", 0.4f);
+        EditorUtility.DisplayProgressBar("Exoforge SDK", "Downloading package archive from server...", 0.4f);
         try
         {
             using var http = new System.Net.Http.HttpClient();

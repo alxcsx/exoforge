@@ -51,11 +51,11 @@ public partial class ExoforgeControlCenter : EditorWindow
 
             using (new EditorGUI.DisabledScope(!_isConnected))
             {
-                if (GUILayout.Button("Push to Cluster", EditorStyles.miniButton, GUILayout.Width(115)))
+                if (GUILayout.Button("Push to Server", EditorStyles.miniButton, GUILayout.Width(115)))
                 {
                     _ = PushProjectMetadataToClusterAsync();
                 }
-                if (GUILayout.Button("Pull from Cluster", EditorStyles.miniButton, GUILayout.Width(120)))
+                if (GUILayout.Button("Pull from Server", EditorStyles.miniButton, GUILayout.Width(120)))
                 {
                     PullProjectMetadataFromCluster();
                 }
@@ -64,7 +64,7 @@ public partial class ExoforgeControlCenter : EditorWindow
 
             if (_isConnected && RemoteProjectName != "—")
             {
-                EditorGUILayout.LabelField($"Cluster Identity: {RemoteStudioName} / {RemoteProjectName}", EditorStyles.miniLabel);
+                EditorGUILayout.LabelField($"Server Identity: {RemoteStudioName} / {RemoteProjectName}", EditorStyles.miniLabel);
             }
         }
         else
@@ -342,7 +342,7 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         string currentBase = ExoforgeEditorConfig.DeriveBaseUrl(currentWs, currentHttp);
         EditorGUI.BeginChangeCheck();
-        string newBase = EditorGUILayout.TextField("Cluster Base URL", currentBase);
+        string newBase = EditorGUILayout.TextField("Server Base URL", currentBase);
         if (EditorGUI.EndChangeCheck() && !string.IsNullOrWhiteSpace(newBase) && newBase != currentBase)
         {
             ExoforgeEditorConfig.DeriveEndpoints(newBase, out var derivedWs, out var derivedHttp);
@@ -599,7 +599,7 @@ public partial class ExoforgeControlCenter : EditorWindow
 
             // 4. Update / Download SDK
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Cluster SDK Package", EditorStyles.boldLabel, GUILayout.Width(220));
+            EditorGUILayout.LabelField("Server SDK Package", EditorStyles.boldLabel, GUILayout.Width(220));
             using (new EditorGUI.DisabledScope(!_isConnected))
             {
                 if (GUILayout.Button("Download Latest SDK Tarball", GUILayout.Height(24)))
@@ -608,7 +608,7 @@ public partial class ExoforgeControlCenter : EditorWindow
                 }
             }
             EditorGUILayout.EndHorizontal();
-            EditorGUILayout.LabelField($"Installed: v{ExoforgePackageVersion.SdkVersion} • Cluster: v{RemoteSdkVersion ?? RemoteVersion}", EditorStyles.miniLabel);
+            EditorGUILayout.LabelField($"Installed: v{ExoforgePackageVersion.SdkVersion} • Server: v{RemoteSdkVersion ?? RemoteVersion}", EditorStyles.miniLabel);
 
             EditorGUILayout.EndVertical();
         }
@@ -658,7 +658,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             RemoteProjectName = Workspace.Config.ProjectName;
             RemoteStudioName = Workspace.Config.StudioName;
             RemoteDescription = Workspace.Config.Description ?? "";
-            ShowStatus("✓ Pushed project metadata to cluster.", MessageType.Info);
+            ShowStatus("✓ Pushed project metadata to server.", MessageType.Info);
         }
         catch (Exception ex)
         {
@@ -676,7 +676,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         if (!string.IsNullOrEmpty(RemoteWebsiteUrl)) Workspace.Config.WebsiteUrl = RemoteWebsiteUrl;
         Workspace.Save();
         ExoforgeRuntimeConfigGenerator.Generate();
-        ShowStatus("✓ Pulled project metadata from cluster and saved to exoforge.json.", MessageType.Info);
+        ShowStatus("✓ Pulled project metadata from server and saved to exoforge.json.", MessageType.Info);
         Repaint();
     }
 }

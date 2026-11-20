@@ -236,7 +236,7 @@ public static class Program
         var ws = ExoWorkspace.Load(dir);
         var deployer = new ExoDeployer(ws);
 
-        Console.WriteLine("[Exoforge] Synchronizing backend contracts (cluster / workspace cache)...");
+        Console.WriteLine("[Exoforge] Synchronizing backend contracts (server / workspace cache)...");
         int changed = await deployer.SyncContractsAsync(
             cli.Value("env"),
             outPath,
@@ -362,7 +362,7 @@ public static class Program
 
         if (!cli.Json)
         {
-            Console.WriteLine("[Exoforge] Querying cluster status...");
+            Console.WriteLine("[Exoforge] Querying server status...");
         }
 
         var status = await deployer.GetSystemStatusAsync(cli.Value("env")).ConfigureAwait(false);
@@ -623,7 +623,7 @@ public static class Program
 
         if (!cli.Json)
         {
-            Console.WriteLine($"[Exoforge] Connecting to cluster ({envName ?? ws.Config.DefaultEnvironment})...");
+            Console.WriteLine($"[Exoforge] Connecting to server ({envName ?? ws.Config.DefaultEnvironment})...");
         }
 
         var res = await deployer.ConnectAndVerifyAsync(
@@ -642,7 +642,7 @@ public static class Program
             return 0;
         }
 
-        Success("[Exoforge] Connected to cluster successfully!");
+        Success("[Exoforge] Connected to server successfully!");
         Console.WriteLine($"  Environment:    {res.Environment}");
         Console.WriteLine($"  WebSocket URL:  {res.WsUrl}");
         Console.WriteLine($"  HTTP Base URL:  {res.HttpUrl}");
@@ -653,7 +653,7 @@ public static class Program
             string? clusterName = ReadString(res.Status, "cluster");
             if (!string.IsNullOrEmpty(clusterName))
             {
-                Console.WriteLine($"  Cluster Node:   {clusterName}");
+                Console.WriteLine($"  Server Node:   {clusterName}");
             }
         }
         return 0;
@@ -2108,7 +2108,7 @@ public static class Program
 
             if (unresolved.Count > 0)
             {
-                Error($"[Exoforge] No contracts for: {string.Join(", ", unresolved)}. Start the cluster (`just dev`), or build the extension that provides them.");
+                Error($"[Exoforge] No contracts for: {string.Join(", ", unresolved)}. Start the server (`just dev`), or build the extension that provides them.");
                 return 1;
             }
 
@@ -2138,7 +2138,7 @@ public static class Program
                 // No cluster to ask. Every extension that has been built has its contracts on disk beside
                 // its manifest, which is the point: stubs for an extension that is built but not deployed.
                 // Services that were neither built here nor deployed are simply absent.
-                Console.WriteLine($"[Exoforge] No cluster ({ex.Message}) — generating from local contracts only.");
+                Console.WriteLine($"[Exoforge] No server ({ex.Message}) — generating from local contracts only.");
                 exportJson = "{\"export\":{\"extensions\":[]}}";
             }
         }
@@ -2160,7 +2160,7 @@ public static class Program
 
         if (missing.Count > 0)
         {
-            Error($"[Exoforge] No contracts for: {string.Join(", ", missing)}. Nothing was written — {stubsOut} still holds the last stubs that were generated. Start the cluster (`just dev`), or build the extension that provides them.");
+            Error($"[Exoforge] No contracts for: {string.Join(", ", missing)}. Nothing was written — {stubsOut} still holds the last stubs that were generated. Start the server (`just dev`), or build the extension that provides them.");
             return 1;
         }
 
@@ -2182,7 +2182,7 @@ public static class Program
 
         if (!cli.Json)
         {
-            Console.WriteLine("[Exoforge] Fetching installed extensions from live cluster...");
+            Console.WriteLine("[Exoforge] Fetching installed extensions from live server...");
         }
 
         var result = await deployer.ListExtensionsAsync(cli.Value("env")).ConfigureAwait(false);
@@ -2219,7 +2219,7 @@ public static class Program
                 return 1;
             }
 
-            Console.Write($"[Exoforge] Remove extension '{id}' from the cluster? [y/N] ");
+            Console.Write($"[Exoforge] Remove extension '{id}' from the server? [y/N] ");
             string? answer = Console.ReadLine();
 
             if (!string.Equals(answer?.Trim(), "y", StringComparison.OrdinalIgnoreCase) &&
@@ -2236,7 +2236,7 @@ public static class Program
         await deployer.RemoveExtensionAsync(id, cli.Value("env"), deleteFiles: cli.Has("delete-files"))
             .ConfigureAwait(false);
 
-        Success($"[Exoforge] Removed extension '{id}' from the cluster.");
+        Success($"[Exoforge] Removed extension '{id}' from the server.");
         return 0;
     }
 
@@ -2259,8 +2259,8 @@ public static class Program
             // The binary runs on the cluster, not here: build for the cluster's runtime unless told otherwise.
             rid = await deployer.GetClusterTargetRidAsync(env).ConfigureAwait(false);
             Console.WriteLine(rid is null
-                ? "[Exoforge] Could not read the cluster's runtime; building for this machine (pass --rid to choose)."
-                : $"[Exoforge] Building for the cluster's runtime: {rid}");
+                ? "[Exoforge] Could not read the server's runtime; building for this machine (pass --rid to choose)."
+                : $"[Exoforge] Building for the server's runtime: {rid}");
         }
 
         if (Build(ws, name, rid) != 0)
@@ -2273,7 +2273,7 @@ public static class Program
         string extensionDir = Path.Combine(ws.ExtensionsPath, cleanName);
         string? builtVersion = ExoDeployer.ReadManifestVersion(extensionDir);
 
-        Console.WriteLine($"[Exoforge] Uploading extension '{cleanName}' to live cluster...");
+        Console.WriteLine($"[Exoforge] Uploading extension '{cleanName}' to live server...");
         string result = await deployer.UploadExtensionAsync(cleanName, env).ConfigureAwait(false);
         Success($"[Exoforge] Deployed '{cleanName}'.");
         Console.WriteLine($"  Server Response: {result}");
@@ -2292,7 +2292,7 @@ public static class Program
             return 0;
         }
 
-        Error($"[Exoforge] Deployed, but the cluster does not look healthy: {status.Detail}");
+        Error($"[Exoforge] Deployed, but the server does not look healthy: {status.Detail}");
         Console.WriteLine($"  Check `exo extension logs {cleanName}`.");
         return 1;
     }
@@ -2411,7 +2411,7 @@ public static class Program
 
         if (message.Contains(":not_found"))
         {
-            return "The cluster does not know that extension. Check `exo extension list`, or deploy it with `exo extension push <name>`.";
+            return "The server does not know that extension. Check `exo extension list`, or deploy it with `exo extension push <name>`.";
         }
 
         if (message.Contains(":forbidden_scope") || message.Contains(":unauthorized"))
@@ -2421,7 +2421,7 @@ public static class Program
 
         if (message.Contains("Unable to connect") || message.Contains("No connection"))
         {
-            return "Could not reach the cluster. Is it running (`just dev`), and is the environment's ws_url correct?";
+            return "Could not reach the server. Is it running (`just dev`), and is the environment's ws_url correct?";
         }
 
         return message;

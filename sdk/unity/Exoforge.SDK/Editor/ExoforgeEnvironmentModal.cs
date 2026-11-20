@@ -95,7 +95,7 @@ namespace Exoforge.Unity.Editor
             title.style.color = ExoforgeUIStyle.TextPrimary;
             titleCol.Add(title);
 
-            var subtitle = new Label("Add a target cluster environment to your workspace (exoforge.json).");
+            var subtitle = new Label("Add a target server environment to your workspace (exoforge.json).");
             subtitle.style.fontSize = 11;
             subtitle.style.color = ExoforgeUIStyle.TextSecondary;
             titleCol.Add(subtitle);
@@ -109,8 +109,8 @@ namespace Exoforge.Unity.Editor
             root.Add(div);
 
             // 2. Input Fields
-            var baseField = new TextField("Cluster Base URL") { value = _baseUrl };
-            baseField.tooltip = "Enter the cluster hostname or URL (e.g. https://my-cluster.exoforge.app). Endpoints are inferred automatically.";
+            var baseField = new TextField("Server Base URL") { value = _baseUrl };
+            baseField.tooltip = "Enter the server hostname or URL (e.g. https://my-cluster.exoforge.app). Endpoints are inferred automatically.";
             baseField.style.marginBottom = 6;
             root.Add(baseField);
 

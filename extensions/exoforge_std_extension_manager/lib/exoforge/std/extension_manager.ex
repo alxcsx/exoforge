@@ -273,6 +273,11 @@ defmodule Exoforge.Std.ExtensionManager do
       ext_type == :native and (is_nil(raw_binary) or raw_binary == "") ->
         {:error, :invalid_package}
 
+      # Refused before the running copy is stopped: a binary built for another OS dies on its first byte
+      # ("syntax error: unexpected word" from the shell) and takes the working version with it.
+      ext_type == :native and wrong_binary_format(raw_binary) != nil ->
+        {:error, {:wrong_binary_format, wrong_binary_format(raw_binary)}}
+
       ext_type == :elixir and not has_elixir_code?(elixir_code, files_map) ->
         {:error, :invalid_package}
 
@@ -298,6 +303,38 @@ defmodule Exoforge.Std.ExtensionManager do
         end
     end
   end
+
+  # Returns a message when the uploaded executable cannot run on this cluster's OS, nil when it can (or
+  # when the format is not one we recognise: the runner's own handshake failure still covers that).
+  def wrong_binary_format(raw_binary) when is_binary(raw_binary) do
+    head =
+      case Base.decode64(binary_part(raw_binary, 0, min(byte_size(raw_binary), 16) |> div(4) |> Kernel.*(4))) do
+        {:ok, decoded} -> decoded
+        _ -> raw_binary
+      end
+
+    built_for =
+      case head do
+        <<0x7F, "ELF", _::binary>> -> "linux"
+        <<"MZ", _::binary>> -> "win"
+        <<0xCF, 0xFA, 0xED, 0xFE, _::binary>> -> "osx"
+        <<0xCA, 0xFE, 0xBA, 0xBE, _::binary>> -> "osx"
+        _ -> nil
+      end
+
+    cluster = cluster_os()
+
+    cond do
+      is_nil(built_for) -> nil
+      built_for == "linux" and String.starts_with?(cluster, "linux") -> nil
+      built_for == cluster -> nil
+      true ->
+        "This extension was built for #{built_for}, but this server runs #{cluster}. " <>
+          "Build it for #{cluster_target_rid()} (exo extension push does this by itself; in Unity set the build target to Auto or #{cluster_target_rid()}) and upload it again. The version that was running is untouched."
+    end
+  end
+
+  def wrong_binary_format(_), do: nil
 
   defp has_elixir_code?(elixir_code, files_map) do
     (is_binary(elixir_code) and String.trim(elixir_code) != "") or

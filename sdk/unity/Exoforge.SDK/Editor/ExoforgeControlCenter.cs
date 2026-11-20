@@ -198,6 +198,13 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
     [NonSerialized] private CancellationTokenSource? _connectCts;
     [NonSerialized] private static string s_connectionStatus = "Disconnected";
     public static string ConnectionStatus => s_connectionStatus;
+
+    /// <summary>
+    /// The server answered and refused the session (no token, or one it no longer accepts). That is a sign-in
+    /// problem, not an outage, and the banner must say so instead of calling the server offline.
+    /// </summary>
+    public static bool NeedsSignIn =>
+        s_connectionStatus is "No token" or "Auth failed" or "Auth rejected";
     private string _connectionStatus
     {
         get => s_connectionStatus;
@@ -642,7 +649,7 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
             return;
         }
 
-        ShowStatus("Connecting to the cluster…", MessageType.Info);
+        ShowStatus("Connecting to the server…", MessageType.Info);
         _ = ConnectAsync();
     }
 
@@ -938,7 +945,7 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
             9
         );
         versionPill.tooltip = $"Exoforge Unity SDK: v{ExoforgePackageVersion.SdkVersion}\nCommit: {ExoforgePackageVersion.BuildHash}\nBuild Date: {ExoforgePackageVersion.BuildDate}" +
-            (_isConnected && RemoteVersion != "—" ? $"\n\nConnected Cluster:\nv{RemoteVersion} ({RemoteCommitHash})\nBuilt: {RemoteBuildDate}" : "");
+            (_isConnected && RemoteVersion != "—" ? $"\n\nConnected Server:\nv{RemoteVersion} ({RemoteCommitHash})\nBuilt: {RemoteBuildDate}" : "");
         brandContainer.Add(versionPill);
 
         var divider = new VisualElement();
@@ -987,7 +994,7 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
         _connectionDot = ExoforgeUIStyle.CreateStatusDot(dotColor, 8f);
         statusCapsule.Add(_connectionDot);
 
-        string statusText = _isConnected ? $"Online ({_connectionStatus})" : (_isConnecting ? "Connecting..." : "Offline");
+        string statusText = _isConnected ? $"Online ({_connectionStatus})" : (_isConnecting ? "Connecting..." : (NeedsSignIn ? "Sign in" : "Offline"));
         _connectionText = new Label(statusText);
         _connectionText.style.fontSize = 11;
         _connectionText.style.color = ExoforgeUIStyle.TextHeaderPrimary;
@@ -1211,7 +1218,7 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
 
                 btn.SetEnabled(isEnabled);
                 btn.tooltip = isClusterTab && !canReach
-                    ? $"{btn.text} is disabled while offline — connect to cluster to access."
+                    ? $"{btn.text} is disabled while offline — connect to server to access."
                     : "";
 
                 btn.style.borderBottomWidth = isActive ? 2 : 0;
@@ -1234,7 +1241,7 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
         {
             _syncBtn.SetEnabled(_isConnected);
             _syncBtn.style.opacity = _isConnected ? 1.0f : 0.40f;
-            _syncBtn.tooltip = _isConnected ? "" : "Syncing contracts requires an active cluster connection.";
+            _syncBtn.tooltip = _isConnected ? "" : "Syncing contracts requires an active server connection.";
         }
 
         if (_studioBtn != null)
@@ -1242,7 +1249,7 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
             bool canOpen = _isConnected && !string.IsNullOrEmpty(ActiveHttpEndpoint);
             _studioBtn.SetEnabled(canOpen);
             _studioBtn.style.opacity = canOpen ? 1.0f : 0.40f;
-            _studioBtn.tooltip = canOpen ? "" : "Web Studio requires an active cluster connection.";
+            _studioBtn.tooltip = canOpen ? "" : "Web Studio requires an active server connection.";
         }
 
         if (_connectionDot != null && _connectionText != null && _connectBtn != null)
@@ -1252,12 +1259,12 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
 
             if (_isConnected && SdkStatus == SdkCompatibilityStatus.UpdateAvailable)
             {
-                _connectionText.text = $"Online • ⚠️ Out of Sync (Cluster v{RemoteSdkVersion ?? RemoteVersion})";
+                _connectionText.text = $"Online • ⚠️ Out of Sync (Server v{RemoteSdkVersion ?? RemoteVersion})";
                 _connectionText.style.color = ExoforgeUIStyle.AccentOrange;
             }
             else
             {
-                _connectionText.text = _isConnected ? $"Online ({_connectionStatus})" : (_isConnecting ? "Connecting..." : "Offline");
+                _connectionText.text = _isConnected ? $"Online ({_connectionStatus})" : (_isConnecting ? "Connecting..." : (NeedsSignIn ? "Sign in" : "Offline"));
                 _connectionText.style.color = ExoforgeUIStyle.TextPrimary;
             }
 
@@ -1461,14 +1468,14 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
             fontSize = 15,
             normal = { textColor = new Color(0.85f, 0.40f, 0.0f) }
         };
-        EditorGUILayout.LabelField(_isConnecting ? "Connecting to Cluster…" : "CLUSTER OFFLINE — TAB UNAVAILABLE", titleStyle);
+        EditorGUILayout.LabelField(_isConnecting ? "Connecting to Server…" : (NeedsSignIn ? "SIGN IN AGAIN — TAB UNAVAILABLE" : "SERVER OFFLINE — TAB UNAVAILABLE"), titleStyle);
 
         var descStyle = new GUIStyle(EditorStyles.wordWrappedLabel)
         {
             fontSize = 12,
             normal = { textColor = ExoforgeUIStyle.TextPrimary }
         };
-        EditorGUILayout.LabelField("This tab requires an active connection to the cluster. Connect to view metrics and live telemetry.", descStyle);
+        EditorGUILayout.LabelField(NeedsSignIn ? "The server did not accept your saved session. Sign in again with the Account button." : "This tab requires an active connection to the server. Connect to view metrics and live telemetry.", descStyle);
         EditorGUILayout.EndVertical();
 
         EditorGUILayout.EndHorizontal();

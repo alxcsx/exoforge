@@ -58,7 +58,7 @@ public class ExoDeployer
             if (!authenticated)
             {
                 throw new InvalidOperationException(
-                    "Failed to authenticate with cluster: the saved session was refused. " +
+                    "Failed to authenticate with server: the saved session was refused. " +
                     "Run `exo connect --email <email> --password <password> --save` to renew it.");
             }
         }
@@ -262,7 +262,7 @@ public class ExoDeployer
             }
             catch (Exception ex)
             {
-                return new ExtensionDeploymentStatus(false, null, null, $"cluster does not have '{cleanName}': {ex.Message}");
+                return new ExtensionDeploymentStatus(false, null, null, $"server does not have '{cleanName}': {ex.Message}");
             }
 
             string? version = ReadString(result, "extension", "version") ?? ReadString(result, "plugin", "version");
@@ -271,7 +271,7 @@ public class ExoDeployer
 
             if (version == null)
             {
-                return new ExtensionDeploymentStatus(false, null, null, $"cluster does not have '{cleanName}'");
+                return new ExtensionDeploymentStatus(false, null, null, $"server does not have '{cleanName}'");
             }
 
             if (status != null && status.StartsWith("crashed", StringComparison.OrdinalIgnoreCase))
@@ -283,7 +283,7 @@ public class ExoDeployer
             {
                 return new ExtensionDeploymentStatus(
                     true, version, type,
-                    $"cluster is running {version}, but {expectedVersion} was just deployed");
+                    $"server is running {version}, but {expectedVersion} was just deployed");
             }
 
             return new ExtensionDeploymentStatus(true, version, type, "loaded");
@@ -493,7 +493,7 @@ public class ExoDeployer
         {
             // No cluster to ask. Try cached cluster export first, then fallback to local contracts only.
             exportJson = LoadCachedOrEmptyContracts();
-            emit?.Invoke($"[stubs] no cluster ({ex.Message}) - generating from {(File.Exists(ContractsCachePath) ? "cached" : "local")} contracts");
+            emit?.Invoke($"[stubs] no server ({ex.Message}) - generating from {(File.Exists(ContractsCachePath) ? "cached" : "local")} contracts");
         }
 
         string merged = MergeLocalContracts(exportJson);
@@ -511,7 +511,7 @@ public class ExoDeployer
         {
             throw new InvalidOperationException(
                 $"No contracts for: {string.Join(", ", missing)}. Nothing was written — {output} still " +
-                "holds the last stubs that were generated. Start the cluster, or build the extension that " +
+                "holds the last stubs that were generated. Start the server, or build the extension that " +
                 "provides them.");
         }
 
@@ -1044,7 +1044,7 @@ public class ExoDeployer
             }
             catch (Exception ex)
             {
-                emit?.Invoke($"[sync] no cluster ({ex.Message}) - falling back to cached/local contracts");
+                emit?.Invoke($"[sync] no server ({ex.Message}) - falling back to cached/local contracts");
                 exportJson = LoadCachedOrEmptyContracts();
             }
         }
@@ -1196,12 +1196,12 @@ public class ExoDeployer
 
                 if (string.IsNullOrEmpty(acquiredToken))
                 {
-                    throw new InvalidOperationException("Cluster login succeeded, but no token was returned in the payload.");
+                    throw new InvalidOperationException("Server login succeeded, but no token was returned in the payload.");
                 }
 
                 if (!await TryAuthenticateAsync(client, acquiredToken, ct).ConfigureAwait(false))
                 {
-                    throw new InvalidOperationException("Authentication failed with the token the cluster issued.");
+                    throw new InvalidOperationException("Authentication failed with the token the server issued.");
                 }
 
                 // A saved CLI session is the same pair a client holds: the access token lasts an
@@ -1232,7 +1232,7 @@ public class ExoDeployer
 
                 if (!valid)
                 {
-                    throw new InvalidOperationException("Authentication failed: the cluster refused the token.");
+                    throw new InvalidOperationException("Authentication failed: the server refused the token.");
                 }
 
                 authenticated = true;
@@ -1697,7 +1697,7 @@ public class ExoDeployer
         // Stage the published native binary where the runner and deployer expect it.
         string published = releaseTrees
             .SelectMany(tree => Directory.GetFiles(tree, cleanName + "*", SearchOption.AllDirectories))
-            .Where(path => IsPublishedBinary(path, cleanName))
+            .Where(path => IsPublishedBinary(path, cleanName, targetRid))
             .OrderByDescending(File.GetLastWriteTimeUtc)
             .FirstOrDefault()
             ?? throw new FileNotFoundException($"Published native binary not found for '{cleanName}' under {pluginDir}.");
@@ -1724,10 +1724,12 @@ public class ExoDeployer
         return staged;
     }
 
-    private static bool IsPublishedBinary(string path, string cleanName)
+    // Only the output of the runtime identifier just built: a win-x64 publish left over from an earlier build
+    // is newer than an unchanged linux one, and uploading it kills the extension on its first byte.
+    internal static bool IsPublishedBinary(string path, string cleanName, string targetRid)
     {
         string normalized = path.Replace('\\', '/');
-        if (!normalized.Contains("/publish/")) return false;
+        if (!normalized.Contains("/" + targetRid + "/publish/")) return false;
 
         string file = Path.GetFileName(path);
         return file == cleanName || file == cleanName + ".exe";

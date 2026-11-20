@@ -250,6 +250,21 @@ defmodule Exoforge.Std.ExtensionManagerTest do
                )
     end
 
+    test "upload_extension refuses an executable built for another OS and says what to build" do
+      windows_exe = Base.encode64(<<"MZ", 0x90, 0, 3, 0, 0, 0, 4, 0, 0, 0>> <> String.duplicate(<<0>>, 64))
+
+      assert {:error, {:wrong_binary_format, message}} =
+               ActionDispatcher.dispatch(
+                 :extension_manager,
+                 :upload_extension,
+                 %{name: "wrong_os_test", type: "native", binary: windows_exe},
+                 caller_scopes: ["admin"]
+               )
+
+      assert message =~ "built for win"
+      assert message =~ "untouched"
+    end
+
     test "upload_extension accepts valid Elixir extension code, persists, compiles, and registers it" do
       elixir_code = """
       defmodule TestUploadedElixir do
