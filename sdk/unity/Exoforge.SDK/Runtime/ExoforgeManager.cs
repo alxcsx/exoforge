@@ -424,6 +424,12 @@ namespace Exoforge.Client.Unity
 
             client.DefaultTransportPreference = defaultTransport;
 
+            // The build's version (Player Settings > Version) is the game version the server is told. Set
+            // `ExoforgeSDK.Client.GameVersion` to say something else; the server answers `upgrade_required`
+            // once that version is blocked.
+            client.GameVersion = Application.version;
+            client.OnUpgradeRequired += () => Debug.LogWarning($"[Exoforge] This build ({Application.version}) is no longer supported: update the game.");
+
             string? token = (ExoTokenStore.HasToken ? ExoTokenStore.Token : null)
                             ?? (string.IsNullOrEmpty(cfg?.Token) ? null : cfg!.Token);
             if (!string.IsNullOrEmpty(token))

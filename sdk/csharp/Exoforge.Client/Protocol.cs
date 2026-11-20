@@ -221,6 +221,11 @@ public class ExoAuthRequest : ExoMessage
     [JsonPropertyName("token")]
     public string Token { get; set; } = string.Empty;
 
+    /// <summary>The client's game version; left out of the frame when null so old servers see the frame they always saw.</summary>
+    [JsonPropertyName("game_version")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? GameVersion { get; set; }
+
     public ExoAuthRequest(string token)
     {
         Type = "auth";

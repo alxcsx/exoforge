@@ -167,6 +167,15 @@ public class ExoClient : IDisposable
     /// </summary>
     public static TimeSpan DefaultTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
+    /// <summary>
+    /// The game version this client was built as ("1.4.0"). Sent with the sign-in frame and on every
+    /// HTTP request so the server can tell an old client to upgrade; null sends nothing.
+    /// </summary>
+    public string? GameVersion { get; set; }
+
+    /// <summary>The server refused this client's game version: it is blocked or unknown. Show an update screen.</summary>
+    public event Action? OnUpgradeRequired;
+
     public event Action? OnConnected;
     public event Action<Exception?>? OnDisconnected;
     public event Action<ExoEventFrame>? OnAnyEvent;
@@ -212,7 +221,7 @@ public class ExoClient : IDisposable
         CancellationToken cancellationToken = default)
     {
         AuthToken = token;
-        var request = new ExoAuthRequest(token);
+        var request = new ExoAuthRequest(token) { GameVersion = GameVersion };
         var tcs = new TaskCompletionSource<ExoAuthResult>(TaskCreationOptions.RunContinuationsAsynchronously);
         _pendingAuth = tcs;
 
@@ -495,6 +504,8 @@ public class ExoClient : IDisposable
             request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", AuthToken);
         }
 
+        AddGameVersionHeader(request);
+
         string jsonPayload = payload != null ? JsonSerializer.Serialize(payload) : "{}";
         request.Content = new StringContent(jsonPayload, System.Text.Encoding.UTF8, "application/json");
 
@@ -548,7 +559,7 @@ public class ExoClient : IDisposable
 
         if (status == "error" || !response.IsSuccessStatusCode || status != "ok")
         {
-            string errCode = "http_error";
+            string errCode = (int)response.StatusCode == 426 ? "upgrade_required" : "http_error";
             string errMsg = $"HTTP {(int)response.StatusCode}";
             JsonElement? errDetails = null;
 
@@ -605,6 +616,11 @@ public class ExoClient : IDisposable
             }
 
             var ex = CreateActionException(service, action, errCode, errMsg, rid, errDetails);
+            if (ex is ExoUpgradeRequiredException)
+            {
+                OnUpgradeRequired?.Invoke();
+            }
+
             OnError?.Invoke(ex.Message, ex);
             throw ex;
         }
@@ -621,6 +637,11 @@ public class ExoClient : IDisposable
         string? rid = null,
         JsonElement? details = null)
     {
+        if (errCode == "upgrade_required")
+        {
+            return new ExoUpgradeRequiredException(errMsg, rid, details);
+        }
+
         if (errCode == "service_not_found" || errMsg == "service_not_found" || errMsg == ":service_not_found" ||
             errMsg.Contains("was not found on the remote server") || errMsg.Contains("service_not_found"))
         {
@@ -853,7 +874,15 @@ public class ExoClient : IDisposable
             else
             {
                 string errMsg = result.Error?.ToString() ?? "Authentication failed";
-                _pendingAuth?.TrySetException(new ExoActionException("auth_failed", errMsg));
+                if (errMsg.Contains("upgrade_required"))
+                {
+                    OnUpgradeRequired?.Invoke();
+                    _pendingAuth?.TrySetException(new ExoUpgradeRequiredException(errMsg));
+                }
+                else
+                {
+                    _pendingAuth?.TrySetException(new ExoActionException("auth_failed", errMsg));
+                }
             }
         }
     }
@@ -959,6 +988,8 @@ public class ExoClient : IDisposable
             request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", AuthToken);
         }
 
+        AddGameVersionHeader(request);
+
         using var content = new MultipartFormDataContent();
         var fileContent = new ByteArrayContent(fileBytes);
         if (!string.IsNullOrEmpty(contentType))
@@ -1018,6 +1049,8 @@ public class ExoClient : IDisposable
             request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", AuthToken);
         }
 
+        AddGameVersionHeader(request);
+
         var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
@@ -1051,6 +1084,8 @@ public class ExoClient : IDisposable
             request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", AuthToken);
         }
 
+        AddGameVersionHeader(request);
+
         var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
@@ -1060,9 +1095,29 @@ public class ExoClient : IDisposable
         return await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
     }
 
+    private void AddGameVersionHeader(HttpRequestMessage request)
+    {
+        if (!string.IsNullOrEmpty(GameVersion))
+        {
+            request.Headers.TryAddWithoutValidation("x-exoforge-game-version", GameVersion);
+        }
+    }
+
     public void Dispose()
     {
         _transport.Dispose();
+    }
+}
+
+/// <summary>
+/// The server will not serve this client's game version any more (it is blocked, or the server has never
+/// heard of it). The game shows an update screen; retrying does not help.
+/// </summary>
+public class ExoUpgradeRequiredException : ExoActionException
+{
+    public ExoUpgradeRequiredException(string message, string? requestId = null, JsonElement? details = null)
+        : base("upgrade_required", message, requestId, details)
+    {
     }
 }
 
