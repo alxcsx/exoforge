@@ -53,7 +53,7 @@ defmodule Exoforge.Std.Docs do
   @impl true
   defaction export_docs(payload), scope: Exoforge.Auth.Roles.studio() do
     format = Map.get(payload, :format) || Map.get(payload, "format") || "markdown"
-    chapters = load_all_chapters()
+    chapters = all_pages()
     catalog = build_api_catalog()
 
     consolidated_md =
@@ -203,27 +203,27 @@ defmodule Exoforge.Std.Docs do
 
     app_dir =
       try do
-        Application.app_dir(:exoforge_std_docs, "priv/docs")
+        Application.app_dir(:exoforge_std_docs, "priv/guide")
       rescue
         _ -> nil
       end
 
     release_dirs =
       try do
-        Path.wildcard(Path.join([:code.root_dir(), "lib", "exoforge_std_docs*", "priv", "docs"]))
+        Path.wildcard(Path.join([:code.root_dir(), "lib", "exoforge_std_docs*", "priv", "guide"]))
       rescue
         _ -> []
       end
 
     candidates =
       [
-        priv_dir && Path.join(priv_dir, "docs"),
+        priv_dir && Path.join(priv_dir, "guide"),
         app_dir,
-        "extensions/exoforge_std_docs/priv/docs",
-        "priv/docs"
+        "extensions/exoforge_std_docs/priv/guide",
+        "priv/guide"
       ] ++ release_dirs
 
-    Enum.find(candidates, fn path -> is_binary(path) and File.dir?(path) end) || "priv/docs"
+    Enum.find(candidates, fn path -> is_binary(path) and File.dir?(path) end) || "priv/guide"
   end
 
   defp load_all_chapters_meta do
@@ -262,10 +262,96 @@ defmodule Exoforge.Std.Docs do
   end
 
   defp find_chapter(id) when is_binary(id) do
-    Enum.find(load_all_chapters(), fn c -> c.id == id or c.filename == id end)
+    Enum.find(load_all_chapters() ++ load_extension_pages(), fn c -> c.id == id or c.filename == id end)
   end
 
   defp find_chapter(_), do: nil
+
+  ## ---- EXTENSION DOCS ----
+
+  # The folder an extension keeps its own documentation in, next to its manifest. An Elixir extension ships files
+  # through `priv/`, so `priv/docs` is the same folder for it.
+  @extension_docs_dirs ["docs", "priv/docs"]
+  @max_extension_pages 24
+  @max_page_bytes 262_144
+
+  @doc """
+  The documentation every running extension ships, gathered from the extensions themselves: each `*.md` file
+  directly inside the reserved `docs/` folder of an extension (Elixir: `priv/docs/`), in file-name order, as a
+  page of the guide's *Extensions* group. Nothing registers them: deploy an extension with a `docs/` folder and its
+  pages appear, remove the extension and they go. Front matter is optional (`nav`, `icon`, `summary`).
+  """
+  def load_extension_pages do
+    Exoforge.ExtensionRegistry.all_manifests()
+    |> Enum.uniq_by(&manifest_field(&1, :id))
+    |> Enum.sort_by(&extension_title/1)
+    |> Enum.flat_map(&extension_pages/1)
+  rescue
+    # the registry is not running (a tool rendering the guide offline): the guide's own chapters still work
+    _ -> []
+  end
+
+  @doc "Every page the exports contain: the guide's chapters, then the extensions' documentation."
+  def all_pages, do: load_all_chapters() ++ load_extension_pages()
+
+  defp extension_pages(manifest) do
+    id = to_string(manifest_field(manifest, :id) || "")
+    root = manifest_field(manifest, :physical_path)
+
+    with true <- id != "" and is_binary(root) and root != "",
+         dir when is_binary(dir) <- Enum.find_value(@extension_docs_dirs, &existing_dir(root, &1)) do
+      title = extension_title(manifest)
+
+      dir
+      |> Path.join("*.md")
+      |> Path.wildcard()
+      |> Enum.sort()
+      |> Enum.take(@max_extension_pages)
+      |> Enum.flat_map(&extension_page(&1, id, title))
+    else
+      _ -> []
+    end
+  end
+
+  defp existing_dir(root, sub) do
+    dir = Path.join(root, sub)
+    if File.dir?(dir), do: dir
+  end
+
+  defp extension_page(path, extension_id, extension_title) do
+    with {:ok, %{size: size}} when size <= @max_page_bytes <- File.stat(path),
+         {:ok, raw} <- File.read(path) do
+      stem = path |> Path.basename() |> Path.rootname()
+      {meta, content} = split_front_matter(raw)
+      title = extract_title(content, stem)
+
+      [
+        %{
+          id: "ext-" <> slug(extension_id) <> "-" <> slug(stem),
+          title: title,
+          nav: Map.get(meta, "nav", if(stem == "overview", do: "Overview", else: title)),
+          order: 0,
+          filename: Path.basename(path),
+          group: "Extensions",
+          icon: Map.get(meta, "icon", "box"),
+          summary: Map.get(meta, "summary", ""),
+          extension: extension_id,
+          extension_title: extension_title,
+          content: content
+        }
+      ]
+    else
+      _ -> []
+    end
+  end
+
+  defp extension_title(manifest) do
+    to_string(manifest_field(manifest, :title) || manifest_field(manifest, :name) || manifest_field(manifest, :id) || "")
+  end
+
+  defp manifest_field(manifest, key), do: Map.get(manifest, key) || Map.get(manifest, to_string(key))
+
+  defp slug(text), do: text |> String.downcase() |> String.replace(~r/[^a-z0-9]+/, "-") |> String.trim("-")
 
   # A chapter may start with a `---` block of `key: value` lines (group, icon, summary) that the guide's
   # navigation reads. The exports (PDF, markdown) get the chapter without it.

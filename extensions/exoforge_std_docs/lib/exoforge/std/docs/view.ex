@@ -2,7 +2,7 @@ defmodule Exoforge.Std.Docs.View do
   @moduledoc """
   The Developer Guide: a sidebar of pages (`Exoforge.Std.Docs.Pages`), the page itself with an "On this
   page" list and previous/next links, and 1-click Print/PDF export. A chapter is rendered from its
-  Markdown file under `priv/docs` and nothing else; the two live pages are the architecture map and the
+  Markdown file under `priv/guide` (or an extension's own `docs/`) and nothing else; the two live pages are the architecture map and the
   API catalog.
   """
   use Phoenix.Component
@@ -138,7 +138,10 @@ defmodule Exoforge.Std.Docs.View do
             <div>
               <p class="px-2 mb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400"><%= group %></p>
               <ul class="space-y-0.5">
-                <%= for p <- group_pages do %>
+                <%= for {p, index} <- Enum.with_index(group_pages) do %>
+                  <li :if={p[:extension_title] && (index == 0 || Enum.at(group_pages, index - 1)[:extension_title] != p[:extension_title])} class="pt-2 pb-0.5 px-2 text-[11px] font-semibold text-gray-500 truncate">
+                    <%= p.extension_title %>
+                  </li>
                   <li>
                     <button
                       type="button"

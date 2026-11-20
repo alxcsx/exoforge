@@ -3,15 +3,16 @@ defmodule Exoforge.Std.Docs.Pages do
   The Developer Guide's table of contents: which pages exist, how they group, and what comes before and
   after each one.
 
-  A page is either a chapter (a Markdown file under `priv/docs`, whose front matter names its group and
-  icon) or one of two live pages the guide renders itself: the architecture map and the API catalog.
-  Adding a chapter means adding the file; nothing here lists chapters by name.
+  A page is either a chapter (a Markdown file under `priv/guide`, whose front matter names its group and
+  icon), a page an extension ships in its own `docs/` folder (group *Extensions*, gathered from the running
+  extensions), or one of two live pages the guide renders itself: the architecture map and the API catalog.
+  Adding a page means adding the file; nothing here lists pages by name.
   """
 
   alias Exoforge.Std.Docs
 
   # The order the sidebar shows its groups in. A chapter whose group is not listed goes last.
-  @groups ["Get started", "Build", "Learn by example", "Understand", "Live reference"]
+  @groups ["Get started", "Build", "Learn by example", "Extensions", "Understand", "Live reference"]
 
   @live_pages [
     %{id: "architecture", title: "Architecture map", nav: "Architecture map", group: "Understand", icon: "graph", summary: "How the extensions on this cluster fit together.", kind: :architecture},
@@ -28,7 +29,7 @@ defmodule Exoforge.Std.Docs.Pages do
 
   @doc "All pages in reading order: chapters by file name within their group, then the live pages."
   def all do
-    chapters = Enum.map(Docs.load_all_chapters(), &Map.put(&1, :kind, :chapter))
+    chapters = Enum.map(Docs.all_pages(), &Map.put(&1, :kind, :chapter))
 
     (chapters ++ @live_pages)
     |> Enum.with_index()

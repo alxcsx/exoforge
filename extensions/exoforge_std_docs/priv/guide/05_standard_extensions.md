@@ -31,6 +31,8 @@ Everything above the kernel is an extension, including what ships with the serve
 | `exoforge_std_docs` | `docs` | This guide, the live API catalog and the PDF export. |
 | `exoforge_std_dashboard`, `exoforge_std_dashboard_views` | `dashboard`, `dashboard_view` | The Producer Studio (port 4005) and the views extensions contribute to it. |
 
+Each standard extension documents itself: open **Extensions** in the sidebar for its actions, events, settings and data.
+
 ### How they depend on each other
 
 ```

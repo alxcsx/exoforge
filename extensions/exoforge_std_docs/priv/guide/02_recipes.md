@@ -57,6 +57,20 @@ ExoServices.Leaderboard.OnScoreSubmitted += evt => Debug.Log(evt.Score);
 3. Use the inspector's **Actions**, **Events** and **Resources** tabs to confirm what the extension exposes.
 
 A build failure is reported before upload. A startup-hook failure appears as `startup_failed` with its code and message.
+## Document your extension
+
+Put Markdown files in a `docs/` folder next to your extension's source (`exo extension new` creates `docs/overview.md`). When the extension is deployed (`exo extension push`), every `docs/*.md` file becomes a page of this guide under **Extensions**, listed by the extension's title; remove the extension and its pages go with it. An Elixir extension uses `priv/docs/` for the same thing.
+
+```markdown
+---
+nav: Refunds
+summary: How refunds and chargebacks work.
+---
+# Refunds
+```
+
+The front matter is optional (`nav` is the sidebar label, `summary` a one-line description). Pages are shown in file-name order, so prefix with `01_`, `02_` to order them; only files directly inside `docs/` are read, and plain text and a few headings are enough: the live API catalog already lists every action's signature.
+
 ## Where to go next
 
 The [quickstart](guide:01_quickstart) walks through these once from scratch. For the properties behind each attribute see the [attribute reference](guide:03_csharp_attributes); to change a table that already has players in it, read [Versions & Migrations](guide:04_versions_and_migrations).

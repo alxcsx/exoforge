@@ -41,9 +41,9 @@ mode). The studio's own migrations are SQL files `migrations/0007_name.sql` appl
 sign-in (WS `auth` frame `game_version`, HTTP header `x-exoforge-game-version`) and a blocked one gets `upgrade_required`
 (HTTP 426). With no game version registered, versioning is off and every client is served. See `.agents/handoff/versioning-spec.md`.
 
-**The Developer Guide is the main documentation.** It lives as Markdown in `extensions/exoforge_std_docs/priv/docs/*.md` (front matter:
+**The Developer Guide is the main documentation.** It lives as Markdown in `extensions/exoforge_std_docs/priv/guide/*.md` (front matter:
 `nav`, `group`, `icon`, `summary`) and is the only source: the Studio's Developer Guide tab, the PDF and the markdown export all render
-those files, and `guide:<chapter>#heading` links connect them. Adding a page is adding a file. Any user-visible change (an attribute
+those files, and `guide:<chapter>#heading` links connect them. Adding a page is adding a file. Extension-specific documentation does not live there: each extension keeps its own pages in a reserved `docs/` folder (Elixir: `priv/docs/`) next to its manifest, `exo extension push` ships `docs/*.md`, and the guide gathers the pages of every running extension under *Extensions*. Any user-visible change (an attribute
 property, a CLI command, a standard extension, a behavior) updates the guide in the same change; `test/guide_drift_test.exs` fails when
 the attributes, the CLI verbs, the standard extensions or the cross-links no longer match the code. This file, `Agents.MD`, stays the
 terse, agent-facing companion and does not replace it.

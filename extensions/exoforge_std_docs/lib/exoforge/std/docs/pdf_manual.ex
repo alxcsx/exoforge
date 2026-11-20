@@ -36,7 +36,7 @@ defmodule Exoforge.Std.Docs.PdfManual do
     commit_hash = BuildInfo.commit_hash()
     build_date = BuildInfo.build_date()
 
-    chapters = Docs.load_all_chapters()
+    chapters = Docs.all_pages()
     catalog = Docs.build_api_catalog()
 
     state = %__MODULE__{

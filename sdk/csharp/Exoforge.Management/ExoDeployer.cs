@@ -207,22 +207,7 @@ public class ExoDeployer
             manifestContent = await File.ReadAllTextAsync(manifestPath, cancellationToken).ConfigureAwait(false);
         }
 
-        Dictionary<string, object>? filesPayload = null;
-        string assetsDir = Path.Combine(extensionDir, "assets");
-        if (Directory.Exists(assetsDir))
-        {
-            filesPayload = new Dictionary<string, object>();
-            foreach (string filePath in Directory.GetFiles(assetsDir, "*", SearchOption.AllDirectories))
-            {
-                string relPath = Path.GetRelativePath(extensionDir, filePath).Replace('\\', '/');
-                byte[] fileBytes = await File.ReadAllBytesAsync(filePath, cancellationToken).ConfigureAwait(false);
-                filesPayload[relPath] = new
-                {
-                    encoding = "base64",
-                    content = Convert.ToBase64String(fileBytes)
-                };
-            }
-        }
+        Dictionary<string, object>? filesPayload = CollectExtensionFiles(extensionDir);
 
         var client = existingClient ?? await CreateConnectedClientAsync(environmentName, cancellationToken).ConfigureAwait(false);
         try
@@ -1853,6 +1838,47 @@ public class ExoDeployer
     private static void CommitBuildNumber(string pluginDir, int buildNumber)
     {
         File.WriteAllText(Path.Combine(pluginDir, ".buildcount"), buildNumber.ToString());
+    }
+
+    /// <summary>
+    /// The files an extension ships beside its binary: everything under <c>assets/</c> (Studio microfrontend
+    /// files) and the Markdown pages directly inside <c>docs/</c>, the reserved folder the Developer Guide
+    /// gathers each extension's own documentation from. Keys are paths relative to the extension directory.
+    /// Null when there is nothing to ship.
+    /// </summary>
+    internal static Dictionary<string, object>? CollectExtensionFiles(string extensionDir)
+    {
+        var files = new Dictionary<string, object>();
+
+        string assetsDir = Path.Combine(extensionDir, "assets");
+        if (Directory.Exists(assetsDir))
+        {
+            foreach (string filePath in Directory.GetFiles(assetsDir, "*", SearchOption.AllDirectories))
+            {
+                AddFile(files, extensionDir, filePath);
+            }
+        }
+
+        string docsDir = Path.Combine(extensionDir, "docs");
+        if (Directory.Exists(docsDir))
+        {
+            foreach (string filePath in Directory.GetFiles(docsDir, "*.md", SearchOption.TopDirectoryOnly))
+            {
+                AddFile(files, extensionDir, filePath);
+            }
+        }
+
+        return files.Count == 0 ? null : files;
+    }
+
+    private static void AddFile(Dictionary<string, object> files, string extensionDir, string filePath)
+    {
+        string relPath = Path.GetRelativePath(extensionDir, filePath).Replace('\\', '/');
+        files[relPath] = new
+        {
+            encoding = "base64",
+            content = Convert.ToBase64String(File.ReadAllBytes(filePath))
+        };
     }
 
     /// <summary>Reads the <c>version</c> field from a plugin's generated <c>manifest.json</c>.</summary>

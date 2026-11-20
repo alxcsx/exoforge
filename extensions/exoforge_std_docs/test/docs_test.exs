@@ -169,6 +169,51 @@ defmodule Exoforge.Std.DocsTest do
     end
   end
 
+  describe "Extension documentation" do
+    setup do
+      Exoforge.ExtensionCase.start_kernel()
+      root = Path.join(System.tmp_dir!(), "exo_ext_docs_#{System.unique_integer([:positive])}")
+      File.mkdir_p!(Path.join(root, "docs"))
+      File.mkdir_p!(Path.join(root, "priv/docs"))
+      on_exit(fn -> File.rm_rf!(root) end)
+      %{root: root}
+    end
+
+    defmodule Stub do
+      use Exoforge.Extension
+    end
+
+    test "pages in an extension's docs folder join the guide, in file order, with optional front matter", %{root: root} do
+      File.write!(Path.join(root, "docs/overview.md"), "# Wallet\n\nCoins shared by every game.\n")
+      File.write!(Path.join(root, "docs/b_refunds.md"), "---\nnav: Refunds\nsummary: How refunds work\n---\n# Refunds & chargebacks\n\nText.\n")
+      File.write!(Path.join(root, "docs/notes.txt"), "not markdown")
+
+      Exoforge.ExtensionCase.register_extension(Stub, id: :wallet_ext, title: "Wallet", physical_path: root)
+
+      pages = Docs.load_extension_pages()
+      assert ["ext-wallet-ext-b-refunds", "ext-wallet-ext-overview"] = Enum.map(pages, & &1.id)
+      assert [%{nav: "Refunds", summary: "How refunds work", extension_title: "Wallet", group: "Extensions"}, %{nav: "Overview"}] = pages
+
+      # they are guide pages: navigable, rendered, and in the export
+      assert Enum.any?(Pages.all(), &(&1.id == "ext-wallet-ext-overview"))
+      html = render_guide("ext-wallet-ext-overview")
+      assert html =~ "Coins shared by every game."
+      assert html =~ "Extensions"
+      {:ok, %{content: md}} = Docs.export_docs(%{format: "markdown"})
+      assert md =~ "Refunds &amp; chargebacks" or md =~ "Refunds & chargebacks"
+      assert {:ok, %{chapter: %{title: "Wallet"}}} = Docs.get_chapter(%{id: "ext-wallet-ext-overview"})
+    end
+
+    test "an Elixir extension's priv/docs is the same folder, and an extension without docs adds nothing", %{root: root} do
+      File.rm_rf!(Path.join(root, "docs"))
+      File.write!(Path.join(root, "priv/docs/overview.md"), "# Elixir extension\n\nBody.\n")
+      Exoforge.ExtensionCase.register_extension(Stub, id: :elixir_ext, physical_path: root)
+      Exoforge.ExtensionCase.register_extension(Stub, id: :no_docs_ext, physical_path: Path.join(root, "missing"))
+
+      assert ["ext-elixir-ext-overview"] = Enum.map(Docs.load_extension_pages(), & &1.id)
+    end
+  end
+
   describe "Docs Phoenix Component View" do
     defp render_guide(subpage) do
       assigns = %{action_catalog: [], extensions: [], project_name: "TestGame", studio_name: "TestStudio", subpage: subpage}

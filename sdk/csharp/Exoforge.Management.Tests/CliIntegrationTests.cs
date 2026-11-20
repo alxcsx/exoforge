@@ -128,6 +128,11 @@ public class CliIntegrationTests : IDisposable
         Assert.True(File.Exists(Path.Combine(extDir, "economy_system.sln")));
         Assert.True(File.Exists(Path.Combine(extDir, "src", "economy_system.csproj")));
         Assert.True(File.Exists(Path.Combine(extDir, "src", "EconomySystemExtension.cs")));
+
+        // the extension's own page in the Developer Guide
+        string overview = File.ReadAllText(Path.Combine(extDir, "docs", "overview.md"));
+        Assert.StartsWith("---\nnav: Overview", overview);
+        Assert.Contains("# EconomySystem", overview);
     }
 
     [Fact]

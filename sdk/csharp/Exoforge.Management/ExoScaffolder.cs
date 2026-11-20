@@ -12,6 +12,7 @@ namespace Exoforge.Management;
 ///   .gitignore           ignores the build outputs (the staged binary, the manifest)
 ///   src/&lt;name&gt;.csproj
 ///   src/&lt;Name&gt;Plugin.cs  the actions
+///   docs/overview.md     the extension's page in the Developer Guide (any docs/*.md is gathered)
 /// </code>
 /// The built binary is staged under <c>.exoforge/</c> and <c>manifest.json</c> is written at the plugin
 /// root; both are build outputs.
@@ -37,6 +38,12 @@ public static class ExoScaffolder
         File.WriteAllText(Path.Combine(srcDir, $"{cleanName}.csproj"), GenerateCsproj(sdkVersion: sdkVersion));
         File.WriteAllText(Path.Combine(srcDir, $"{className}Extension.cs"), GenerateExtensionCode(cleanName, className, template));
         File.WriteAllText(Path.Combine(targetDir, $"{cleanName}.sln"), GenerateSln(cleanName));
+
+        // The extension's own documentation: every Markdown file in docs/ becomes a page of the Developer Guide
+        // once the extension is deployed.
+        string docsDir = Path.Combine(targetDir, "docs");
+        Directory.CreateDirectory(docsDir);
+        File.WriteAllText(Path.Combine(docsDir, "overview.md"), GenerateOverviewDoc(cleanName, className));
 
         // The staged native binary and the local build counter are build artifacts.
         File.WriteAllText(Path.Combine(targetDir, ".gitignore"), "/.exoforge/\n/.buildcount\n/manifest.json\n");
@@ -479,6 +486,20 @@ public static class ExoScaffolder
         In Unity: **Exoforge ▸ Studio**, then the Extensions tab.
         """;
     }
+
+    private static string GenerateOverviewDoc(string name, string className) =>
+        "---\n" +
+        "nav: Overview\n" +
+        "summary: What " + name + " does and how to use it.\n" +
+        "---\n" +
+        "# " + className + "\n\n" +
+        "What this extension is for, in a sentence or two.\n\n" +
+        "## Actions\n\n" +
+        "Say what each action does and who may call it (its `Scope`). The live API catalog lists the signatures.\n\n" +
+        "## Data\n\n" +
+        "The resources it stores and what a row means.\n\n" +
+        "## Events\n\n" +
+        "The events it raises or listens to, and their topics.\n";
 
     public static string GenerateSln(string cleanName)
     {

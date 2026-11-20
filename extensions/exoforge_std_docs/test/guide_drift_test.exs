@@ -123,6 +123,51 @@ defmodule Exoforge.Std.GuideDriftTest do
     assert Markdown.slugify("Two `code`") == "two-code"
   end
 
+  # ---- the standard extensions' own pages ----
+
+  @std_dirs Path.wildcard(Path.join(@repo, "extensions/exoforge_std_*"))
+
+  defp overview(dir), do: Path.join(dir, "priv/docs/overview.md")
+
+  test "every standard extension documents itself in its own docs folder" do
+    skip_without_repo()
+
+    for dir <- @std_dirs do
+      path = overview(dir)
+      assert File.exists?(path), "#{Path.basename(dir)} has no priv/docs/overview.md"
+
+      text = File.read!(path)
+      assert text =~ ~r/\A---\n(?:.*\n)*?summary: \S/, "#{Path.basename(dir)}: overview.md needs front matter with a summary"
+      assert text =~ ~r/^# \S/m, "#{Path.basename(dir)}: overview.md needs a title"
+    end
+  end
+
+  test "what a standard extension's page says exists in the code: its actions and its settings" do
+    skip_without_repo()
+
+    sources =
+      ["core/lib/**/*.ex", "extensions/*/lib/**/*.ex", "extensions/*/config/**/*.exs", "config/*.exs"]
+      |> Enum.flat_map(&Path.wildcard(Path.join(@repo, &1)))
+      |> Enum.map(&File.read!/1)
+      |> Enum.join("\n")
+
+    for dir <- @std_dirs, File.exists?(overview(dir)) do
+      name = Path.basename(dir)
+      text = File.read!(overview(dir))
+
+      [_, actions_section] = Regex.run(~r/## Actions\n(.*?)(?=\n## |\z)/s, text) || [nil, ""]
+
+      for [_, action] <- Regex.scan(~r/^\|\s*`([a-z_]+)`\s*\|/m, actions_section) do
+        assert sources =~ ~r/(defaction\(?\s*#{action}\b|action\(?\s*:#{action}\b)/,
+               "#{name}: the page lists action `#{action}`, which no defaction or service contract defines"
+      end
+
+      for [_, setting] <- Regex.scan(~r/`([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)`/, text) do
+        assert sources =~ setting, "#{name}: the page mentions setting `#{setting}`, which the code never reads"
+      end
+    end
+  end
+
   defp skip_without_repo do
     unless File.exists?(@attributes), do: flunk("the repository sources were not found; run the drift tests from a checkout")
   end
