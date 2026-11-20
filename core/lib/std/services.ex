@@ -928,6 +928,53 @@ defmodule Exoforge.Std.Services do
     end
   end
 
+  defservice versioning do
+    @moduledoc """
+    Game versions: which release is live, which is still served, and which extension version each one locks.
+
+    A game version moves `dev` -> `live` -> `outdated` -> `blocked`. At most `max_active_versions`
+    (default 3) are not blocked; registering or promoting past that blocks the oldest `outdated` one.
+    """
+
+    @doc "Registers a game version in `dev`, with the extension versions it locks."
+    action :register do
+      scope(:studio)
+      params(version: :string, locks: [type: :map, optional: true])
+      returns(version: :string, status: :string, blocked: [:string])
+      errors([:already_exists, :invalid_version, :too_many_active])
+    end
+
+    @doc "Makes a `dev` game version live. The previous live one becomes `outdated`."
+    action :promote do
+      scope(:studio)
+      params(version: :string)
+      returns(version: :string, status: :string, blocked: [:string])
+      errors([:not_found, :invalid_transition])
+    end
+
+    @doc "Blocks a game version: its clients are told to upgrade."
+    action :block do
+      scope(:studio)
+      params(version: :string)
+      returns(version: :string, status: :string)
+      errors([:not_found])
+    end
+
+    @doc "Lists game versions, newest first."
+    action :list do
+      scope(:studio)
+      returns(versions: [:map])
+    end
+
+    @doc "Status and extension locks of one game version, as a client reports it."
+    action :resolve do
+      scope(:player)
+      params(version: :string)
+      returns(version: :string, status: :string, locks: :map)
+      errors([:not_found])
+    end
+  end
+
   defservice file_bucket do
     @moduledoc """
     Cluster file storage and retrieval engine for binary assets, uploads, and blobs.
