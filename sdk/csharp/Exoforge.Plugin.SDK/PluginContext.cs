@@ -78,7 +78,26 @@ public class HostDatabase : IDatabase
     {
         string? json = HostBridge.DbGet(table, key);
         CheckDbError(table, json);
-        return string.IsNullOrEmpty(json) ? default : PluginJson.DeserializeDatabaseRow<T>(json);
+        if (string.IsNullOrEmpty(json)) return default;
+
+        using var doc = JsonDocument.Parse(json);
+        return ReadRow<T>(table, key, doc.RootElement) is { } row ? row : default;
+    }
+
+    /// <summary>
+    /// A stored row as <typeparamref name="T"/>. A row written under an older extension version is brought up to
+    /// date first and written back (guarded by its old stamp, so a lost race changes nothing here).
+    /// </summary>
+    private T? ReadRow<T>(string table, string? key, JsonElement row)
+    {
+        if (RowMigrations.PendingFrom<T>(row) is long stamp)
+        {
+            T upgraded = RowMigrations.Upgrade<T>(row, stamp);
+            HostBridge.DbPut(table, key ?? EntityMetadata<T>.GetKey(upgraded), RowMigrations.WithGuard(upgraded!, stamp));
+            return upgraded;
+        }
+
+        return PluginJson.DeserializeDatabaseRow<T>(row.GetRawText());
     }
 
     public IReadOnlyList<T> All<T>(string table)
@@ -94,7 +113,7 @@ public class HostDatabase : IDatabase
         {
             foreach (var row in doc.RootElement.EnumerateArray())
             {
-                if (PluginJson.DeserializeDatabaseRow(row.GetRawText(), typeof(T)) is T value)
+                if (ReadRow<T>(table, null, row) is { } value)
                 {
                     rows.Add(value);
                 }

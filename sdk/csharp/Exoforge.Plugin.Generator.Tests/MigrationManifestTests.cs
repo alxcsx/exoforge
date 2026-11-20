@@ -9,7 +9,7 @@ using Xunit;
 
 namespace Exoforge.Plugin.Generator.Tests;
 
-/// <summary>Resource versions and the migrations between them, as the manifest tells the server (T6).</summary>
+/// <summary>The migrations an extension declares on the way to a version, as the manifest tells the server.</summary>
 public class MigrationManifestTests
 {
     private static (JsonNode Manifest, ImmutableArray<Diagnostic> Diagnostics) Run(string source)
@@ -39,24 +39,16 @@ public class MigrationManifestTests
         """;
 
     [Fact]
-    public void A_Resource_Has_Version_One_Unless_It_Says_Otherwise()
+    public void A_Resource_Carries_No_Version_Of_Its_Own()
     {
-        var (plain, _) = Run(Preamble + """
+        var (manifest, _) = Run(Preamble + """
 
             [ExoResource("items")]
             public class Item { public string Id { get; set; } = ""; }
             """);
 
-        var (second, _) = Run(Preamble + """
-
-            [ExoResource("items", Version = 2)]
-            public class Item { public string Id { get; set; } = ""; }
-            """);
-
-        JsonNode Resource(JsonNode m) => m["services"]!.AsArray()[0]!["resources"]!.AsArray()[0]!;
-
-        Assert.Equal(1, Resource(plain)["version"]!.GetValue<int>());
-        Assert.Equal(2, Resource(second)["version"]!.GetValue<int>());
+        var resource = manifest["services"]!.AsArray()[0]!["resources"]!.AsArray()[0]!;
+        Assert.Null(resource["version"]);
     }
 
     [Fact]
@@ -64,10 +56,10 @@ public class MigrationManifestTests
     {
         var (manifest, diagnostics) = Run(Preamble + """
 
-            [ExoResource("items", Version = 2)]
+            [ExoResource("items")]
             public class Item { public string Id { get; set; } = ""; public decimal Price { get; set; } public string Name { get; set; } = ""; }
 
-            [ExoMigration(typeof(Item), From = 1, To = 2)]
+            [ExoMigration(typeof(Item), To = "1.2.0")]
             [ExoRename("nm", "Name")]
             [ExoConvert("Price", ExoType.Decimal)]
             [ExoFill("rarity", "common")]
@@ -82,8 +74,8 @@ public class MigrationManifestTests
 
         var migration = Assert.Single(manifest["migrations"]!.AsArray())!;
         Assert.Equal("items", migration["resource"]!.GetValue<string>());
-        Assert.Equal(1, migration["from"]!.GetValue<int>());
-        Assert.Equal(2, migration["to"]!.GetValue<int>());
+        Assert.Equal("1.2.0", migration["to"]!.GetValue<string>());
+        Assert.Null(migration["from"]);
         Assert.Matches(@"^Resources\.cs:\d+$", migration["decl"]!.GetValue<string>());
 
         var ops = migration["ops"]!.AsArray();
@@ -103,61 +95,82 @@ public class MigrationManifestTests
     }
 
     [Fact]
-    public void Migrations_Come_Out_Ordered_By_Resource_And_Version_Whatever_Order_They_Are_Written_In()
+    public void Migrations_Come_Out_Ordered_By_Resource_And_Version_Number_Whatever_Order_They_Are_Written_In()
     {
         var (manifest, _) = Run(Preamble + """
 
-            [ExoResource("items", Version = 3)]
+            [ExoResource("items")]
             public class Item { public string Id { get; set; } = ""; }
 
-            [ExoMigration(typeof(Item), From = 2, To = 3)]
+            [ExoMigration(typeof(Item), To = "1.10.0")]
             [ExoDrop("b")]
-            public static class ItemsV3 { }
+            public static class ItemsV110 { }
 
-            [ExoMigration(typeof(Item), From = 1, To = 2)]
+            [ExoMigration(typeof(Item), To = "1.2.0")]
             [ExoDrop("a")]
-            public static class ItemsV2 { }
+            public static class ItemsV12 { }
             """);
 
-        Assert.Equal(new[] { 1, 2 }, manifest["migrations"]!.AsArray().Select(m => m!["from"]!.GetValue<int>()));
+        // 1.2.0 before 1.10.0: by number, not by text
+        Assert.Equal(new[] { "1.2.0", "1.10.0" }, manifest["migrations"]!.AsArray().Select(m => m!["to"]!.GetValue<string>()));
     }
 
     [Fact]
-    public void A_Migration_Must_Step_One_Version()
+    public void A_Migration_Needs_An_Extension_Version_To_Lead_To()
     {
         var (_, diagnostics) = Run(Preamble + """
 
-            [ExoResource("items", Version = 3)]
+            [ExoResource("items")]
             public class Item { public string Id { get; set; } = ""; }
 
-            [ExoMigration(typeof(Item), From = 1, To = 3)]
+            [ExoMigration(typeof(Item), To = "two")]
             [ExoDrop("a")]
-            public static class Skip { }
+            public static class Bad { }
             """);
 
         var error = Assert.Single(diagnostics, d => d.Id == "EXO005");
-        Assert.Contains("To = From + 1", error.GetMessage());
+        Assert.Contains("MAJOR.MINOR.PATCH", error.GetMessage());
     }
 
     [Fact]
-    public void Two_Migrations_From_The_Same_Version_Are_An_Error()
+    public void Two_Migrations_To_The_Same_Version_Are_An_Error()
     {
         var (_, diagnostics) = Run(Preamble + """
 
-            [ExoResource("items", Version = 2)]
+            [ExoResource("items")]
             public class Item { public string Id { get; set; } = ""; }
 
-            [ExoMigration(typeof(Item), From = 1, To = 2)]
+            [ExoMigration(typeof(Item), To = "1.2.0")]
             [ExoDrop("a")]
             public static class One { }
 
-            [ExoMigration(typeof(Item), From = 1, To = 2)]
+            [ExoMigration(typeof(Item), To = "1.2.0")]
             [ExoDrop("b")]
             public static class Two { }
             """);
 
         var error = Assert.Single(diagnostics, d => d.Id == "EXO005");
-        Assert.Contains("two migrations from version 1", error.GetMessage());
+        Assert.Contains("two migrations to version 1.2.0", error.GetMessage());
+    }
+
+    [Theory]
+    [InlineData("2.1.0")]
+    [InlineData("0.1.0")]
+    [InlineData("10.20.30")]
+    [InlineData("1.4.0-beta.1")]
+    [InlineData("nonsense")]
+    [InlineData("1.1000.0")]
+    public void The_Generator_And_The_SDK_Encode_Versions_The_Same_Way(string version)
+    {
+        // Both are reached by name: the emitter is internal to the generator assembly, and naming the
+        // generator's types here would make the build read this project as depending on a service.
+        var emitter = typeof(ResourceValidationTests).Assembly.GetReferencedAssemblies()
+            .Where(a => a.Name == "Exoforge.Plugin.Generator").Select(Assembly.Load).Single()
+            .GetTypes().Single(t => t.Name == "ManifestEmitter");
+        long generator = (long)emitter.GetMethod("EncodeVersion", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static)!.Invoke(null, new object?[] { version })!;
+        long sdk = (long)Assembly.Load("Exoforge.Plugin.SDK").GetType("Exoforge.Plugin.SDK.ExoVersion")!.GetMethod("Encode")!.Invoke(null, new object?[] { version })!;
+
+        Assert.Equal(sdk, generator);
     }
 
     [Fact]
@@ -170,7 +183,7 @@ public class MigrationManifestTests
 
             public class NotAResource { }
 
-            [ExoMigration(typeof(NotAResource), From = 1, To = 2)]
+            [ExoMigration(typeof(NotAResource), To = "1.2.0")]
             [ExoDrop("a")]
             public static class Lost { }
             """);

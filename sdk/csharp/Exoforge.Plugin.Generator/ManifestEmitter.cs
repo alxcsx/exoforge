@@ -59,14 +59,13 @@ internal sealed record ResourceModel(
     List<ColumnModel> Columns,
     string? TypeName,
     bool Singleton = false,
-    bool AllowPlayerRead = false,
-    int Version = 1);
+    bool AllowPlayerRead = false);
 
 /// <summary>One step of a migration, ready to write: the operation and its arguments as JSON values.</summary>
 internal sealed record MigrationOp(string Op, string? Column, string? From, string? To, string? ValueJson);
 
-/// <summary>A resource's change from one version to the next, found on a class marked <c>[ExoMigration]</c>.</summary>
-internal sealed record MigrationModel(string Resource, int From, int To, List<MigrationOp> Ops, string? Decl);
+/// <summary>A resource's change on the way to extension version <c>To</c>, found on a class marked <c>[ExoMigration]</c>.</summary>
+internal sealed record MigrationModel(string Resource, string To, List<MigrationOp> Ops, string? Decl);
 
 internal sealed record CronModel(
     string Name,
@@ -245,7 +244,6 @@ internal static class ManifestEmitter
                 // The shape `Exoforge.Std.Resources.normalize_source/1` reads. A bare string would not
                 // match, and a resource with no source is stored as an opaque key-value document.
                 sb.Append($"\"source\": {{\"table\": {Str(resource.Source)}}}, ");
-                sb.Append($"\"version\": {resource.Version}, ");
                 sb.Append($"\"schema_hash\": {Str(SchemaHash(resource))}, ");
                 sb.Append($"\"drawer\": {Atoms(resource.Drawer)}, ");
                 sb.Append($"\"actions\": {Atoms(resource.Actions)}, ");
@@ -336,7 +334,7 @@ internal static class ManifestEmitter
     private static string Migrations(IEnumerable<MigrationModel>? migrations)
     {
         var list = (migrations ?? Array.Empty<MigrationModel>())
-            .OrderBy(m => m.Resource, StringComparer.Ordinal).ThenBy(m => m.From)
+            .OrderBy(m => m.Resource, StringComparer.Ordinal).ThenBy(m => EncodeVersion(m.To))
             .ToList();
 
         if (list.Count == 0) return "[]";
@@ -345,7 +343,7 @@ internal static class ManifestEmitter
         {
             string decl = string.IsNullOrEmpty(m.Decl) ? "" : $", \"decl\": {Str(m.Decl!)}";
             string ops = string.Join(", ", m.Ops.Select(Op));
-            return $"{{\"resource\": {Str(m.Resource)}, \"from\": {m.From}, \"to\": {m.To}{decl}, \"ops\": [{ops}]}}";
+            return $"{{\"resource\": {Str(m.Resource)}, \"to\": {Str(m.To)}{decl}, \"ops\": [{ops}]}}";
         });
 
         return "[\n    " + string.Join(",\n    ", items) + "\n  ]";
@@ -358,6 +356,26 @@ internal static class ManifestEmitter
         string to = op.To is null ? "" : $", \"to\": {Str(op.To)}";
         string value = op.ValueJson is null ? "" : $", \"value\": {op.ValueJson}";
         return $"{{\"op\": {Str(op.Op)}{column}{from}{to}{value}}}";
+    }
+
+    /// <summary>Mirror of the SDK's <c>ExoVersion.Encode</c> (the generator cannot reference the SDK); a test pins them together.</summary>
+    internal static long EncodeVersion(string? version)
+    {
+        if (string.IsNullOrWhiteSpace(version)) return 0;
+
+        string text = version!;
+        int cut = text.IndexOfAny(new[] { '-', '+' });
+        string[] parts = (cut < 0 ? text : text.Substring(0, cut)).Split('.');
+        if (parts.Length != 3 ||
+            !long.TryParse(parts[0], out long major) ||
+            !long.TryParse(parts[1], out long minor) ||
+            !long.TryParse(parts[2], out long patch) ||
+            major < 0 || minor < 0 || minor > 999 || patch < 0 || patch > 999)
+        {
+            return 0;
+        }
+
+        return major * 1_000_000 + minor * 1_000 + patch;
     }
 
     internal static string SchemaHash(ResourceModel resource)
