@@ -732,12 +732,17 @@ public static class PluginHost
 
             string? callerPlayerId = null;
             List<string>? callerScopes = null;
+            string? callerGameVersion = null;
 
             if (payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty("_auth", out var authElem) && authElem.ValueKind == JsonValueKind.Object)
             {
                 if (authElem.TryGetProperty("player_id", out var pidElem) && pidElem.ValueKind == JsonValueKind.String)
                 {
                     callerPlayerId = pidElem.GetString();
+                }
+                if (authElem.TryGetProperty("game_version", out var gvElem) && gvElem.ValueKind == JsonValueKind.String)
+                {
+                    callerGameVersion = gvElem.GetString();
                 }
                 if (authElem.TryGetProperty("scopes", out var scopesElem) && scopesElem.ValueKind == JsonValueKind.Array)
                 {
@@ -753,7 +758,7 @@ public static class PluginHost
             }
 
             var hostCtx = CurrentContext as HostPluginContext;
-            hostCtx?.UpdateCaller(callerPlayerId, callerScopes);
+            hostCtx?.UpdateCaller(callerPlayerId, callerScopes, callerGameVersion);
 
             try
             {

@@ -16,6 +16,8 @@ public interface IPluginContext
     ILogger Logger { get; }
     string? CallerPlayerId { get; }
     IReadOnlyList<string> CallerScopes { get; }
+    /// <summary>The game version the calling client reported at sign-in; null for a call that carries none.</summary>
+    string? CallerGameVersion { get; }
 }
 
 /// <summary>

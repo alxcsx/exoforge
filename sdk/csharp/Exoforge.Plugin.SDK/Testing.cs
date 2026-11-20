@@ -326,6 +326,7 @@ public sealed class ExoTestContext : IPluginContext, IDisposable
 
     public string? CallerPlayerId { get; set; }
     public IReadOnlyList<string> CallerScopes { get; set; } = Array.Empty<string>();
+    public string? CallerGameVersion { get; set; }
 
     private readonly IPluginContext? _previousContext;
 

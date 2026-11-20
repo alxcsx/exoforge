@@ -23,6 +23,7 @@ public class HostPluginContext : IPluginContext
     public ILogger Logger { get; }
     public string? CallerPlayerId { get; private set; }
     public IReadOnlyList<string> CallerScopes { get; private set; } = Array.Empty<string>();
+    public string? CallerGameVersion { get; private set; }
 
     public HostPluginContext(string pluginId)
     {
@@ -33,10 +34,11 @@ public class HostPluginContext : IPluginContext
         Logger = new HostLogger();
     }
 
-    public void UpdateCaller(string? playerId, IReadOnlyList<string>? scopes)
+    public void UpdateCaller(string? playerId, IReadOnlyList<string>? scopes, string? gameVersion = null)
     {
         CallerPlayerId = playerId;
         CallerScopes = scopes ?? Array.Empty<string>();
+        CallerGameVersion = gameVersion;
     }
 
     /// <summary>
