@@ -271,6 +271,15 @@ defmodule Exoforge.Std.DocsTest do
       assert catalog =~ "Read its documentation"
     end
 
+    test "{{about}} is the extension module's own @moduledoc, so the explanation lives in the code", %{root: root} do
+      File.write!(Path.join(root, "docs/overview.md"), "# Cron\n\n{{about}}\n")
+      Exoforge.ExtensionCase.register_extension(Exoforge.Std.Docs, id: :docs_ext, title: "Docs", physical_path: root)
+
+      [page] = Docs.load_extension_pages()
+      assert page.content =~ "Developer Guide"
+      refute page.content =~ "{{about}}"
+    end
+
     test "an Elixir extension's priv/docs is the same folder, and an extension without docs adds nothing", %{root: root} do
       File.rm_rf!(Path.join(root, "docs"))
       File.write!(Path.join(root, "priv/docs/overview.md"), "# Elixir extension\n\nBody.\n")

@@ -386,11 +386,23 @@ defmodule Exoforge.Std.Docs do
       services = catalog_services(extension_id)
 
       content
+      |> String.replace("{{about}}", about_markdown(extension_id))
       |> String.replace("{{actions}}", actions_markdown(services))
       |> String.replace("{{events}}", events_markdown(services))
       |> String.replace("{{resources}}", resources_markdown(extension_id))
     else
       content
+    end
+  end
+
+  # The extension module's own `@moduledoc`: the explanation lives in the code, next to what it explains, and
+  # shows here and in the Studio's inspector from one place.
+  defp about_markdown(extension_id) do
+    with %{entry_point: module} when is_atom(module) <- Enum.find(ExtensionRegistry.all_manifests(), &(to_string(manifest_field(&1, :id)) == extension_id)),
+         {:docs_v1, _, _, _, %{"en" => text}, _, _} when is_binary(text) <- Code.fetch_docs(module) do
+      String.trim(text)
+    else
+      _ -> ""
     end
   end
 
