@@ -8,13 +8,11 @@ The REST transport on port 4001, with OpenAPI routes derived from the service co
 
 ## Actions
 
-| Action | Scope | Takes | What it does |
-|---|---|---|---|
-| `status` | `global` | - | Returns HTTP server status and registered route summaries. |
+{{actions}}
 
 ## Events
 
-It declares no events.
+{{events}}
 
 ## Settings
 

@@ -8,15 +8,11 @@ Runs the schedules declared with `[ExoCron]` and lets the Studio list and trigge
 
 ## Actions
 
-| Action | Scope | Takes | What it does |
-|---|---|---|---|
-| `status` | `studio` | - | Returns status and count of active cron jobs. |
-| `list_jobs` | `studio` | - | Lists all scheduled cron jobs. |
-| `trigger_job` | `studio` | `job_id` | Manually triggers a scheduled job by its name or id. |
+{{actions}}
 
 ## Events
 
-It declares no events.
+{{events}}
 
 ## Settings
 

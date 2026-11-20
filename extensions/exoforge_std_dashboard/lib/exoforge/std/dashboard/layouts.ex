@@ -757,6 +757,11 @@ defmodule Exoforge.Std.Dashboard.Layouts do
                       try {
                         const target = document.querySelector(hash);
                         if (target) {
+                          // an anchor inside a collapsed section (the API catalog folds services and
+                          // actions) must open the folds around it first
+                          for (let fold = target.closest('details'); fold; fold = fold.parentElement && fold.parentElement.closest('details')) {
+                            fold.open = true;
+                          }
                           setTimeout(() => {
                             window.exoScrollIntoView(target, 'start');
                           }, 90);

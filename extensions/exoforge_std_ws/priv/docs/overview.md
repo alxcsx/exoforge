@@ -8,14 +8,11 @@ The realtime transport on port 4000: it carries actions and event subscriptions 
 
 ## Actions
 
-| Action | Scope | Takes | What it does |
-|---|---|---|---|
-| `broadcast` | `studio` | `topic`, `event`, `payload` | Broadcasts a frame to an active WebSocket topic. |
-| `connection_count` | `studio` | - | Retrieves current active WebSocket connection count. |
+{{actions}}
 
 ## Events
 
-It declares no events.
+{{events}}
 
 ## Settings
 

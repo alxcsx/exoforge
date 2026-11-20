@@ -244,4 +244,36 @@ public class MigrationManifestTests
         var score = Assert.Single(actions.Where(a => a!["name"]!.GetValue<string>() == "score"))!;
         Assert.Equal(2, score["arity"]!.GetValue<int>());
     }
+
+    [Fact]
+    public void Doc_Comments_On_Actions_And_Events_Reach_The_Manifest_As_One_Line()
+    {
+        var (manifest, diagnostics) = Run("""
+            using Exoforge.Plugin.SDK;
+            namespace P;
+            [ExoService("svc")]
+            public partial class Svc
+            {
+                /// <summary>
+                /// Credits coins to a player,
+                /// see <see cref="Other"/> for <c>refunds</c>.
+                /// </summary>
+                /// <param name="a">ignored</param>
+                [ExoAction] public int Credit(int a) => a;
+
+                [ExoAction] public int Undocumented(int a) => a;
+            }
+
+            /// <summary>Fired when a balance changes.</summary>
+            [ExoEvent("balance_changed", Topic = "wallet:feed")]
+            public record BalanceChanged(string PlayerId);
+            """);
+
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+        var service = manifest["services"]!.AsArray()[0]!;
+        var actions = service["actions"]!.AsArray();
+        Assert.Equal("Credits coins to a player, see Other for refunds.", actions.Single(a => a!["name"]!.GetValue<string>() == "credit")!["doc"]!.GetValue<string>());
+        Assert.Null(actions.Single(a => a!["name"]!.GetValue<string>() == "undocumented")!["doc"]);
+        Assert.Equal("Fired when a balance changes.", service["events"]!.AsArray()[0]!["doc"]!.GetValue<string>());
+    }
 }

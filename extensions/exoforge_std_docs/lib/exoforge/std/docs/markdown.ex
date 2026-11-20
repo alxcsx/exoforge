@@ -516,6 +516,18 @@ defmodule Exoforge.Std.Docs.Markdown do
     end)
   end
 
+  @patch " data-phx-link=\"patch\" data-phx-link-state=\"push\""
+
+  defp catalog_link(kind, ref) do
+    anchor =
+      case String.split(ref, ".", parts: 2) do
+        [service, name] -> "#{kind}-#{service}-#{name}"
+        [name] -> "service-#{name}"
+      end
+
+    {"/guide?subpage=catalog##{anchor}", @patch}
+  end
+
   # `guide:<page>#anchor` points at another page of the Developer Guide (a live patch, no reload); a bare
   # `#anchor` stays on the page; `http...` opens in a new tab. The url arrives already escaped.
   defp link_target("guide:" <> rest) do
@@ -525,8 +537,14 @@ defmodule Exoforge.Std.Docs.Markdown do
         [page] -> {page, ""}
       end
 
-    {"/guide?subpage=#{URI.encode_www_form(page)}#{anchor}", " data-phx-link=\"patch\" data-phx-link-state=\"push\""}
+    {"/guide?subpage=#{URI.encode_www_form(page)}#{anchor}", @patch}
   end
+
+  # `api:service.action`, `event:service.event` and `service:name` point at the live API catalog; the catalog opens
+  # the folds around the target.
+  defp link_target("api:" <> ref), do: catalog_link("action", ref)
+  defp link_target("event:" <> ref), do: catalog_link("event", ref)
+  defp link_target("service:" <> name), do: {"/guide?subpage=catalog#service-#{name}", @patch}
 
   defp link_target(url) do
     if String.starts_with?(url, "http"),

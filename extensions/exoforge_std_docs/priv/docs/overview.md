@@ -8,11 +8,11 @@ The Developer Guide, the live API catalog and the PDF export. It gathers the `do
 
 ## Actions
 
-It has no actions of its own.
+{{actions}}
 
 ## Events
 
-It declares no events.
+{{events}}
 
 ## Settings
 

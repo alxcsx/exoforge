@@ -495,11 +495,13 @@ public static class ExoScaffolder
         "# " + className + "\n\n" +
         "What this extension is for, in a sentence or two.\n\n" +
         "## Actions\n\n" +
-        "Say what each action does and who may call it (its `Scope`). The live API catalog lists the signatures.\n\n" +
-        "## Data\n\n" +
-        "The resources it stores and what a row means.\n\n" +
+        "{{actions}}\n\n" +
+        "Say here, in your own words, what the actions are for and who should call them. The table above is built from the code on every deploy and links to the API reference, so it never needs editing.\n\n" +
         "## Events\n\n" +
-        "The events it raises or listens to, and their topics.\n";
+        "{{events}}\n\n" +
+        "## Data\n\n" +
+        "{{resources}}\n\n" +
+        "Say what a row means.\n";
 
     public static string GenerateSln(string cleanName)
     {

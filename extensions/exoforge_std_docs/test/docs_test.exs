@@ -219,9 +219,56 @@ defmodule Exoforge.Std.DocsTest do
       assert reading =~ ~s(data-page="ext-wallet-ext-overview")
 
       # one button hides and shows the index and the contents list
-      assert reading =~ "Hide index"
+      assert reading =~ "Expand"
+      refute reading =~ "Hide index"
       assert reading =~ ~s(id="guide-index")
       assert reading =~ ~s(id="guide-toc")
+    end
+
+    defmodule Contract do
+      import Exoforge.Contracts.Service
+
+      defservice wallet_svc do
+        @doc "Credits coins to a player."
+        action :credit do
+          scope(:service)
+          params(player_id: :string, amount: :integer, reason: [type: :string, optional: true])
+          returns(balance: :integer)
+        end
+
+        @doc "Fired when a balance changes."
+        event :balance_changed do
+          payload(player_id: :string, balance: :integer)
+          scope(:server)
+        end
+      end
+    end
+
+    test "{{actions}} and {{events}} are built from the contract and link to the API reference", %{root: root} do
+      File.write!(Path.join(root, "docs/overview.md"), "# Wallet\n\n## Actions\n\n{{actions}}\n\n## Events\n\n{{events}}\n")
+
+      Exoforge.ExtensionCase.register_extension(Stub,
+        id: :wallet_ext,
+        title: "Wallet",
+        physical_path: root,
+        services: [Contract.WalletSvc.__service_metadata__()]
+      )
+
+      [page] = Docs.load_extension_pages()
+      assert page.content =~ "| [`credit`](api:wallet_svc.credit) | `service` | `player_id`, `amount`, `reason?` | Credits coins to a player. |"
+      assert page.content =~ "| [`balance_changed`](event:wallet_svc.balance_changed) |"
+      refute page.content =~ "{{"
+
+      html = render_guide(page.id)
+      assert html =~ ~s(href="/guide?subpage=catalog#action-wallet_svc-credit")
+      assert html =~ ~s(href="/guide?subpage=catalog#event-wallet_svc-balance_changed")
+
+      # the catalog is where those links land: anchors for the service, the action and the event, and a way back
+      catalog = render_guide("catalog")
+      assert catalog =~ ~s(id="service-wallet_svc")
+      assert catalog =~ ~s(id="action-wallet_svc-credit")
+      assert catalog =~ ~s(id="event-wallet_svc-balance_changed")
+      assert catalog =~ "Read its documentation"
     end
 
     test "an Elixir extension's priv/docs is the same folder, and an extension without docs adds nothing", %{root: root} do
@@ -254,7 +301,8 @@ defmodule Exoforge.Std.DocsTest do
 
       assert html =~ "Developer Quickstart"
       assert html =~ "Developer Guide pages"
-      for group <- ["Get started", "Build", "Learn by example", "Understand", "Live reference"], do: assert(html =~ group)
+      groups = ["Get started", "Build", "Learn by example", "Understand", "Live reference"]
+      for group <- groups, do: assert(html =~ group)
       assert html =~ "Export to PDF"
       assert html =~ "/api/docs/manual.pdf"
       assert html =~ "@media print"

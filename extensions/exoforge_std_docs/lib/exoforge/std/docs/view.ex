@@ -98,6 +98,7 @@ defmodule Exoforge.Std.Docs.View do
       |> assign(:page, page)
       |> assign(:previous, previous)
       |> assign(:next, next)
+      |> assign(:ext_pages, Enum.reduce(pages, %{}, fn p, acc -> if p[:extension], do: Map.put_new(acc, p.extension, p.id), else: acc end))
       |> assign(:toc, if(page.kind == :chapter, do: Pages.toc(page.content), else: []))
 
     ~H"""
@@ -121,16 +122,6 @@ defmodule Exoforge.Std.Docs.View do
           <span class="exo-page-subtitle">Build, version and run your game's extensions</span>
         </div>
         <div class="exo-page-actions">
-          <button
-            type="button"
-            phx-click={toggle_index()}
-            title="Show or hide the page index and the contents list, to give the page the full width"
-            class="exo-btn exo-btn-secondary exo-btn-sm"
-          >
-            <.studio_icon icon="book" class="w-3.5 h-3.5" />
-            <span id="guide-index-hide">Hide index</span>
-            <span id="guide-index-show" class="!hidden">Show index</span>
-          </button>
           <a
             href="/api/docs/manual.pdf"
             download="exoforge-developer-manual.pdf"
@@ -165,11 +156,29 @@ defmodule Exoforge.Std.Docs.View do
         </div>
 
         <main class="min-w-0 flex-1">
+          <div class="print:hidden mb-2 flex justify-end">
+            <button
+              type="button"
+              phx-click={toggle_index()}
+              title="Expand the page to the full width, or bring the index back"
+              aria-label="Expand or collapse the page"
+              class="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+            >
+              <svg id="guide-expand-icon" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M4 9V4h5 M20 9V4h-5 M4 15v5h5 M20 15v5h-5" />
+              </svg>
+              <svg id="guide-collapse-icon" class="w-3.5 h-3.5 !hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M9 4v5H4 M15 4v5h5 M9 20v-5H4 M15 20v-5h5" />
+              </svg>
+              <span id="guide-index-hide">Expand</span>
+              <span id="guide-index-show" class="!hidden">Collapse</span>
+            </button>
+          </div>
           <%= case @page.kind do %>
             <% :architecture -> %>
               <.subpage_architecture />
             <% :catalog -> %>
-              <.subpage_catalog action_catalog={@action_catalog} myself={@myself} />
+              <.subpage_catalog action_catalog={@action_catalog} myself={@myself} ext_pages={@ext_pages} />
             <% :chapter -> %>
               <article id={"guide-" <> @page.id} class="bg-white rounded-xl border border-gray-200/90 px-6 py-8 sm:px-10 shadow-sm print:border-0 print:shadow-none print:p-0">
                 <p class="text-xs font-semibold uppercase tracking-wider text-primary-700 mb-2"><%= @page.group %></p>
@@ -250,6 +259,8 @@ defmodule Exoforge.Std.Docs.View do
     |> JS.toggle_class("!hidden", to: "#guide-toc")
     |> JS.toggle_class("!hidden", to: "#guide-index-hide")
     |> JS.toggle_class("!hidden", to: "#guide-index-show")
+    |> JS.toggle_class("!hidden", to: "#guide-expand-icon")
+    |> JS.toggle_class("!hidden", to: "#guide-collapse-icon")
   end
 
   # Opens or closes a fold. The classes are toggled in the browser, so a patch (moving to another page)
@@ -360,6 +371,10 @@ defmodule Exoforge.Std.Docs.View do
   # ===========================================================================
   # SUBPAGE: DYNAMIC API REFERENCE & CATALOG
   # ===========================================================================
+  attr(:action_catalog, :list, default: [])
+  attr(:myself, :any, default: nil)
+  attr(:ext_pages, :map, default: %{})
+
   defp subpage_catalog(assigns) do
     ~H"""
     <section id="catalog" data-guide-section class="bg-white rounded-xl border border-gray-200/90 p-8 shadow-sm space-y-6 print:border-gray-300 print:shadow-none print:break-inside-avoid">
@@ -431,7 +446,7 @@ defmodule Exoforge.Std.Docs.View do
       <% else %>
         <div id="catalog-list" class="space-y-4">
           <%= for svc <- @action_catalog do %>
-            <details class="group bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden transition-colors duration-200 print:border-gray-300 print:shadow-none print:break-inside-avoid">
+            <details id={"service-" <> to_string(svc[:name])} class="group bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden transition-colors duration-200 print:border-gray-300 print:shadow-none print:break-inside-avoid scroll-mt-4">
               <summary class="flex items-center justify-between gap-3 p-5 cursor-pointer select-none bg-white hover:bg-gray-50 transition-colors list-none">
                 <div class="flex items-center gap-3">
                   <span class="w-9 h-9 rounded-xl bg-primary-50 text-primary-700 flex items-center justify-center font-semibold text-base shadow-xs">
@@ -458,8 +473,17 @@ defmodule Exoforge.Std.Docs.View do
               </summary>
 
               <div class="p-5 pt-3 border-t border-gray-100 space-y-3 bg-gray-50/50 print:bg-white">
+                <p :if={@ext_pages[svc[:extension_id]]} class="print:hidden text-xs text-gray-500">
+                  Provided by <span class="font-semibold text-gray-700"><%= svc[:extension_title] || svc[:extension_id] %></span>.
+                  <a
+                    href={"/guide?subpage=" <> @ext_pages[svc[:extension_id]]}
+                    data-phx-link="patch"
+                    data-phx-link-state="push"
+                    class="text-primary-600 hover:text-primary-800 underline font-medium"
+                  >Read its documentation</a>
+                </p>
                 <%= for act <- (svc[:actions] || []) do %>
-                  <details class="group/act bg-white rounded-xl border border-gray-200/80 p-4 space-y-3 shadow-2xs transition-colors print:border-gray-300 print:break-inside-avoid">
+                  <details id={"action-" <> to_string(svc[:name]) <> "-" <> act.name} class="group/act bg-white rounded-xl border border-gray-200/80 p-4 space-y-3 shadow-2xs transition-colors print:border-gray-300 print:break-inside-avoid scroll-mt-4">
                     <summary class="flex items-center justify-between gap-2 cursor-pointer select-none list-none">
                       <div class="flex items-center gap-2">
                         <span class="font-semibold text-primary-800 text-xs font-mono">
@@ -538,6 +562,23 @@ defmodule Exoforge.Std.Docs.View do
                     </div>
                   </details>
                 <% end %>
+                <div :if={(svc[:events] || []) != []} class="pt-2 space-y-2">
+                  <p class="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Events</p>
+                  <div
+                    :for={evt <- svc[:events] || []}
+                    id={"event-" <> to_string(svc[:name]) <> "-" <> evt.name}
+                    class="bg-white rounded-xl border border-gray-200/80 p-4 space-y-1 shadow-2xs scroll-mt-4 print:border-gray-300 print:break-inside-avoid"
+                  >
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <span class="font-semibold text-primary-800 text-xs font-mono"><%= evt.name %></span>
+                      <span :if={evt.topic} class="text-[10px] font-semibold px-1.5 py-0.5 rounded border font-mono bg-gray-100 text-gray-700 border-gray-200">topic <%= evt.topic %></span>
+                    </div>
+                    <p :if={evt.doc} class="text-xs text-gray-600 leading-relaxed"><%= evt.doc %></p>
+                    <p :if={evt.payload != []} class="text-[11px] text-gray-500">
+                      Payload: <span class="font-mono text-gray-700"><%= Enum.join(evt.payload, ", ") %></span>
+                    </p>
+                  </div>
+                </div>
               </div>
             </details>
           <% end %>

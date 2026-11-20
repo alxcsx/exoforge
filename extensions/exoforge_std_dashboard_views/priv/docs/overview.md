@@ -8,16 +8,11 @@ The views that other standard extensions contribute to the Studio: users, extens
 
 ## Actions
 
-| Action | Scope | Takes | What it does |
-|---|---|---|---|
-| `resolve_view` | `server` | `id` | Resolves the LiveView component module for a given service or extension id. |
-| `list_views` | `server` | - | Lists all registered custom dashboard view modules. |
-| `get_dashboard_mount` | `server` | `view_id` | Retrieves dashboard mount specification: {:live, Module} | {:hook, config} | {:iframe, config} |
-| `get_dashboard_data` | `server` | `view_id` | Retrieves data payload for hydrating the dashboard view. |
+{{actions}}
 
 ## Events
 
-It declares no events.
+{{events}}
 
 ## Settings
 

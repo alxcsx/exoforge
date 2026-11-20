@@ -142,7 +142,7 @@ defmodule Exoforge.Std.GuideDriftTest do
     end
   end
 
-  test "what a standard extension's page says exists in the code: its actions and its settings" do
+  test "a standard extension's page builds its action and event tables from the code and names only settings the code reads" do
     skip_without_repo()
 
     sources =
@@ -155,12 +155,8 @@ defmodule Exoforge.Std.GuideDriftTest do
       name = Path.basename(dir)
       text = File.read!(overview(dir))
 
-      [_, actions_section] = Regex.run(~r/## Actions\n(.*?)(?=\n## |\z)/s, text) || [nil, ""]
-
-      for [_, action] <- Regex.scan(~r/^\|\s*`([a-z_]+)`\s*\|/m, actions_section) do
-        assert sources =~ ~r/(defaction\(?\s*#{action}\b|action\(?\s*:#{action}\b)/,
-               "#{name}: the page lists action `#{action}`, which no defaction or service contract defines"
-      end
+      # the signatures are not typed into the page: a directive expands them from the contract at render time
+      assert text =~ "{{actions}}" and text =~ "{{events}}", "#{name}: the page should use {{actions}} and {{events}} instead of a hand-written table"
 
       for [_, setting] <- Regex.scan(~r/`([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)`/, text) do
         assert sources =~ setting, "#{name}: the page mentions setting `#{setting}`, which the code never reads"

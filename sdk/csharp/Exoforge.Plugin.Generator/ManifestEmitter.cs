@@ -42,14 +42,16 @@ internal sealed record ActionModel(
     string? ReturnsScalar,
     List<ParamModel> ReturnFields,
     bool ReturnsList,
-    string? ReturnsType);
+    string? ReturnsType,
+    string? Doc = null);
 
 internal sealed record EventModel(
     string Name,
     string? Topic,
     string Scope,
     List<ParamModel> Payload,
-    string? PayloadTypeName);
+    string? PayloadTypeName,
+    string? Doc = null);
 
 internal sealed record ResourceModel(
     string Name,
@@ -198,6 +200,7 @@ internal static class ManifestEmitter
 
                 sb.Append("        {");
                 sb.Append($"\"name\": {Str(action.Name)}, ");
+                if (!string.IsNullOrEmpty(action.Doc)) sb.Append($"\"doc\": {Str(action.Doc!)}, ");
                 sb.Append($"\"mode\": {Str(action.Mode)}, ");
                 sb.Append($"\"scope\": {Str(action.Scope)}, ");
                 sb.Append($"\"transport\": {Str(action.Transport)}, ");
@@ -219,7 +222,9 @@ internal static class ManifestEmitter
                 string payload = evt.Payload.Count == 0 ? "" : $", \"payload\": {AtomMap(evt.Payload)}{NullableNames("payload_nullable", evt.Payload)}";
                 string payloadType = evt.PayloadTypeName is null ? "" : $", \"payload_type\": {Str(evt.PayloadTypeName)}";
 
-                sb.Append($"        {{\"name\": {Str(evt.Name)}{topic}, \"scope\": {Str(evt.Scope)}{payload}{payloadType}}}");
+                string eventDoc = string.IsNullOrEmpty(evt.Doc) ? "" : $", \"doc\": {Str(evt.Doc!)}";
+
+                sb.Append($"        {{\"name\": {Str(evt.Name)}{eventDoc}{topic}, \"scope\": {Str(evt.Scope)}{payload}{payloadType}}}");
                 sb.Append(comma).Append('\n');
             }
 

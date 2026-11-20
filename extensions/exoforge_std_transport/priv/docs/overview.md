@@ -8,13 +8,11 @@ The gateway behind `ws` and `http`: framing, dispatch to the kernel, and the gam
 
 ## Actions
 
-| Action | Scope | Takes | What it does |
-|---|---|---|---|
-| `status` | `global` | - | Returns transport layer status. |
+{{actions}}
 
 ## Events
 
-It declares no events.
+{{events}}
 
 ## Settings
 

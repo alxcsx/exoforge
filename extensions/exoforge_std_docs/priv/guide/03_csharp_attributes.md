@@ -116,6 +116,7 @@ By default, `Mode` is set to `ActionMode.Auto`, which is recommended for almost 
 | FromVersion | string | `null` | Starts an action *revision* at this extension version (`"2.0.0"`). Several methods may share one action name when each has its own `FromVersion`: a caller whose game version locks the extension below it gets the previous revision, everyone else the newest. See [Versions & Migrations](guide:04_versions_and_migrations). |
 
 ```csharp
+/// <summary>Moves items between two players' inventories.</summary>
 [ExoAction(Scope = "player")]
 public TransferItemResponse TransferItem(TransferItemRequest req)
 {
@@ -125,6 +126,9 @@ public TransferItemResponse TransferItem(TransferItemRequest req)
     return new TransferItemResponse(req.ItemId, req.Quantity, true);
 }
 ```
+
+> [!TIP]
+> The `///` summary above an action method, and above an `[ExoEvent]` record, is shown next to it in the [API catalog](guide:catalog) and in the extension's page. Write it as one sentence about what the action does for its caller.
 
 > [!CAUTION]
 > Throwing `new ExoActionException(code, message)` ensures structured error payloads propagate through the WebSocket layer with consistent error codes and clear user-facing messages.

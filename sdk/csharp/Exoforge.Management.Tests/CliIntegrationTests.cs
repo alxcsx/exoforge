@@ -133,6 +133,7 @@ public class CliIntegrationTests : IDisposable
         string overview = File.ReadAllText(Path.Combine(extDir, "docs", "overview.md"));
         Assert.StartsWith("---\nnav: Overview", overview);
         Assert.Contains("# EconomySystem", overview);
+        Assert.Contains("{{actions}}", overview);
     }
 
     [Fact]

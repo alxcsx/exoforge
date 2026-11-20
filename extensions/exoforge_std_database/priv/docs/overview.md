@@ -8,14 +8,11 @@ The helper every extension uses for `Get`, `Put`, `All`, `Delete`, `Query` and `
 
 ## Actions
 
-| Action | Scope | Takes | What it does |
-|---|---|---|---|
-| `execute` | `server` | `operation`, `arguments`, `plugin` | Executes a driver-agnostic query or data operation. |
-| `table_columns` | `server` | `table`, `plugin` | Lists the columns of a table in a plugin's isolated database (M33 Fix 9). |
+{{actions}}
 
 ## Events
 
-It declares no events.
+{{events}}
 
 ## Settings
 

@@ -423,7 +423,8 @@ namespace Exoforge.Plugin.SDK
                 returnsScalar,
                 returnFields,
                 returnsList,
-                returnsType));
+                returnsType,
+                DocSummary(method)));
         }
 
         // Events: declared on the declaration itself and on its methods.
@@ -961,7 +962,40 @@ namespace Exoforge.Plugin.SDK
             NamedString(attr, "Topic"),
             NamedString(attr, "Scope") ?? "global",
             payload,
-            payloadType?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
+            payloadType?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+            DocSummary(payloadType ?? declaringType)));
+    }
+
+    /// <summary>
+    /// The summary of a symbol's <c>///</c> comment as one line of plain text, or null: what the Developer Guide shows
+    /// next to an action or event. Read from the source's comment lines, so it works without the compiler's
+    /// documentation mode.
+    /// </summary>
+    internal static string? DocSummary(ISymbol? symbol)
+    {
+        if (symbol is null) return null;
+
+        foreach (var reference in symbol.DeclaringSyntaxReferences)
+        {
+            var lines = reference.GetSyntax().GetLeadingTrivia().ToFullString()
+                .Split('\n')
+                .Select(l => l.Trim())
+                .Where(l => l.StartsWith("///", StringComparison.Ordinal))
+                .Select(l => l.Substring(3).Trim());
+
+            string text = string.Join(" ", lines);
+            if (text.Length == 0) continue;
+
+            var summary = System.Text.RegularExpressions.Regex.Match(text, "<summary>(.*?)</summary>", System.Text.RegularExpressions.RegexOptions.Singleline);
+            if (summary.Success) text = summary.Groups[1].Value;
+
+            text = System.Text.RegularExpressions.Regex.Replace(text, "<see(?:also)? (?:cref|langword)=\"([^\"]+)\"\\s*/>", "$1");
+            text = System.Text.RegularExpressions.Regex.Replace(text, "<[^>]+>", string.Empty);
+            text = System.Text.RegularExpressions.Regex.Replace(text, "\\s+", " ").Trim();
+            if (text.Length > 0) return text;
+        }
+
+        return null;
     }
 
     private static IEnumerable<INamedTypeSymbol> AllTypes(INamespaceSymbol root)

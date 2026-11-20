@@ -69,6 +69,8 @@ summary: How refunds and chargebacks work.
 # Refunds
 ```
 
+Three directives on a line of their own are filled in from the code every time the page is shown, and link to the API catalog: `{{actions}}` (a table of the extension's actions with scope, fields and description), `{{events}}` and `{{resources}}`. The description is the `///` summary above the action method (or the event record) in C#, and the `@doc` above `action` in an Elixir contract, so documenting the code documents the guide. Link to a single entry from your own prose with `[credit](api:wallet.credit)`, `[balance_changed](event:wallet.balance_changed)` or `[the wallet service](service:wallet)`.
+
 The front matter is optional (`nav` is the sidebar label, `summary` a one-line description). Pages are shown in file-name order, so prefix with `01_`, `02_` to order them; only files directly inside `docs/` are read, and plain text and a few headings are enough: the live API catalog already lists every action's signature.
 
 ## Where to go next

@@ -8,13 +8,11 @@ Usage per extension and action (invocations, errors, latency, bytes), persisted 
 
 ## Actions
 
-| Action | Scope | Takes | What it does |
-|---|---|---|---|
-| `usage` | `studio` | `plugin_id`, `since` | Rolls up persisted usage per plugin and action for this title. |
+{{actions}}
 
 ## Events
 
-It declares no events.
+{{events}}
 
 ## Settings
 

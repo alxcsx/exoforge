@@ -12,7 +12,7 @@ defmodule Exoforge.Std.Docs.Pages do
   alias Exoforge.Std.Docs
 
   # The order the sidebar shows its groups in. A chapter whose group is not listed goes last.
-  @groups ["Get started", "Build", "Learn by example", "Extensions", "Understand", "Live reference"]
+  @groups ["Get started", "Build", "Learn by example", "Understand", "Live reference", "Extensions"]
 
   @live_pages [
     %{id: "architecture", title: "Architecture map", nav: "Architecture map", group: "Understand", icon: "graph", summary: "How the extensions on this cluster fit together.", kind: :architecture},

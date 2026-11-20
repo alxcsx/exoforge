@@ -106,11 +106,12 @@ defmodule Exoforge.Std.Docs do
           name: svc["name"] || svc[:name],
           title: svc["title"] || svc[:title] || Macro.camelize(to_string(svc["name"] || svc[:name])),
           icon: svc["icon"] || svc[:icon] || ext["icon"] || "⚙",
-          actions: normalize_actions(svc["actions"] || svc[:actions] || [])
+          actions: normalize_actions(svc["actions"] || svc[:actions] || []),
+          events: normalize_events(svc["events"] || svc[:events] || [])
         }
       end)
     end)
-    |> Enum.reject(&(&1.actions == []))
+    |> Enum.reject(&(&1.actions == [] and &1.events == []))
     |> Enum.uniq_by(& &1.name)
     |> Enum.sort_by(& &1.name)
   end
@@ -127,11 +128,42 @@ defmodule Exoforge.Std.Docs do
           name: to_string(svc.name),
           title: svc[:title] || Macro.camelize(to_string(svc.name)),
           icon: svc[:icon] || m.icon || "⚙",
-          actions: normalize_actions(svc[:actions] || [])
+          actions: normalize_actions(svc[:actions] || []),
+          events: normalize_events(svc[:events] || [])
         }
       end)
     end)
-    |> Enum.reject(&(&1.actions == []))
+    |> Enum.reject(&(&1.actions == [] and &1.events == []))
+    |> Enum.uniq_by(& &1.name)
+    |> Enum.sort_by(& &1.name)
+  end
+
+  defp normalize_events(events) do
+    Enum.map(events, fn evt ->
+      payload =
+        case evt[:payload] || evt["payload"] do
+          list when is_list(list) ->
+            Enum.map(list, fn
+              {k, _type} -> to_string(k)
+              %{} = p -> to_string(p["name"] || p[:name])
+              other -> to_string(other)
+            end)
+
+          %{} = map ->
+            Enum.map(Map.keys(map), &to_string/1)
+
+          _ ->
+            []
+        end
+
+      %{
+        name: to_string(evt[:name] || evt["name"]),
+        doc: evt[:doc] || evt["doc"],
+        topic: evt[:topic] || evt["topic"],
+        scope: to_string(evt[:scope] || evt["scope"] || ""),
+        payload: payload
+      }
+    end)
     |> Enum.uniq_by(& &1.name)
     |> Enum.sort_by(& &1.name)
   end
@@ -323,6 +355,7 @@ defmodule Exoforge.Std.Docs do
          {:ok, raw} <- File.read(path) do
       stem = path |> Path.basename() |> Path.rootname()
       {meta, content} = split_front_matter(raw)
+      content = expand_directives(content, extension_id)
       title = extract_title(content, stem)
 
       [
@@ -344,6 +377,70 @@ defmodule Exoforge.Std.Docs do
       _ -> []
     end
   end
+
+  # `{{actions}}`, `{{events}}` and `{{resources}}` on a line of their own in an extension's page become tables built from
+  # what the extension declares now, linked to the API catalog. The prose is the author's; the signatures can never
+  # drift from the code because they are not written down.
+  defp expand_directives(content, extension_id) do
+    if String.contains?(content, "{{") do
+      services = catalog_services(extension_id)
+
+      content
+      |> String.replace("{{actions}}", actions_markdown(services))
+      |> String.replace("{{events}}", events_markdown(services))
+      |> String.replace("{{resources}}", resources_markdown(extension_id))
+    else
+      content
+    end
+  end
+
+  defp catalog_services(extension_id) do
+    extract_catalog_from_registry() |> Enum.filter(&(&1.extension_id == extension_id))
+  end
+
+  defp actions_markdown(services) do
+    rows =
+      for svc <- services, act <- svc.actions do
+        takes =
+          Enum.map_join(act.params, ", ", fn p -> "`#{p.name}#{if p.optional, do: "?"}`" end)
+
+        "| [`#{act.name}`](api:#{svc.name}.#{act.name}) | `#{act.scope}` | #{if takes == "", do: "-", else: takes} | #{cell(act.doc)} |"
+      end
+
+    if rows == [],
+      do: "It declares no actions.",
+      else: Enum.join(["| Action | Scope | Takes | What it does |", "|---|---|---|---|" | rows], "\n") <> "\n\n`name?` marks an optional field. Select an action to see its types and a call example."
+  end
+
+  defp events_markdown(services) do
+    rows =
+      for svc <- services, evt <- svc.events do
+        payload = Enum.map_join(evt.payload, ", ", &"`#{&1}`")
+        "| [`#{evt.name}`](event:#{svc.name}.#{evt.name}) | #{if evt.topic, do: "`#{evt.topic}`", else: "-"} | #{if payload == "", do: "-", else: payload} | #{cell(evt.doc)} |"
+      end
+
+    if rows == [],
+      do: "It declares no events.",
+      else: Enum.join(["| Event | Topic | Payload | What it means |", "|---|---|---|---|" | rows], "\n")
+  end
+
+  defp resources_markdown(extension_id) do
+    rows =
+      for m <- ExtensionRegistry.all_manifests(),
+          to_string(manifest_field(m, :id)) == extension_id,
+          svc <- ExtensionRegistry.manifest_services(m),
+          res <- List.wrap(svc[:resources] || svc["resources"]),
+          is_map(res) do
+        name = to_string(res[:name] || res["name"])
+        "- `#{name}`"
+      end
+
+    if rows == [], do: "It stores nothing of its own.", else: Enum.join(Enum.uniq(rows), "\n")
+  end
+
+  # A table cell: the first sentence of the text, on one line, without the pipe that would split the cell.
+  defp cell(nil), do: "-"
+  defp cell(text), do: text |> to_string() |> String.split("\n") |> hd() |> String.replace("|", "/") |> then(&if(&1 == "", do: "-", else: &1))
 
   defp extension_title(manifest) do
     to_string(manifest_field(manifest, :title) || manifest_field(manifest, :name) || manifest_field(manifest, :id) || "")
