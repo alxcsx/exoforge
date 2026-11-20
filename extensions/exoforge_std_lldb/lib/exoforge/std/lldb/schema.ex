@@ -1179,8 +1179,8 @@ defmodule Exoforge.Std.Lldb.Schema do
   @doc """
   Convenience helper that reads live state, plans, and applies in one call.
   """
-  def reconcile(conn, schema, resources, migrations \\ [], version \\ 0) do
-    Exoforge.Std.Lldb.SchemaMigration.reconcile(conn, schema, resources, migrations, version)
+  def reconcile(conn, schema, resources, migrations \\ [], version \\ 0, opts \\ []) do
+    Exoforge.Std.Lldb.SchemaMigration.reconcile(conn, schema, resources, migrations, version, opts)
   end
 
   ## ---- MANIFEST RESOURCE NORMALIZATION & VALIDATION ----

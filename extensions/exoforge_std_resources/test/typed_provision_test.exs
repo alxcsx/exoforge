@@ -42,11 +42,11 @@ defmodule Exoforge.Std.ResourcesTypedProvisionTest do
     }
   end
 
-  defp declare(plugin, resource, migrations \\ []) do
+  defp declare(plugin, resource, migrations \\ [], version \\ "1.0.0") do
     ExtensionRegistry.register(%Exoforge.Domain.Manifest{
       id: plugin,
       name: to_string(plugin),
-      version: "1.0.0",
+      version: version,
       entry_point: nil,
       provides: [plugin],
       services: [%{name: plugin, resources: [resource]}],
@@ -178,93 +178,119 @@ defmodule Exoforge.Std.ResourcesTypedProvisionTest do
     end
   end
 
-  describe "versions and migrations" do
-    defp versioned(version, columns, hash) do
-      base = %{sku: %{name: "sku", storage: "text", primary_key: true, type: "string"}}
-
+  describe "extension versions and migrations" do
+    defp inventory(columns, hash) do
       %{
         name: "inventory",
         source: {:table, "inventory"},
         primary_key: :sku,
-        version: version,
         schema_hash: hash,
-        columns: [base.sku | columns]
+        columns: [%{name: "sku", storage: "text", primary_key: true, type: "string"} | columns]
       }
     end
 
-    defp qty_col(name, storage, decl),
-      do: %{name: name, storage: storage, nullable: true, type: "integer", decl: decl}
+    defp qty(decl), do: %{name: "qty", storage: "int32", nullable: true, type: "integer", decl: decl}
+    # required: a table that has rows cannot gain it without being told what the rows get
+    defp amount(decl), do: %{name: "amount", storage: "int32", nullable: false, type: "integer", decl: decl}
 
     defp rename_qty,
-      do: %{"resource" => "inventory", "from" => 1, "to" => 2, "ops" => [%{"op" => "rename", "from" => "qty", "to" => "amount"}]}
+      do: %{
+        "resource" => "inventory",
+        "to" => "1.1.0",
+        "ops" => [%{"op" => "rename", "from" => "qty", "to" => "amount"}, %{"op" => "set_not_null", "column" => "amount", "value" => 0}]
+      }
 
-    test "a rename the manifest carries a migration for is applied and the rows survive", %{plugin: plugin} do
+    test "a change the manifest carries a migration for is applied and the rows survive", %{plugin: plugin} do
       on_exit(fn -> Database.reset!(plugin) end)
-      declare(plugin, versioned(1, [qty_col("qty", "int32", "Inventory.cs:14")], "h1"))
+      declare(plugin, inventory([qty("Inventory.cs:14")], "h1"))
       assert {:ok, _} = provision(plugin)
       assert {:ok, _} = Database.put(plugin, "inventory", "gear", %{"qty" => 5})
 
-      declare(plugin, versioned(2, [qty_col("amount", "int32", "Inventory.cs:14")], "h2"), [rename_qty()])
+      declare(plugin, inventory([amount("Inventory.cs:14")], "h2"), [rename_qty()], "1.1.0")
 
       assert {:ok, %{provisioned: 1}} = provision(plugin)
-      assert {:ok, %{"sku" => "gear", "amount" => 5}} = Database.get(plugin, "inventory", "gear")
+      # the table changed, the row did not: it keeps the stamp it was written under (rewriting every row at
+      # deploy is the full-table write this design avoids)
+      assert {:ok, %{"sku" => "gear", "amount" => 5, "_v" => 1_000_000}} = Database.get(plugin, "inventory", "gear")
     end
 
     test "a change without its migration is refused with the file to write", %{plugin: plugin} do
       on_exit(fn -> Database.reset!(plugin) end)
-      declare(plugin, versioned(1, [qty_col("qty", "int32", "Inventory.cs:14")], "h1"))
+      declare(plugin, inventory([qty("Inventory.cs:14")], "h1"))
       assert {:ok, _} = provision(plugin)
       assert {:ok, _} = Database.put(plugin, "inventory", "gear", %{"qty" => 5})
 
-      # version raised, no migration declared
-      declare(plugin, versioned(2, [qty_col("amount", "int32", "Inventory.cs:14")], "h2"))
+      declare(plugin, inventory([amount("Inventory.cs:14")], "h2"), [], "1.1.0")
 
       assert {:error, {:unsafe_schema_change, %{table: "inventory", changes: changes, hint: hint}}} = provision(plugin)
 
-      assert Enum.any?(changes, &(&1.column == "qty"))
-      assert hint =~ "No migration from version 1 to 2"
-      assert hint =~ "[ExoMigration(typeof(<your inventory type>), From = 1, To = 2)]"
-      assert hint =~ "Migrations/Inventory/V1To2.cs"
+      assert Enum.any?(changes, &(&1.column == "amount" and &1.decl == "Inventory.cs:14"))
+      assert hint =~ "No migration leads from version 1.0.0 to 1.1.0"
+      assert hint =~ "[ExoMigration(typeof(<your inventory type>), To = \"1.1.0\")]"
+      assert hint =~ "Migrations/Inventory/To1_1_0.cs"
       assert hint =~ "EXOFORGE_SCHEMA_CHANGE_MODE=reset"
 
       # the table is untouched
       assert {:ok, %{"qty" => 5}} = Database.get(plugin, "inventory", "gear")
     end
 
-    test "a change that did not raise the version is told to", %{plugin: plugin} do
+    test "a change that did not raise the extension version is told to", %{plugin: plugin} do
       on_exit(fn -> Database.reset!(plugin) end)
-      declare(plugin, versioned(1, [qty_col("qty", "int32", "Inventory.cs:14")], "h1"))
+      declare(plugin, inventory([qty("Inventory.cs:14")], "h1"))
       assert {:ok, _} = provision(plugin)
 
-      declare(plugin, versioned(1, [qty_col("qty", "text", "Inventory.cs:14")], "h1b"))
+      declare(plugin, inventory([%{name: "qty", storage: "text", nullable: true, type: "string", decl: "Inventory.cs:14"}], "h1b"))
 
       assert {:error, {:unsafe_schema_change, %{hint: hint}}} = provision(plugin)
-      assert hint =~ "Raise the resource's Version to 2 (it is 1)"
-      assert hint =~ "From = 1, To = 2"
+      assert hint =~ "still at version 1.0.0"
+      assert hint =~ "Raise the extension's version"
+      assert hint =~ "To = \"<the new version>\""
     end
 
-    test "a table newer than the build is refused", %{plugin: plugin} do
+    test "an older build over a newer table is refused", %{plugin: plugin} do
       on_exit(fn -> Database.reset!(plugin) end)
-      declare(plugin, versioned(1, [qty_col("qty", "int32", "Inventory.cs:14")], "h1"))
+      declare(plugin, inventory([qty("Inventory.cs:14")], "h1"))
       assert {:ok, _} = provision(plugin)
-      declare(plugin, versioned(2, [qty_col("amount", "int32", "Inventory.cs:14")], "h2"), [rename_qty()])
+      declare(plugin, inventory([amount("Inventory.cs:14")], "h2"), [rename_qty()], "1.1.0")
       assert {:ok, _} = provision(plugin)
 
-      declare(plugin, versioned(1, [qty_col("qty", "int32", "Inventory.cs:14")], "h1"))
+      declare(plugin, inventory([qty("Inventory.cs:14")], "h1"))
 
       assert {:error, {:unsafe_schema_change, %{changes: [%{change: :version, reason: reason}], hint: hint}}} = provision(plugin)
-      assert reason =~ "table is at version 2 and this build declares version 1"
-      assert hint =~ "Deploy the build that declares version 2 or later"
+      assert reason =~ "table is at version 1.1.0 and this build is version 1.0.0"
+      assert hint =~ "Deploy version 1.1.0 or later"
+    end
+
+    test "a drop is refused while rows are below its version, and reset rebuilds in development", %{plugin: plugin} do
+      on_exit(fn -> Database.reset!(plugin); System.delete_env("EXOFORGE_SCHEMA_CHANGE_MODE") end)
+
+      two_cols = inventory([qty("Inventory.cs:14"), %{name: "note", storage: "text", nullable: true, type: "string"}], "h1")
+      declare(plugin, two_cols)
+      assert {:ok, _} = provision(plugin)
+      assert {:ok, _} = Database.put(plugin, "inventory", "gear", %{"qty" => 5, "note" => "x"})
+
+      # the row was written under 1.0.0; a drop that leads to 1.1.0 would lose its note
+      drop_note = %{"resource" => "inventory", "to" => "1.1.0", "ops" => [%{"op" => "drop", "column" => "note"}]}
+      declare(plugin, inventory([qty("Inventory.cs:14")], "h2"), [drop_note], "1.1.0")
+
+      assert {:error, {:unsafe_schema_change, %{changes: [%{change: :drop, reason: reason}], hint: hint}}} = provision(plugin)
+      assert reason =~ "1 rows are still below version 1.1.0"
+      assert hint =~ "Deploy the drop once none is left"
+      assert {:ok, %{"note" => "x"}} = Database.get(plugin, "inventory", "gear")
+
+      System.put_env("EXOFORGE_SCHEMA_CHANGE_MODE", "reset")
+      assert {:ok, %{provisioned: 1}} = provision(plugin)
+      assert {:error, :not_found} = Database.get(plugin, "inventory", "gear")
     end
 
     test "reset rebuilds the table when the migration is missing", %{plugin: plugin} do
-      on_exit(fn -> Database.reset!(plugin) end)
-      declare(plugin, versioned(1, [qty_col("qty", "int32", "Inventory.cs:14")], "h1"))
+      on_exit(fn -> Database.reset!(plugin); System.delete_env("EXOFORGE_SCHEMA_CHANGE_MODE") end)
+      declare(plugin, inventory([qty("Inventory.cs:14")], "h1"))
       assert {:ok, _} = provision(plugin)
       assert {:ok, _} = Database.put(plugin, "inventory", "gear", %{"qty" => 5})
 
       System.put_env("EXOFORGE_SCHEMA_CHANGE_MODE", "reset")
-      declare(plugin, versioned(2, [qty_col("amount", "int32", "Inventory.cs:14")], "h2"))
+      declare(plugin, inventory([amount("Inventory.cs:14")], "h2"), [], "1.1.0")
 
       assert {:ok, %{provisioned: 1}} = provision(plugin)
       assert %{columns: columns} = introspect(plugin, "inventory")

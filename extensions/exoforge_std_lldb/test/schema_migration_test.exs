@@ -79,7 +79,8 @@ defmodule Exoforge.Std.Lldb.SchemaMigrationTest do
 
   defp migration(to, ops), do: %{resource: "items", to: to, ops: ops}
 
-  defp reconcile(conn, schema, resource, migrations, version), do: Schema.reconcile(conn, schema, [resource], migrations, version)
+  defp reconcile(conn, schema, resource, migrations, version, opts \\ []),
+    do: Schema.reconcile(conn, schema, [resource], migrations, version, opts)
 
   defp rows(conn, schema) do
     %Postgrex.Result{columns: columns, rows: rows} = Postgrex.query!(conn, ~s|SELECT * FROM "#{schema}".items ORDER BY id|, [])
@@ -240,6 +241,42 @@ defmodule Exoforge.Std.Lldb.SchemaMigrationTest do
     assert {:ok, _} = reconcile(conn, schema, v2, [drop_qty], @v110)
     assert column_type(conn, schema, "qty") == nil
     assert [%{"nm" => "sword"}, %{"nm" => "shield"}] = rows(conn, schema)
+  end
+
+  defmodule StubVersioning do
+    use Exoforge.Extension
+
+    defaction(list(), scope: :server) do
+      {:ok,
+       %{
+         versions: [
+           %{version: "1.3", status: "live", locks: %{"pets_ext" => "1.1.0"}},
+           %{version: "1.2", status: "outdated", locks: %{"pets_ext" => "1.0.0"}},
+           %{version: "1.0", status: "blocked", locks: %{"pets_ext" => "0.9.0"}}
+         ]
+       }}
+    end
+  end
+
+  test "a drop is refused while a game version still served locks the extension below the migration", %{conn: conn, schema: schema} do
+    Exoforge.ExtensionCase.start_kernel()
+    Exoforge.ExtensionCase.register_extension(StubVersioning, id: :versioning, provides: [:versioning])
+
+    seed_v1(conn, schema)
+    Postgrex.query!(conn, ~s|UPDATE "#{schema}".items SET _v = #{@v120}|, [])
+    v2 = resource([col("nm", "text")], "h2")
+    drop_qty = migration("1.2.0", [%{op: "drop", column: "qty"}])
+
+    # game version 1.2 (outdated, still served) is locked at 1.0.0 < 1.2.0; the blocked 1.0 does not count
+    assert {:error, {:game_versions_lock_older, %{table: "items", to: "1.2.0", game_versions: [%{game_version: "1.3"}, %{game_version: "1.2"}]}}} =
+             reconcile(conn, schema, v2, [drop_qty], @v120, extension: "pets_ext")
+
+    assert column_type(conn, schema, "qty") == "text"
+    assert ledger_version(conn, schema) == @v100
+
+    # an extension no game version locks is free to drop
+    assert {:ok, _} = reconcile(conn, schema, v2, [drop_qty], @v120, extension: "other_ext")
+    assert column_type(conn, schema, "qty") == nil
   end
 
   test "several migrations to versions up to the deploy run in order in one go", %{conn: conn, schema: schema} do

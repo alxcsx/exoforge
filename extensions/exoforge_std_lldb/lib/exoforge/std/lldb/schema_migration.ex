@@ -27,11 +27,12 @@ defmodule Exoforge.Std.Lldb.SchemaMigration do
   `Schema.reconcile/3` for resources that may need migrating. `version` is the encoded extension version being
   deployed (`Exoforge.VersionStamp`); `migrations` are the manifest's, each `%{resource, to, ops}`.
   """
-  def reconcile(conn, schema, resources, migrations, version \\ 0) do
+  def reconcile(conn, schema, resources, migrations, version \\ 0, opts \\ []) do
     with {:ok, s} <- Schema.validate_ident(schema),
          :ok <- Schema.ensure_ledgers(conn, s),
          {:ok, plan} <- read_plan(conn, s, resources, version),
-         {:ok, work} <- decide(plan, resources, List.wrap(migrations), version) do
+         {:ok, work} <- decide(plan, resources, List.wrap(migrations), version),
+         :ok <- check_game_versions(work, Keyword.get(opts, :extension)) do
       case work do
         [] -> Schema.apply(conn, plan)
         _ -> run(conn, s, plan, work)
@@ -121,6 +122,42 @@ defmodule Exoforge.Std.Lldb.SchemaMigration do
       error -> error
     end
   end
+
+  # A drop is also refused while a game version that is still served locks this extension below the migration: the
+  # clients of that game version have not left yet and still read the column. Asked before the transaction opens.
+  # With no versioning service installed there are no game versions to ask.
+  defp check_game_versions(work, extension) do
+    drops =
+      for item <- work,
+          step <- item.steps,
+          Enum.any?(List.wrap(g(step, :ops)), &(g(&1, :op) == "drop")),
+          do: {item, step}
+
+    with [_ | _] <- drops,
+         true <- not is_nil(extension),
+         {:ok, %{versions: versions}} <- Exoforge.ActionDispatcher.dispatch_internal(:versioning, :list, %{}) do
+      Enum.find_value(drops, :ok, fn {item, step} ->
+        to = Exoforge.VersionStamp.encode(g(step, :to))
+
+        older =
+          for game <- versions,
+              status(game) != "blocked",
+              lock = lock_for(game, extension),
+              Exoforge.VersionStamp.encode(lock) < to,
+              do: %{game_version: game_field(game, :version), status: status(game), locks: lock}
+
+        if older == [],
+          do: nil,
+          else: {:error, {:game_versions_lock_older, %{table: item.table, resource: item.resource, to: g(step, :to), game_versions: older, decl: g(step, :decl)}}}
+      end)
+    else
+      _ -> :ok
+    end
+  end
+
+  defp status(game), do: to_string(game_field(game, :status))
+  defp lock_for(game, extension), do: game |> game_field(:locks) |> then(&(is_map(&1) && (Map.get(&1, to_string(extension)) || Map.get(&1, extension))))
+  defp game_field(game, key), do: Map.get(game, key) || Map.get(game, to_string(key))
 
   # The migrations of one resource that lead to a version after the table's and not beyond the deploy's, oldest first.
   defp steps_for(migrations, resource, live, version) do

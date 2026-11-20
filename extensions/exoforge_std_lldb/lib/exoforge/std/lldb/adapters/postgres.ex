@@ -438,7 +438,7 @@ defmodule Exoforge.Std.Lldb.Adapters.Postgres do
 
     with {:ok, {mode, conn}} <- pooled_connection(clean_self, schema_name, config) do
       try do
-        Exoforge.Std.Lldb.Schema.reconcile(conn, schema_name, resources, migrations, version)
+        Exoforge.Std.Lldb.Schema.reconcile(conn, schema_name, resources, migrations, version, extension: clean_self)
       after
         if mode == :unmanaged, do: GenServer.stop(conn)
       end

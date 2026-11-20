@@ -26,6 +26,14 @@ defmodule Exoforge.Std.VersioningTest do
   defp call(action, payload), do: ActionDispatcher.dispatch_internal(:versioning, action, payload)
   defp statuses, do: with({:ok, %{versions: v}} <- call(:list, %{}), do: Map.new(v, &{&1.version, &1.status}))
 
+  test "with no game version registered, versioning is not in use and every client is served" do
+    assert {:ok, %{version: "0.1", status: "live", locks: %{}}} = call(:resolve, %{version: "0.1"})
+
+    # once one is registered, the others are unknown
+    assert {:ok, _} = call(:register, %{version: "1.0"})
+    assert {:error, :not_found} = call(:resolve, %{version: "0.1"})
+  end
+
   test "a registered version starts in dev and resolves with its locks" do
     assert {:ok, %{status: "dev"}} = call(:register, %{version: "1.0", locks: %{"inventory" => "2.1.0"}})
     assert {:ok, %{status: "dev", locks: %{"inventory" => "2.1.0"}}} = call(:resolve, %{version: "1.0"})

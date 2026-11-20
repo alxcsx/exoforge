@@ -2,7 +2,10 @@ defmodule Exoforge.VersionStamp do
   @moduledoc "Encodes extension versions for row and schema stamps."
 
   def encode(version) when is_binary(version) do
-    case String.split(version, ".") do
+    # "1.4.0-beta.1" and "1.4.0+build5" are the 1.4.0 release for ordering purposes (the SDK does the same).
+    [release | _] = String.split(version, ["-", "+"], parts: 2)
+
+    case String.split(release, ".") do
       [major, minor, patch] ->
         with {major, ""} <- Integer.parse(major),
              {minor, ""} <- Integer.parse(minor),

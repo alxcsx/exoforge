@@ -103,7 +103,11 @@ defmodule Exoforge.Std.Versioning do
   defaction resolve(payload), scope: Exoforge.Auth.Roles.player() do
     version = payload |> field(:version) |> to_string()
 
-    case Enum.find(rows(), &(&1.version == version)) do
+    all = rows()
+
+    case Enum.find(all, &(&1.version == version)) do
+      # Nothing registered at all: versioning is not in use for this instance, so every client is served.
+      nil when all == [] -> {:ok, %{version: version, status: "live", locks: %{}}}
       nil -> {:error, :not_found}
       row -> {:ok, %{version: row.version, status: row.status, locks: row.locks}}
     end

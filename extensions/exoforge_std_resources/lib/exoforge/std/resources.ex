@@ -167,7 +167,8 @@ defmodule Exoforge.Std.Resources do
       {:error, {:unsafe_schema_change, ops}} ->
         unsafe_schema_change(pid, res, {:unsafe, ops})
 
-      {:error, {kind, %{} = detail}} when kind in [:migration_missing, :version_downgrade, :migration_incomplete] ->
+      {:error, {kind, %{} = detail}}
+      when kind in [:migration_missing, :version_downgrade, :migration_incomplete, :rows_below_version, :game_versions_lock_older] ->
         unsafe_schema_change(pid, res, {kind, detail})
 
       # Not a problem with the change: the table is busy. Rebuilding it would not help.
@@ -225,21 +226,22 @@ defmodule Exoforge.Std.Resources do
   @reset_hint "or set EXOFORGE_SCHEMA_CHANGE_MODE=reset to rebuild the table (its rows are lost)."
 
   defp changes_and_hint(res, {:unsafe, ops}) do
-    version = ops |> List.first() |> then(&(&1[:manifest_version] || 1))
+    live = ops |> List.first() |> then(&(&1[:live_version] || 0))
 
     {Enum.map(ops, &%{table: &1.table, column: Map.get(&1, :column), change: &1.op, reason: &1.reason}),
-     "This change cannot be applied on its own. Raise the resource's Version to #{version + 1} (it is #{version}) and add a migration " <>
-       "from #{version} to #{version + 1}: #{migration_how(res, version)}, #{@reset_hint}"}
+     "This change cannot be applied on its own, and the extension is still at version #{label(live)}. Raise the extension's version " <>
+       "and add a migration to the new version: #{migration_how(res, "<the new version>")}, #{@reset_hint}"}
   end
 
-  defp changes_and_hint(res, {:migration_missing, %{from: from, to: to, changes: changes}}) do
+  defp changes_and_hint(res, {:migration_missing, %{live: live, manifest: manifest, changes: changes}}) do
     {Enum.map(changes, &%{column: &1[:column], change: &1.change, reason: &1.reason}),
-     "No migration from version #{from} to #{to}. #{upcase_first(migration_how(res, from))}, #{@reset_hint}"}
+     "No migration leads from version #{label(live)} to #{label(manifest)}. " <>
+       "#{upcase_first(migration_how(res, label(manifest)))}, #{@reset_hint}"}
   end
 
   defp changes_and_hint(_res, {:version_downgrade, %{live: live, manifest: manifest}}) do
-    {[%{column: nil, change: :version, reason: "the table is at version #{live} and this build declares version #{manifest}"}],
-     "An older build is running over a newer table. Deploy the build that declares version #{live} or later, or set EXOFORGE_SCHEMA_CHANGE_MODE=reset in development."}
+    {[%{column: nil, change: :version, reason: "the table is at version #{label(live)} and this build is version #{label(manifest)}"}],
+     "An older build is running over a newer table. Deploy version #{label(live)} or later, or set EXOFORGE_SCHEMA_CHANGE_MODE=reset in development."}
   end
 
   defp changes_and_hint(_res, {:migration_incomplete, %{remaining: remaining}}) do
@@ -247,14 +249,28 @@ defmodule Exoforge.Std.Resources do
      "The migration ran but the table would still differ from the declared shape, so it was rolled back. Add the operations that are missing."}
   end
 
+  defp changes_and_hint(_res, {:rows_below_version, %{rows: rows, to: to}}) do
+    {[%{column: nil, change: :drop, reason: "#{rows} rows are still below version #{to}, so the column they hold would be lost"}],
+     "Rows are brought up to date when they are read (or by the sweeper). Deploy the drop once none is left below #{to}, or set EXOFORGE_SCHEMA_CHANGE_MODE=reset in development."}
+  end
+
+  defp changes_and_hint(_res, {:game_versions_lock_older, %{to: to, game_versions: games}}) do
+    names = Enum.map_join(games, ", ", &"#{&1.game_version} (#{&1.status})")
+
+    {[%{column: nil, change: :drop, reason: "game versions still served lock this extension below #{to}: #{names}"}],
+     "Those clients still read what the drop removes. Block or retire those game versions in the versioning extension first, or set EXOFORGE_SCHEMA_CHANGE_MODE=reset in development."}
+  end
+
   # What to write, naming the file and the attribute.
-  defp migration_how(res, from) do
+  defp migration_how(res, to) do
     name = to_string(Map.get(res, :name) || Map.get(res, "name"))
 
-    "add a class in its own file (for example Migrations/#{Macro.camelize(name)}/V#{from}To#{from + 1}.cs) marked " <>
-      "[ExoMigration(typeof(<your #{name} type>), From = #{from}, To = #{from + 1})] with the operations that make the change " <>
+    "add a class in its own file (for example Migrations/#{Macro.camelize(name)}/To#{String.replace(to, ~r/[^0-9A-Za-z]/, "_")}.cs) marked " <>
+      "[ExoMigration(typeof(<your #{name} type>), To = \"#{to}\")] with the operations that make the change " <>
       "([ExoRename], [ExoConvert], [ExoFill], [ExoDrop], [ExoSetNotNull])"
   end
+
+  defp label(stamp), do: Exoforge.VersionStamp.decode(stamp) || "0.0.0"
 
   defp upcase_first(<<first::utf8, rest::binary>>), do: String.upcase(<<first::utf8>>) <> rest
   defp upcase_first(other), do: other
