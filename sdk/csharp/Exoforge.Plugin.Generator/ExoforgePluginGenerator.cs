@@ -1227,7 +1227,8 @@ namespace Exoforge.Plugin.SDK
                 MapTypeToStorage(property.Type),
                 NamedBool(colAttr, "PrimaryKey"),
                 NamedBool(colAttr, "Unique"),
-                NamedBool(colAttr, "Indexed")));
+                NamedBool(colAttr, "Indexed"),
+                DeclOf(property)));
 
             if (NamedBool(colAttr, "PrimaryKey") && string.IsNullOrEmpty(primaryKey)) primaryKey = colName;
         }
@@ -1490,6 +1491,17 @@ namespace Exoforge.Generated
 
     private static bool IsNullableValue(ITypeSymbol type) =>
         type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T };
+
+    // `File.cs:42`: the file name and line of a property, for messages that point a developer at a column.
+    private static string? DeclOf(IPropertySymbol property)
+    {
+        var location = property.Locations.FirstOrDefault(l => l.IsInSource);
+        if (location is null) return null;
+
+        var span = location.GetLineSpan();
+        string file = System.IO.Path.GetFileName(span.Path);
+        return string.IsNullOrEmpty(file) ? null : $"{file}:{span.StartLinePosition.Line + 1}";
+    }
 
     private static bool IsNullableProperty(IPropertySymbol property)
     {

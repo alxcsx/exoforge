@@ -305,6 +305,40 @@ public class NullableManifestTests
     }
 
     [Fact]
+    public void Columns_Say_Where_They_Are_Declared_Without_Changing_The_Schema_Hash()
+    {
+        static string Source(string blankLines) => $$"""
+            using Exoforge.Plugin.SDK;
+            namespace P;
+            [ExoService("svc", Resources = new[] { typeof(Item) })]
+            public partial class Svc { }
+            [ExoResource("items")]
+            public class Item
+            {
+            {{blankLines}}
+                public string Id { get; set; } = "";
+                public int Amount { get; set; }
+            }
+            """;
+
+        JsonNode Resource(string src) => RunManifest(src)["services"]!.AsArray()[0]!["resources"]!.AsArray()[0]!;
+
+        var plain = Resource(Source(""));
+        var shifted = Resource(Source("\n\n\n"));
+
+        string DeclOfAmount(JsonNode r) =>
+            r["columns"]!.AsArray().Single(c => c!["name"]!.GetValue<string>() == "amount")!["decl"]!.GetValue<string>();
+
+        Assert.Matches(@"^.+\.cs:\d+$", DeclOfAmount(plain));
+
+        int Line(string decl) => int.Parse(decl[(decl.LastIndexOf(':') + 1)..]);
+        Assert.Equal(Line(DeclOfAmount(plain)) + 3, Line(DeclOfAmount(shifted)));
+
+        // moving a line is not a schema change
+        Assert.Equal(plain["schema_hash"]!.GetValue<string>(), shifted["schema_hash"]!.GetValue<string>());
+    }
+
+    [Fact]
     public void SchemaHash_Does_Not_Depend_On_Property_Order()
     {
         static string Source(string first, string second) => $$"""

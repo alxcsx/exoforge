@@ -37,7 +37,7 @@ defmodule Exoforge.Std.ResourcesTypedProvisionTest do
       primary_key: :sku,
       columns: [
         %{name: "sku", storage: "text", primary_key: true, type: "string"},
-        %{name: "qty", storage: qty_storage, nullable: true, type: "integer"}
+        %{name: "qty", storage: qty_storage, nullable: true, type: "integer", decl: "Inventory.cs:14"}
       ]
     }
   end
@@ -112,7 +112,7 @@ defmodule Exoforge.Std.ResourcesTypedProvisionTest do
              provision(plugin)
 
     assert extension == to_string(plugin)
-    assert [%{table: "inventory", column: "qty", change: _, reason: reason}] = changes
+    assert [%{table: "inventory", column: "qty", change: _, reason: reason, decl: "Inventory.cs:14"}] = changes
     assert is_binary(reason)
     assert hint =~ "EXOFORGE_SCHEMA_CHANGE_MODE=reset"
 

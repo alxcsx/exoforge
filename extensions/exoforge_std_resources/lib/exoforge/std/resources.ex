@@ -201,12 +201,31 @@ defmodule Exoforge.Std.Resources do
           %{
             extension: to_string(pid),
             table: table_for(res),
-            changes: Enum.map(ops, &%{table: &1.table, column: Map.get(&1, :column), change: &1.op, reason: &1.reason}),
+            changes:
+              Enum.map(ops, fn op ->
+                %{
+                  table: op.table,
+                  column: Map.get(op, :column),
+                  change: op.op,
+                  reason: op.reason,
+                  decl: declaration(res, Map.get(op, :column))
+                }
+              end),
             hint:
               "Add a migration for this change, or set EXOFORGE_SCHEMA_CHANGE_MODE=reset to rebuild the table (its rows are lost)."
           }}}
     end
   end
+
+  # Where the column is declared in the extension's source (`Item.cs:42`), when the manifest says.
+  defp declaration(res, column) when is_binary(column) do
+    case Enum.find(Map.get(res, :columns) || Map.get(res, "columns") || [], &(to_string(&1[:name] || &1["name"]) == column)) do
+      nil -> nil
+      col -> col[:decl] || col["decl"]
+    end
+  end
+
+  defp declaration(_res, _column), do: nil
 
   @doc "`:reset` or `:refuse`, set at the deploy site (env `EXOFORGE_SCHEMA_CHANGE_MODE`, or `config :exoforge, :schema_change_mode`). Default `:refuse`."
   def schema_change_mode do

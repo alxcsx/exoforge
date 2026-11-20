@@ -223,7 +223,7 @@ defmodule Exoforge.ExtensionBootIsolationTest do
           %{
             extension: "stores",
             table: "inventory",
-            changes: [%{table: "inventory", column: "qty", change: :alter_type, reason: "text is not a widening of int32"}],
+            changes: [%{table: "inventory", column: "qty", change: :alter_type, reason: "text is not a widening of int32", decl: "Inventory.cs:14"}],
             hint: "Add a migration, or set EXOFORGE_SCHEMA_CHANGE_MODE=reset."
           }}}
       )
@@ -236,7 +236,7 @@ defmodule Exoforge.ExtensionBootIsolationTest do
 
       assert %{kind: :boot_failed, stage: :storage, message: message} = ExtensionRegistry.get_failure(:stores)
       assert message =~ "unsafe schema change in inventory"
-      assert message =~ "inventory.qty (alter_type): text is not a widening of int32"
+      assert message =~ "inventory.qty [Inventory.cs:14] (alter_type): text is not a widening of int32"
       assert message =~ "EXOFORGE_SCHEMA_CHANGE_MODE=reset"
       assert ExtensionRegistry.get_failure(:healthy) == nil
     end

@@ -52,7 +52,8 @@ defmodule Exoforge.ExtensionBootstrapper do
       where =
         Enum.map_join(changes, "; ", fn change ->
           column = if change[:column], do: ".#{change.column}", else: ""
-          "#{change.table}#{column} (#{change.change}): #{change.reason}"
+          decl = if change[:decl], do: " [#{change.decl}]", else: ""
+          "#{change.table}#{column}#{decl} (#{change.change}): #{change.reason}"
         end)
 
       "extension #{id} has an unsafe schema change in #{table}: #{where}. #{hint}"

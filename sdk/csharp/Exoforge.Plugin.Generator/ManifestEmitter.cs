@@ -29,7 +29,8 @@ internal sealed record ColumnModel(
     string Storage = "text",
     bool PrimaryKey = false,
     bool Unique = false,
-    bool Indexed = false);
+    bool Indexed = false,
+    string? Decl = null);
 
 internal sealed record ActionModel(
     string Name,
@@ -315,6 +316,9 @@ internal static class ManifestEmitter
         }
 
         if (column.Nullable) baseJson += ", \"nullable\": true";
+
+        // Where the property is declared, so a schema change can say where to look. Not part of schema_hash.
+        if (!string.IsNullOrEmpty(column.Decl)) baseJson += $", \"decl\": {Str(column.Decl!)}";
 
         return baseJson;
     }
