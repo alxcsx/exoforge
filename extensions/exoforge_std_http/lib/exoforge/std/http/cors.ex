@@ -171,9 +171,15 @@ defmodule Exoforge.Std.Http.Cors do
 
   defp init_db do
     _ =
-      ActionDispatcher.dispatch_internal(:database, :execute, %{
-        plugin: :http,
-        operation: "CREATE TABLE IF NOT EXISTS #{@settings_table} (key text PRIMARY KEY, value text)"
+      ActionDispatcher.dispatch_internal(:lldb, :run_migrations, %{
+        namespace: :http,
+        migrations: [
+          %{
+            version: 1,
+            name: "cors settings",
+            sql: ["CREATE TABLE IF NOT EXISTS #{@settings_table} (key text PRIMARY KEY, value text)"]
+          }
+        ]
       })
   rescue
     _ -> :ok

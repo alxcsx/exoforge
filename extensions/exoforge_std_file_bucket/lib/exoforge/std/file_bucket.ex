@@ -405,10 +405,18 @@ defmodule Exoforge.Std.FileBucket do
   # so a staff toggle survives restarts and a seed never undoes it.
   defp seed_bucket_visibility do
     with {:ok, _} <-
-           database_execute(
-             "CREATE TABLE IF NOT EXISTS #{@visibility_table} (" <>
-               "bucket text PRIMARY KEY, visibility text NOT NULL)"
-           ) do
+           Exoforge.ActionDispatcher.dispatch_internal(:lldb, :run_migrations, %{
+             namespace: :file_bucket,
+             migrations: [
+               %{
+                 version: 1,
+                 name: "bucket visibility",
+                 sql: [
+                   "CREATE TABLE IF NOT EXISTS #{@visibility_table} (bucket text PRIMARY KEY, visibility text NOT NULL)"
+                 ]
+               }
+             ]
+           }) do
       Enum.each(Application.get_env(:exoforge_std_file_bucket, :public_buckets, ["sdk"]), fn bucket ->
         _ =
           database_execute(

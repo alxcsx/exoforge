@@ -62,6 +62,28 @@ defmodule Exoforge.Std.Metering do
               )
               """
             ]
+          },
+          %{
+            version: 2,
+            name: "64-bit counters and timestamps",
+            sql: [
+              """
+              ALTER TABLE usage_actions
+                ALTER COLUMN period_start TYPE bigint, ALTER COLUMN period_end TYPE bigint,
+                ALTER COLUMN invocations TYPE bigint, ALTER COLUMN errors TYPE bigint,
+                ALTER COLUMN wall_us TYPE bigint, ALTER COLUMN bytes_in TYPE bigint,
+                ALTER COLUMN bytes_out TYPE bigint
+              """,
+              """
+              ALTER TABLE usage_plugins
+                ALTER COLUMN period_start TYPE bigint, ALTER COLUMN period_end TYPE bigint,
+                ALTER COLUMN events TYPE bigint, ALTER COLUMN host_calls TYPE bigint,
+                ALTER COLUMN starts TYPE bigint, ALTER COLUMN cpu_ms TYPE bigint,
+                ALTER COLUMN peak_rss_kb TYPE bigint, ALTER COLUMN uptime_ms TYPE bigint
+              """,
+              "CREATE INDEX IF NOT EXISTS usage_actions_plugin_period ON usage_actions (plugin_id, period_start)",
+              "CREATE INDEX IF NOT EXISTS usage_plugins_plugin_period ON usage_plugins (plugin_id, period_start)"
+            ]
           }
         ]
       })
@@ -96,7 +118,7 @@ defmodule Exoforge.Std.Metering do
     {where, args} = filters(plugin_id, since)
 
     select =
-      "plugin_id, action, SUM(invocations) AS invocations, SUM(errors) AS errors, SUM(wall_us) AS wall_us, SUM(bytes_in) AS bytes_in, SUM(bytes_out) AS bytes_out"
+      "plugin_id, action, SUM(invocations)::bigint AS invocations, SUM(errors)::bigint AS errors, SUM(wall_us)::bigint AS wall_us, SUM(bytes_in)::bigint AS bytes_in, SUM(bytes_out)::bigint AS bytes_out"
 
     group = "GROUP BY plugin_id, action ORDER BY plugin_id, action"
 
@@ -107,8 +129,8 @@ defmodule Exoforge.Std.Metering do
     {where, args} = filters(plugin_id, since)
 
     select =
-      "plugin_id, SUM(events) AS events, SUM(host_calls) AS host_calls, SUM(starts) AS starts, " <>
-        "SUM(cpu_ms) AS cpu_ms, MAX(peak_rss_kb) AS peak_rss_kb, MAX(uptime_ms) AS uptime_ms"
+      "plugin_id, SUM(events)::bigint AS events, SUM(host_calls)::bigint AS host_calls, SUM(starts)::bigint AS starts, " <>
+        "SUM(cpu_ms)::bigint AS cpu_ms, MAX(peak_rss_kb) AS peak_rss_kb, MAX(uptime_ms) AS uptime_ms"
 
     group = "GROUP BY plugin_id ORDER BY plugin_id"
 

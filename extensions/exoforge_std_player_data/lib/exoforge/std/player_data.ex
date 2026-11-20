@@ -41,21 +41,29 @@ defmodule Exoforge.Std.PlayerData do
   @doc "Initializes the required tables in the isolated player_data database."
   def init_schema do
     _ =
-      ActionDispatcher.dispatch_internal(:database, :execute, %{
-        plugin: :player_data,
-        operation: "CREATE TABLE IF NOT EXISTS players (id text, player_id text, user_id text, profile text, state text)"
-      })
-
-    _ =
-      ActionDispatcher.dispatch_internal(:database, :execute, %{
-        plugin: :player_data,
-        operation: "CREATE TABLE IF NOT EXISTS player_kv (id text, player_id text, key text, value text, updated_at bigint)"
-      })
-
-    _ =
-      ActionDispatcher.dispatch_internal(:database, :execute, %{
-        plugin: :player_data,
-        operation: "CREATE INDEX IF NOT EXISTS idx_player_kv_prefix ON player_kv (player_id, key)"
+      ActionDispatcher.dispatch_internal(:lldb, :run_migrations, %{
+        namespace: :player_data,
+        migrations: [
+          %{
+            version: 1,
+            name: "create player tables",
+            sql: [
+              "CREATE TABLE IF NOT EXISTS players (id text, player_id text, user_id text, profile text, state text)",
+              "CREATE TABLE IF NOT EXISTS player_kv (id text, player_id text, key text, value text, updated_at bigint)",
+              "CREATE INDEX IF NOT EXISTS idx_player_kv_prefix ON player_kv (player_id, key)"
+            ]
+          },
+          %{
+            version: 2,
+            name: "one row per player and per key",
+            sql: [
+              "DELETE FROM players a USING players b WHERE a.player_id = b.player_id AND a.ctid > b.ctid",
+              "DELETE FROM player_kv a USING player_kv b WHERE a.player_id = b.player_id AND a.key = b.key AND a.ctid > b.ctid",
+              "CREATE UNIQUE INDEX IF NOT EXISTS players_player_id_key ON players (player_id)",
+              "CREATE UNIQUE INDEX IF NOT EXISTS player_kv_player_key ON player_kv (player_id, key)"
+            ]
+          }
+        ]
       })
 
     :ok

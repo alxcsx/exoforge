@@ -38,7 +38,9 @@ public class RowMigrationTests : IDisposable
         public List<(string Key, string Json)> Puts { get; } = new();
 
         public bool EmitEvent(string topic, string evt, string payloadJson) => true;
-        public string? CallAction(string service, string action, string payloadJson) => null;
+        public string? SqlRows { get; set; }
+        public string? CallAction(string service, string action, string payloadJson) =>
+            service == "database" && SqlRows is not null ? "{\"rows\":" + SqlRows + "}" : null;
         public void Log(int level, string message) { }
         public string? DbGet(string table, string key) => Row;
         public string? DbAll(string table) => Row is null ? "[]" : $"[{Row}]";
@@ -112,6 +114,22 @@ public class RowMigrationTests : IDisposable
 
         Assert.Equal(new Pet("p1", "Rex", 5), Assert.Single(pets));
         Assert.Single(transport.Puts);
+    }
+
+    [Fact]
+    public void The_sweeper_migrates_rows_nobody_read_and_reports_zero_when_current()
+    {
+        var (context, transport) = Setup(null);
+        RowMigrations.Register(typeof(Pet), "2.0.0", typeof(PetMigrations).GetMethod(nameof(PetMigrations.ToV2))!);
+        transport.SqlRows = "[{\"id\":\"p9\",\"nm\":\"Old\",\"level\":1,\"_v\":0}]";
+
+        var db = (HostDatabase)context.Database;
+
+        Assert.Equal(1, db.MigrateBatch(100));
+        Assert.Equal("p9", Assert.Single(transport.Puts).Key);
+
+        transport.SqlRows = "[]";
+        Assert.Equal(0, db.MigrateBatch(100));
     }
 
     [Theory]

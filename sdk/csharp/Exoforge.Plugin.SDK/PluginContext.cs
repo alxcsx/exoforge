@@ -100,6 +100,45 @@ public class HostDatabase : IDatabase
         return PluginJson.DeserializeDatabaseRow<T>(row.GetRawText());
     }
 
+    /// <summary>
+    /// The sweeper's unit of work: migrates up to <paramref name="limit"/> rows of <typeparamref name="T"/> that
+    /// are still stamped below its newest row migration, so rows of players who never come back catch up too.
+    /// Returns how many it touched; 0 means the table is current.
+    /// </summary>
+    internal int MigrateBatch<T>(int limit)
+    {
+        string table = EntityMetadata<T>.TableName;
+        var rows = RunSql($"SELECT * FROM \"{table}\" WHERE _v < $1 ORDER BY _v LIMIT $2",
+            new object?[] { RowMigrations.TargetOf(typeof(T)), limit }, out _);
+        if (rows is null) return 0;
+
+        int migrated = 0;
+        foreach (var row in rows.Value.EnumerateArray())
+        {
+            if (RowMigrations.PendingFrom<T>(row) is null) continue;
+            ReadRow<T>(table, null, row);
+            migrated++;
+        }
+
+        return migrated;
+    }
+
+    /// <summary>One throttled pass over every migrated record type; stops at <paramref name="limit"/> rows.</summary>
+    internal int MigrateBatch(int limit)
+    {
+        int done = 0;
+        foreach (var type in RowMigrations.MigratedTypes())
+        {
+            var method = System.Linq.Enumerable.First(typeof(HostDatabase).GetMethods(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic),
+                m => m.Name == nameof(MigrateBatch) && m.IsGenericMethodDefinition)
+                .MakeGenericMethod(type);
+            done += (int)method.Invoke(this, new object[] { limit - done })!;
+            if (done >= limit) break;
+        }
+
+        return done;
+    }
+
     public IReadOnlyList<T> All<T>(string table)
     {
         string? json = HostBridge.DbAll(table);

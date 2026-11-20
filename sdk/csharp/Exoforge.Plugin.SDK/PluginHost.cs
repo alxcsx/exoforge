@@ -622,6 +622,7 @@ public static class PluginHost
 
             _lifecycleCode = null;
             _lifecycleMessage = null;
+            StartRowSweeper();
         }
         catch (Exception ex)
         {
@@ -632,6 +633,30 @@ public static class PluginHost
         }
 
         Write(LifecycleResponse(id));
+    }
+
+    /// <summary>
+    /// When the extension declares row migrations, migrates the rows nobody has read yet in small, spaced
+    /// batches (100 rows every 2 s) until none are left, so a drop of the old columns stops being refused.
+    /// </summary>
+    private static void StartRowSweeper()
+    {
+        if (RowMigrations.MigratedTypes().Length == 0) return;
+
+        var thread = new Thread(() =>
+        {
+            var db = (HostDatabase)CurrentContext.Database;
+            try
+            {
+                while (db.MigrateBatch(100) > 0) Thread.Sleep(2000);
+            }
+            catch (Exception ex)
+            {
+                WriteHostLog(2, "row sweeper stopped: " + Cause(ex).Message);
+            }
+        })
+        { IsBackground = true, Name = "exoforge-row-sweeper" };
+        thread.Start();
     }
 
     private static string LifecycleResponse(long id)

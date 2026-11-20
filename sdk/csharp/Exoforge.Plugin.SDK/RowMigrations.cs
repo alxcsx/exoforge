@@ -117,6 +117,28 @@ internal static class RowMigrations
         return (T)current!;
     }
 
+    /// <summary>The record types that have a row migration, in the record's assembly or the entry assembly.</summary>
+    internal static Type[] MigratedTypes()
+    {
+        var types = new HashSet<Type>(Registered.Keys);
+        var entry = Assembly.GetEntryAssembly();
+        if (entry is not null)
+        {
+            foreach (var candidate in SafeTypes(entry))
+            {
+                foreach (var method in candidate.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
+                {
+                    if (method.GetCustomAttribute<ExoRowMigrationAttribute>() is { } attr) types.Add(attr.Resource);
+                }
+            }
+        }
+
+        return types.ToArray();
+    }
+
+    /// <summary>The newest stamp any row migration of the type leads to.</summary>
+    internal static long TargetOf(Type resource) => StepsFor(resource).Max(s => s.To);
+
     /// <summary>The record as JSON with the guard set, for the write-back.</summary>
     internal static string WithGuard(object upgraded, long stamp)
     {

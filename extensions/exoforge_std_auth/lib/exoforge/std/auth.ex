@@ -123,6 +123,27 @@ defmodule Exoforge.Std.Auth do
     ensure_token_columns(token_columns)
     migrate_legacy_tokens(token_columns)
 
+    _ =
+      ActionDispatcher.dispatch_internal(:lldb, :run_migrations, %{
+        namespace: :auth,
+        migrations: [
+          %{
+            version: 1,
+            name: "lookup keys",
+            sql: [
+              "DELETE FROM tokens a USING tokens b WHERE a.token_id = b.token_id AND a.ctid > b.ctid",
+              "DELETE FROM accounts a USING accounts b WHERE a.id = b.id AND a.ctid > b.ctid",
+              "DELETE FROM players a USING players b WHERE a.id = b.id AND a.ctid > b.ctid",
+              "CREATE UNIQUE INDEX IF NOT EXISTS tokens_token_id_key ON tokens (token_id)",
+              "CREATE INDEX IF NOT EXISTS tokens_user_id ON tokens (user_id)",
+              "CREATE UNIQUE INDEX IF NOT EXISTS accounts_id_key ON accounts (id)",
+              "CREATE UNIQUE INDEX IF NOT EXISTS accounts_email_key ON accounts (email)",
+              "CREATE UNIQUE INDEX IF NOT EXISTS players_id_key ON players (id)"
+            ]
+          }
+        ]
+      })
+
     :ok
   end
 
