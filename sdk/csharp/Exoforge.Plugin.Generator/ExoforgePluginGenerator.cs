@@ -487,8 +487,7 @@ namespace Exoforge.Plugin.SDK
                 MarkPrimaryKey(columns, resolvedPk),
                 declared.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                 isSingleton,
-                NamedBool(attr, "AllowPlayerRead"),
-                NamedInt(attr, "Version", 1)));
+                NamedBool(attr, "AllowPlayerRead")));
         }
 
         foreach (var candidate in AllTypes(compilation.Assembly.GlobalNamespace))
@@ -1043,8 +1042,7 @@ namespace Exoforge.Plugin.SDK
             MarkPrimaryKey(columns, resolvedPk),
             resourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             isSingleton,
-            NamedBool(resAttr, "AllowPlayerRead"),
-            NamedInt(resAttr, "Version", 1));
+            NamedBool(resAttr, "AllowPlayerRead"));
     }
 
     private static List<ColumnModel> MarkPrimaryKey(List<ColumnModel> columns, string primaryKey) =>
@@ -1357,7 +1355,7 @@ namespace Exoforge.Plugin.SDK
             // Every root finds the same migrations in the same assembly: one copy of each.
             foreach (var migration in emit.Migrations ?? new List<MigrationModel>())
             {
-                if (!migrations.Any(m => m.Resource == migration.Resource && m.From == migration.From)) migrations.Add(migration);
+                if (!migrations.Any(m => m.Resource == migration.Resource && m.To == migration.To)) migrations.Add(migration);
             }
         }
 
@@ -1962,11 +1960,10 @@ namespace Exoforge.Generated
                 continue;
             }
 
-            int from = NamedInt(attr, "From", 0);
-            int to = NamedInt(attr, "To", 0);
-            if (from < 1 || to != from + 1)
+            string to = NamedString(attr, "To") ?? "";
+            if (ManifestEmitter.EncodeVersion(to) == 0)
             {
-                errors.Add($"Migration '{where}': From = {from}, To = {to}. A migration goes from one version to the next (To = From + 1, starting at 1).");
+                errors.Add($"Migration '{where}': To = \"{to}\" is not an extension version. Write it as MAJOR.MINOR.PATCH, for example To = \"1.2.0\".");
                 continue;
             }
 
@@ -2003,13 +2000,13 @@ namespace Exoforge.Generated
                 }
             }
 
-            if (found.Any(m => m.Resource == resource && m.From == from))
+            if (found.Any(m => m.Resource == resource && ManifestEmitter.EncodeVersion(m.To) == ManifestEmitter.EncodeVersion(to)))
             {
-                errors.Add($"Resource '{resource}' has two migrations from version {from}: '{where}' and another. Keep one.");
+                errors.Add($"Resource '{resource}' has two migrations to version {to}: '{where}' and another. Keep one.");
                 continue;
             }
 
-            found.Add(new MigrationModel(resource, from, to, ops, DeclOf(type)));
+            found.Add(new MigrationModel(resource, to, ops, DeclOf(type)));
         }
 
         return found;

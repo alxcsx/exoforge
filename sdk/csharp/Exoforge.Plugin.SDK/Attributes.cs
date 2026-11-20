@@ -210,13 +210,6 @@ public class ExoResourceAttribute : Attribute
     /// </summary>
     public bool AllowPlayerRead { get; set; }
 
-    /// <summary>
-    /// The version of this resource's shape. Starts at 1; raise it by one when a change cannot be applied
-    /// automatically (a rename, a type change, a dropped column) and describe the change in an
-    /// <see cref="ExoMigrationAttribute"/> class from the old version to the new one.
-    /// </summary>
-    public int Version { get; set; } = 1;
-
     public ExoResourceAttribute()
     {
     }
@@ -566,7 +559,7 @@ public enum ExoType
 }
 
 /// <summary>
-/// Describes how a resource's table changes from one version to the next, as a list of operations given by
+/// Describes how a resource's table changes on the way to an extension version, as a list of operations given by
 /// the attributes on the same class (<see cref="ExoRenameAttribute"/>, <see cref="ExoConvertAttribute"/>,
 /// <see cref="ExoFillAttribute"/>, <see cref="ExoDropAttribute"/>, <see cref="ExoSetNotNullAttribute"/>),
 /// applied in the order they are written. Put each migration in its own file. Nothing here runs: the generator
@@ -574,7 +567,7 @@ public enum ExoType
 /// </summary>
 /// <example>
 /// <code>
-/// [ExoMigration(typeof(Item), From = 1, To = 2)]
+/// [ExoMigration(typeof(Item), To = "1.2.0")]
 /// [ExoRename("nm", "name")]
 /// [ExoConvert("price", ExoType.Decimal)]
 /// public static class ItemsV2 { }
@@ -585,13 +578,54 @@ public sealed class ExoMigrationAttribute : Attribute
 {
     public Type Resource { get; }
 
-    /// <summary>The version this migration starts from.</summary>
-    public int From { get; set; }
-
-    /// <summary>The version it leads to; always <c>From + 1</c>.</summary>
-    public int To { get; set; }
+    /// <summary>
+    /// The extension version this migration brings the table to ("1.2.0"). It runs on a deploy of that
+    /// version or later when the table is still behind it, in the order of <c>To</c>.
+    /// </summary>
+    public string To { get; set; } = "";
 
     public ExoMigrationAttribute(Type resource) => Resource = resource;
+}
+
+/// <summary>
+/// Marks a static method that brings one stored row up to the shape of extension version <see cref="To"/>:
+/// <c>static T Up(JsonElement oldRow)</c>. The row arrives as stored (old columns included) and the method
+/// returns the current record. A row is migrated the first time it is read after the deploy, and written back
+/// stamped with the new version, so the rows of players who never return are never touched.
+/// </summary>
+[AttributeUsage(AttributeTargets.Method, Inherited = false, AllowMultiple = false)]
+public sealed class ExoRowMigrationAttribute : Attribute
+{
+    public Type Resource { get; }
+
+    /// <summary>The extension version whose shape the method returns ("2.0.0").</summary>
+    public string To { get; set; } = "";
+
+    public ExoRowMigrationAttribute(Type resource) => Resource = resource;
+}
+
+/// <summary>The stored form of an extension version: <c>major * 1_000_000 + minor * 1_000 + patch</c>.</summary>
+public static class ExoVersion
+{
+    /// <summary>0 for anything that is not <c>MAJOR.MINOR.PATCH</c> with minor and patch under 1000.</summary>
+    public static long Encode(string? version)
+    {
+        if (string.IsNullOrWhiteSpace(version)) return 0;
+
+        // "1.4.0-beta" and "1.4.0+build" are the 1.4.0 release for ordering purposes.
+        int cut = version!.IndexOfAny(new[] { '-', '+' });
+        string[] parts = (cut < 0 ? version : version.Substring(0, cut)).Split('.');
+        if (parts.Length != 3 ||
+            !long.TryParse(parts[0], out long major) ||
+            !long.TryParse(parts[1], out long minor) ||
+            !long.TryParse(parts[2], out long patch) ||
+            major < 0 || minor is < 0 or > 999 || patch is < 0 or > 999)
+        {
+            return 0;
+        }
+
+        return major * 1_000_000 + minor * 1_000 + patch;
+    }
 }
 
 /// <summary>Renames a column (<c>ALTER TABLE .. RENAME COLUMN</c>).</summary>
