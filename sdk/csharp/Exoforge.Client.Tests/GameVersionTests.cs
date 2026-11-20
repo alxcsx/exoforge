@@ -68,6 +68,21 @@ public class GameVersionTests
         Assert.IsAssignableFrom<ExoActionException>(ex);
     }
 
+    [Fact]
+    public async Task Client_outdated_from_an_extension_raises_the_same_upgrade_path()
+    {
+        var handler = new RecordingHandler(
+            HttpStatusCode.OK,
+            "{\"status\":\"error\",\"error\":{\"code\":\"client_outdated\",\"message\":\"update the game\"}}");
+        using var client = NewClient(handler);
+        int raised = 0;
+        client.OnUpgradeRequired += () => raised++;
+
+        await Assert.ThrowsAsync<ExoUpgradeRequiredException>(() => client.SendActionAsync<JsonElement>("demo", "ping", new { }));
+
+        Assert.Equal(1, raised);
+    }
+
     private static ExoClient NewClient(HttpMessageHandler handler)
     {
         var client = new ExoClient(httpClient: new HttpClient(handler), httpBaseUri: new Uri("http://cluster.test/"));

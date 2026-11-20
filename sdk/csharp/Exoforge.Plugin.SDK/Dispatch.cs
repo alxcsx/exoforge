@@ -40,13 +40,38 @@ public static class ExoDispatch
     /// extension version): its game version locks this extension at or above it. A caller with no game version,
     /// an extension the game version does not lock, or an unreachable versioning service gets the newest revision.
     /// </summary>
-    public static bool CallerAtLeast(long from)
+    public static bool CallerAtLeast(long from) => CallerLockedVersion() is not long locked || locked >= from;
+
+    /// <summary>
+    /// The encoded extension version the caller's game version locks this extension at, or null when the caller
+    /// is to be served the newest (no game version, not locked, or versioning unreachable).
+    /// </summary>
+    internal static long? CallerLockedVersion()
     {
         var context = PluginHost.CurrentContext;
         string? gameVersion = context.CallerGameVersion;
-        if (string.IsNullOrEmpty(gameVersion) || context is not HostPluginContext host) return true;
+        if (string.IsNullOrEmpty(gameVersion) || context is not HostPluginContext host) return null;
 
-        return LockedVersion(host.PluginId, gameVersion!) is not long locked || locked >= from;
+        return LockedVersion(host.PluginId, gameVersion!);
+    }
+
+    /// <summary>
+    /// For a type that forks on breaking changes: the generation the caller reads and writes. A caller locked at
+    /// extension version L is on the newest generation at or below L; a caller with no lock is on the newest.
+    /// </summary>
+    internal static long CallerGeneration(Type resource)
+    {
+        long[] generations = RowMigrations.Generations(resource);
+        if (generations.Length == 0) return 0;
+        if (CallerLockedVersion() is not long locked) return generations[generations.Length - 1];
+
+        long chosen = 0;
+        foreach (long generation in generations)
+        {
+            if (generation <= locked) chosen = generation;
+        }
+
+        return chosen;
     }
 
     private static long? LockedVersion(string pluginId, string gameVersion)

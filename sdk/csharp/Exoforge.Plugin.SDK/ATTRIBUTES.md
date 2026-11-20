@@ -236,3 +236,27 @@ public record PlayerScoreRecord(
     DateTime CreatedAt
 );
 ```
+
+## Versioning attributes
+
+```csharp
+// Safe change, applied as ALTERs on the deploy that reaches To (its own file).
+[ExoMigration(typeof(Item), To = "1.2.0")]
+[ExoRename("qty", "quantity")] public static class V12 { }
+
+// A change an ALTER cannot do: each row is transformed the first time it is read, then written back.
+[ExoRowMigration(typeof(Pet), To = "2.0.0")]
+public static Pet Up(JsonElement oldRow) => new(...);
+
+// Per resource.
+[ExoResource("pets", RowMigration = RowMigrationMode.ReadOnly)]          // WriteBack (default) | ReadOnly | Off
+[ExoResource("balance", BreakingChanges = BreakingChangeMode.Fork)]       // shared data: a table per generation
+[ExoResource("items", SchemaVersioningMode = SchemaVersioningMode.Manual)] // the studio owns the table
+
+// An action revision: old clients (game version locks the extension below 2.0.0) get the previous method.
+[ExoAction("score")] public int ScoreV1(int a) => a;
+[ExoAction("score", FromVersion = "2.0.0")] public int ScoreV2(int a, int b) => a + b;
+```
+
+`db.QueryRaw<T>(sql, args)` reads without row migration. `db.DuplicateGeneration<T>()` and `db.SyncGeneration<T>("col")`
+copy rows or shared columns into the caller's generation of a forking resource.

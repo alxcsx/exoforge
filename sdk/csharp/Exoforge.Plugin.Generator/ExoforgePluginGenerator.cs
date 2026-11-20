@@ -484,9 +484,10 @@ namespace Exoforge.Plugin.SDK
             bool isSingleton = IsSingletonAttribute(attr) || NamedBool(attr, "Singleton");
             string resName = NamedString(attr, "Name") ?? PositionalString(attr, 0) ?? ToSnakeCase(declared.Name);
             string resolvedPk = ToSnakeCase(declaredPk!);
+            long generation = ForkGeneration(declared, attr);
             AddResource(primary.Resources, new ResourceModel(
                 resName,
-                NamedString(attr, "Source") ?? resName,
+                GenerationSource(NamedString(attr, "Source") ?? resName, generation),
                 resolvedPk,
                 NamedStringArray(attr, "DrawerTabs") ?? new[] { "overview" },
                 ActionNames(primary),
@@ -494,7 +495,9 @@ namespace Exoforge.Plugin.SDK
                 declared.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                 isSingleton,
                 NamedBool(attr, "AllowPlayerRead"),
-                NamedInt(attr, "SchemaVersioningMode", 0) == 1));
+                NamedInt(attr, "SchemaVersioningMode", 0) == 1,
+                NamedInt(attr, "BreakingChanges", 0) == 1,
+                generation));
         }
 
         foreach (var candidate in AllTypes(compilation.Assembly.GlobalNamespace))
@@ -1040,9 +1043,11 @@ namespace Exoforge.Plugin.SDK
         bool isSingleton = IsSingletonAttribute(resAttr) || NamedBool(resAttr, "Singleton");
         string resolvedPk = ToSnakeCase(primaryKey!);
 
+        long forkGeneration = ForkGeneration(resourceType, resAttr);
+
         return new ResourceModel(
             resName,
-            NamedString(resAttr, "Source") ?? resName,
+            GenerationSource(NamedString(resAttr, "Source") ?? resName, forkGeneration),
             resolvedPk,
             NamedStringArray(resAttr, "DrawerTabs") ?? new[] { "overview", "attributes" },
             serviceActions,
@@ -1050,7 +1055,38 @@ namespace Exoforge.Plugin.SDK
             resourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             isSingleton,
             NamedBool(resAttr, "AllowPlayerRead"),
-            NamedInt(resAttr, "SchemaVersioningMode", 0) == 1);
+            NamedInt(resAttr, "SchemaVersioningMode", 0) == 1,
+            NamedInt(resAttr, "BreakingChanges", 0) == 1,
+            forkGeneration);
+    }
+
+    /// <summary>The table of generation <paramref name="generation"/>: the original name for 0, else <c>name_g&lt;stamp&gt;</c> (the SDK builds the same name).</summary>
+    private static string GenerationSource(string source, long generation) =>
+        generation == 0 ? source : source + "_g" + generation.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// For a resource that forks on breaking changes, the newest generation: the highest <c>To</c> among the
+    /// <c>[ExoRowMigration]</c> methods that name it. 0 for a resource that does not fork or has none yet.
+    /// </summary>
+    private static long ForkGeneration(INamedTypeSymbol resourceType, AttributeData? attr)
+    {
+        if (attr is null || NamedInt(attr, "BreakingChanges", 0) != 1) return 0;
+
+        long newest = 0;
+        foreach (var type in AllTypes(resourceType.ContainingAssembly.GlobalNamespace))
+        {
+            foreach (var method in type.GetMembers().OfType<IMethodSymbol>())
+            {
+                foreach (var migration in method.GetAttributes())
+                {
+                    if (migration.AttributeClass?.Name != "ExoRowMigrationAttribute" || migration.ConstructorArguments.Length == 0) continue;
+                    if (!SymbolEqualityComparer.Default.Equals(migration.ConstructorArguments[0].Value as INamedTypeSymbol, resourceType)) continue;
+                    newest = Math.Max(newest, ManifestEmitter.EncodeVersion(NamedString(migration, "To")));
+                }
+            }
+        }
+
+        return newest;
     }
 
     private static List<ColumnModel> MarkPrimaryKey(List<ColumnModel> columns, string primaryKey) =>

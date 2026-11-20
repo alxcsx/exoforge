@@ -637,7 +637,7 @@ public class ExoClient : IDisposable
         string? rid = null,
         JsonElement? details = null)
     {
-        if (errCode == "upgrade_required")
+        if (errCode == "upgrade_required" || errCode == "client_outdated")
         {
             return new ExoUpgradeRequiredException(errMsg, rid, details);
         }

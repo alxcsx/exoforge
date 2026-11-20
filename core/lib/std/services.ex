@@ -957,6 +957,14 @@ defmodule Exoforge.Std.Services do
       errors([:already_exists, :invalid_version, :too_many_active])
     end
 
+    @doc "Changes the locks of a `dev` game version. Live, outdated and blocked versions are immutable."
+    action :set_locks do
+      scope(:studio)
+      params(version: :string, locks: :map)
+      returns(version: :string, status: :string)
+      errors([:not_found, :invalid_locks, :locks_immutable])
+    end
+
     @doc "Makes a `dev` game version live. The previous live one becomes `outdated`."
     action :promote do
       scope(:studio)

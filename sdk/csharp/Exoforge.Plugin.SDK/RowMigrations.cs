@@ -20,7 +20,7 @@ internal static class RowMigrations
     internal const string StampKey = "_v";
     internal const string GuardKey = "_if_v";
 
-    private sealed class Step
+    internal sealed class Step
     {
         public Step(long to, MethodInfo method)
         {
@@ -32,7 +32,41 @@ internal static class RowMigrations
         public MethodInfo Method { get; }
     }
 
-    private static readonly ConcurrentDictionary<Type, Step[]> Cache = new();
+    /// <summary>What reads need to know about a record type, found once.</summary>
+    internal sealed class Info
+    {
+        public Info(Step[] steps, RowMigrationMode mode, bool fork)
+        {
+            Steps = steps;
+            Mode = mode;
+            Fork = fork;
+        }
+
+        public Step[] Steps { get; }
+        public RowMigrationMode Mode { get; }
+        public bool Fork { get; }
+
+        /// <summary>True when reads have anything to do for this type.</summary>
+        public bool Active => Steps.Length > 0 && Mode != RowMigrationMode.Off;
+    }
+
+    private static readonly ConcurrentDictionary<Type, Info> Cache = new();
+
+    private static readonly System.Threading.AsyncLocal<bool> SuppressedScope = new();
+
+    /// <summary>True inside <see cref="Suppress"/>: reads return rows as stored (the QueryRaw escape hatch).</summary>
+    internal static bool Suppressed => SuppressedScope.Value;
+
+    internal static IDisposable Suppress()
+    {
+        SuppressedScope.Value = true;
+        return new Scope();
+    }
+
+    private sealed class Scope : IDisposable
+    {
+        public void Dispose() => SuppressedScope.Value = false;
+    }
 
     /// <summary>Methods registered by hand (tests, or an assembly the scan does not see).</summary>
     private static readonly ConcurrentDictionary<Type, List<Step>> Registered = new();
@@ -49,7 +83,7 @@ internal static class RowMigrations
         Cache.Clear();
     }
 
-    private static Step[] StepsFor(Type resource) =>
+    internal static Info InfoFor(Type resource) =>
         Cache.GetOrAdd(resource, type =>
         {
             var steps = new List<Step>();
@@ -66,8 +100,14 @@ internal static class RowMigrations
                 }
             }
 
-            return steps.OrderBy(s => s.To).ToArray();
+            var resourceAttr = type.GetCustomAttribute<ExoResourceAttribute>();
+            return new Info(
+                steps.OrderBy(s => s.To).ToArray(),
+                resourceAttr?.RowMigration ?? RowMigrationMode.WriteBack,
+                resourceAttr?.BreakingChanges == BreakingChangeMode.Fork);
         });
+
+    private static Step[] StepsFor(Type resource) => InfoFor(resource).Steps;
 
     private static IEnumerable<Type> SafeTypes(Assembly assembly)
     {
@@ -86,19 +126,42 @@ internal static class RowMigrations
     /// </summary>
     internal static long? PendingFrom<T>(JsonElement row)
     {
-        if (row.ValueKind != JsonValueKind.Object || !row.TryGetProperty(StampKey, out var stampElement)) return null;
-        if (stampElement.ValueKind != JsonValueKind.Number || !stampElement.TryGetInt64(out long stamp)) return null;
+        var info = InfoFor(typeof(T));
+        if (!info.Active || Suppressed) return null;
+        if (StampOf(row) is not long stamp) return null;
 
-        return StepsFor(typeof(T)).Any(s => s.To > stamp) ? stamp : null;
+        return info.Steps.Any(s => s.To > stamp) ? stamp : null;
+    }
+
+    /// <summary>The stored <c>_v</c> of a row, or null when it has none.</summary>
+    internal static long? StampOf(JsonElement row)
+    {
+        if (row.ValueKind != JsonValueKind.Object || !row.TryGetProperty(StampKey, out var stampElement)) return null;
+        return stampElement.ValueKind == JsonValueKind.Number && stampElement.TryGetInt64(out long stamp) ? stamp : null;
+    }
+
+    /// <summary>
+    /// The oldest extension version that can read a row stamped <paramref name="stamp"/>: the newest row migration
+    /// it has been through. Declarative migrations are safe changes older clients tolerate, so they never count.
+    /// </summary>
+    internal static long FloorOf(Type resource, long stamp)
+    {
+        long floor = 0;
+        foreach (var step in StepsFor(resource))
+        {
+            if (step.To <= stamp) floor = step.To;
+        }
+
+        return floor;
     }
 
     /// <summary>Runs the pending migrations in order. Each sees the row as the one before left it.</summary>
-    internal static T Upgrade<T>(JsonElement row, long stamp)
+    internal static T Upgrade<T>(JsonElement row, long stamp, long upTo = long.MaxValue)
     {
         var working = JsonNode.Parse(row.GetRawText())!.AsObject();
         object? current = null;
 
-        foreach (var step in StepsFor(typeof(T)).Where(s => s.To > stamp))
+        foreach (var step in StepsFor(typeof(T)).Where(s => s.To > stamp && s.To <= upTo))
         {
             using var doc = JsonDocument.Parse(working.ToJsonString());
             current = step.Method.Invoke(null, new object[] { doc.RootElement.Clone() })
@@ -118,7 +181,10 @@ internal static class RowMigrations
     }
 
     /// <summary>The record types that have a row migration, in the record's assembly or the entry assembly.</summary>
-    internal static Type[] MigratedTypes()
+    internal static Type[] MigratedTypes() =>
+        MigratedTypesAll().Where(t => InfoFor(t) is { Fork: false, Mode: RowMigrationMode.WriteBack }).ToArray();
+
+    private static Type[] MigratedTypesAll()
     {
         var types = new HashSet<Type>(Registered.Keys);
         var entry = Assembly.GetEntryAssembly();
@@ -138,6 +204,9 @@ internal static class RowMigrations
 
     /// <summary>The newest stamp any row migration of the type leads to.</summary>
     internal static long TargetOf(Type resource) => StepsFor(resource).Max(s => s.To);
+
+    /// <summary>The generation numbers (the row migrations' <c>To</c>) a forking type has, ascending; generation 0 is the original table.</summary>
+    internal static long[] Generations(Type resource) => StepsFor(resource).Select(s => s.To).Distinct().ToArray();
 
     /// <summary>The record as JSON with the guard set, for the write-back.</summary>
     internal static string WithGuard(object upgraded, long stamp)

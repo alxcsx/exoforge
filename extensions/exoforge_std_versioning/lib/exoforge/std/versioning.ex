@@ -70,6 +70,32 @@ defmodule Exoforge.Std.Versioning do
     end
   end
 
+  # Locks of a pre-production version can still change, because no player has been served by them. A live,
+  # outdated or blocked version is immutable: its clients already depend on what it resolved to.
+  @impl true
+  defaction set_locks(payload), scope: Exoforge.Auth.Roles.studio() do
+    version = payload |> field(:version) |> to_string()
+    locks = field(payload, :locks)
+
+    Serializer.run(fn ->
+      case Enum.find(rows(), &(&1.version == version)) do
+        nil ->
+          {:error, :not_found}
+
+        %{status: "dev", locks: current} when is_map(locks) ->
+          merged = Map.merge(current, Map.new(locks, fn {k, v} -> {to_string(k), v} end))
+          execute("UPDATE game_versions SET locks = $2::jsonb WHERE version = $1", [version, Jason.encode!(merged)])
+          {:ok, %{version: version, status: "dev"}}
+
+        %{status: "dev"} ->
+          {:error, :invalid_locks}
+
+        _ ->
+          {:error, :locks_immutable}
+      end
+    end)
+  end
+
   @impl true
   defaction promote(payload), scope: Exoforge.Auth.Roles.studio() do
     version = payload |> field(:version) |> to_string()

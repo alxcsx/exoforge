@@ -34,6 +34,16 @@ defmodule Exoforge.Std.VersioningTest do
     assert {:error, :not_found} = call(:resolve, %{version: "0.1"})
   end
 
+  test "locks can change while a version is in dev and never after" do
+    assert {:ok, _} = call(:register, %{version: "1.0", locks: %{"inventory" => "2.1.0"}})
+    assert {:ok, %{status: "dev"}} = call(:set_locks, %{version: "1.0", locks: %{"inventory" => "2.2.0", "shop" => "1.0.0"}})
+    assert {:ok, %{locks: %{"inventory" => "2.2.0", "shop" => "1.0.0"}}} = call(:resolve, %{version: "1.0"})
+
+    assert {:ok, _} = call(:promote, %{version: "1.0"})
+    assert {:error, :locks_immutable} = call(:set_locks, %{version: "1.0", locks: %{"inventory" => "9.0.0"}})
+    assert {:error, :not_found} = call(:set_locks, %{version: "nope", locks: %{}})
+  end
+
   test "a registered version starts in dev and resolves with its locks" do
     assert {:ok, %{status: "dev"}} = call(:register, %{version: "1.0", locks: %{"inventory" => "2.1.0"}})
     assert {:ok, %{status: "dev", locks: %{"inventory" => "2.1.0"}}} = call(:resolve, %{version: "1.0"})
