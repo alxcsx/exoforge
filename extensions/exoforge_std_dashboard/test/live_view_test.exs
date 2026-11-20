@@ -358,6 +358,20 @@ defmodule Exoforge.DashboardLiveViewTest do
     end
   end
 
+  describe "Resource browser" do
+    test "opens for a declared resource and lists it, and its rows page" do
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{"admin_player_id" => "admin", "admin_scopes" => ["admin"]})
+
+      # `players` is declared by the player_data extension, which the suite boots
+      {:ok, _view, html} = live(conn, "/resources/players")
+
+      assert html =~ "players"
+      refute html =~ "Internal Server Error"
+    end
+  end
+
   describe "Request id in the command palette" do
     test "a pasted request id becomes the first result and opens the request" do
       conn =

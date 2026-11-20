@@ -48,7 +48,7 @@ The Studio is a web app served by the `dashboard` extension and is where a produ
 | **Overview** | `dashboard` | See server health, the actions that need attention (error rate, p95 latency) and recent activity. |
 | **Extensions** | `extension_manager` | Deploy, reload or remove an extension, and open its inspector: actions, events, resources, contracts, logs and docs, plus the game versions that lock it. |
 | **Users** | `auth` | Create accounts and tokens, assign roles, list and revoke sessions. |
-| **Resources** | `resources` | Browse and edit the rows of any `[ExoResource]` table. `[ExoColumn]` decides labels, sorting, filters and input widgets. |
+| **Data** | `resources` | Lists every `[ExoResource]` table with its owner and row count; **Browse rows** opens it to search, edit and export. `[ExoColumn]` decides labels, sorting, filters and input widgets. The same link is in each extension's inspector, under *Resources*. |
 | **Files** | `file_bucket` | Upload to buckets and switch a bucket between public and private. |
 | **Timeline and health** | `observability` | Paste a request id (`rid`) to see the calls, events, queries and logs of one request; turn on deep capture for one player and replay a captured request. |
 | **Developer Guide** | `docs` | This guide, plus the live catalog of every service and action registered on this server. |

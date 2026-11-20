@@ -33,7 +33,7 @@ defmodule Exoforge.Std.Resources do
     icon: "🗃️",
     category: "Storage",
     system: true,
-    dashboard_view: %{id: :resources, title: "Resource Store", icon: "🗃️"}
+    dashboard_view: %{id: :resources, title: "Data", icon: "🗃️"}
   }
 
   @cache :exo_resource_migrated

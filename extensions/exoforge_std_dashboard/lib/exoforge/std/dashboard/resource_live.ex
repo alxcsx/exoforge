@@ -49,6 +49,7 @@ defmodule Exoforge.Std.Dashboard.ResourceLive do
        rows: rows,
        row_total: total,
        row_page: 1,
+       per_page: @per_page,
        row_pages: max(ceil(total / @per_page), 1),
        drawer_open: false,
        inspected_row: nil,

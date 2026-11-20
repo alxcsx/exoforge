@@ -1465,7 +1465,10 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                     <div class="p-2.5 bg-gray-50 border border-gray-200 rounded-lg space-y-1.5">
                       <div class="flex items-center justify-between">
                         <span class="font-mono font-semibold text-gray-900"><%= res[:name] || res["name"] %></span>
-                        <span class="text-[10px] font-mono text-gray-500">pk: <%= res[:primary_key] || res["primary_key"] || :id %></span>
+                        <span class="flex items-center gap-2">
+                          <span class="text-[10px] font-mono text-gray-500">pk: <%= res[:primary_key] || res["primary_key"] || :id %></span>
+                          <.link navigate={"/resources/" <> to_string(res[:name] || res["name"])} class="text-[11px] font-semibold text-primary-700 hover:underline">Browse rows</.link>
+                        </span>
                       </div>
                       <div class="flex flex-wrap gap-1">
                         <%= for col <- (res[:columns] || res["columns"] || []) do %>
