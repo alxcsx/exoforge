@@ -4,6 +4,18 @@ defmodule Exoforge.Std.FileBucket do
   Provides a pluggable file storage engine for binary assets, media, game saves, and blobs.
   Operates on the local filesystem by default, and can be swapped with alternative implementations
   (such as s3_file_bucket) satisfying the `:file_bucket` service contract.
+
+  Extensions and the Studio use it for anything binary, and the contract lets a deployment move storage to another engine without changing callers.
+
+  ### How it works
+  - Files live under priv/data/file_bucket by default, one directory per bucket, with a meta sidecar and an ETS index in `exo_file_bucket_meta`.
+  - Buckets are private unless the visibility table says otherwise; the operator's public_buckets setting only seeds buckets that have no row yet.
+  - An upload stores the bytes, their size, a SHA-256 digest and a detected content type, and records the disk path in the index.
+  - A private download needs a signed URL: an HMAC over bucket, id and expiry using the configured secret, checked with `:crypto.hash_equals/2` plus an expiry timestamp.
+  - Deleting a file removes the disk copy, its sidecar and the index entry, then broadcasts a deletion event.
+
+  ### Depends on
+  `:database`, and `:lldb` for the visibility table migration.
   """
   use Exoforge.Extension, provides: [:file_bucket]
 

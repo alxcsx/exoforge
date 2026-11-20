@@ -6,6 +6,17 @@ defmodule Exoforge.Std.Database do
   so it names no engine. Each extension's tables live in its own isolated namespace, so a query sees
   only the caller's own tables; a table it cannot see comes back with a hint pointing at the owning
   extension's action (for example a `get_many`) or a generated typed stub.
+
+  ### How it works
+  - Statements go through `ActionDispatcher.dispatch_internal(:lldb, ...)`, and this module never names a driver.
+  - `Exoforge.Std.Database.Store` classifies each table as a key-value document table, a typed resource table, or a missing declared resource, and plans SQL from `Exoforge.Std.Database.Dialect`.
+  - Key-value helpers create the document table on first use, and batch operations run as one transaction.
+  - A DDL statement forgets the cached table kind in `Exoforge.Std.Database.KindCache`, whose entries expire after five seconds.
+  - Schema planning is a dry run that reports what a declared resource would do without applying anything.
+  - Resetting an extension drops its whole namespace through `:lldb`.
+
+  ### Depends on
+  `:lldb`.
   """
   use Exoforge.Extension, provides: [:database]
 

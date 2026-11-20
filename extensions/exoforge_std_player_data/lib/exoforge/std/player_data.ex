@@ -5,6 +5,19 @@ defmodule Exoforge.Std.PlayerData do
   Persists data into its own isolated database via :database,
   supports user linking, data retention/orphaned player accessibility,
   key-value JSON storage, and emits lifecycle events :player_created and :player_deleted.
+
+  Game extensions read and write profiles and per-player state through it; keeping it an extension lets an account removal retain play statistics without keeping personal data.
+
+  ### How it works
+  - On boot it runs migrations through `:lldb` in the `:player_data` namespace, creating the players and player_kv tables with unique indexes.
+  - Every query goes to `:database` with the plugin set to `:player_data`, so the tables stay in this extension's isolated namespace.
+  - A linked player carries a user id and the active state; a player with no user is retained, and retaining one clears the user id, email and display name.
+  - Profiles are stored as JSON in one column; key-value state is addressable per key or by prefix for a player.
+  - Display names are unique case-insensitively, checked before an insert or update.
+  - The create and delete paths broadcast the `:player_created` and `:player_deleted` lifecycle events.
+
+  ### Depends on
+  `:database`, and `:lldb` for migrations.
   """
   use Exoforge.Extension, provides: [:player_data]
 

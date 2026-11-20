@@ -2,6 +2,19 @@ defmodule Exoforge.Std.Ws do
   @moduledoc """
   Standard real-time ingress and egress plugin for Exoforge.
   Provides the :ws service and manages the Bandit WebSocket server in its supervision tree.
+
+  Game clients use it as the low-latency path for actions and live events, and it stays an extension so the gateway can be replaced without changing client code.
+
+  ### How it works
+  - `children/0` starts Bandit with `Exoforge.Std.Ws.Router` on the port from `Exoforge.Endpoints.ws_port/0`.
+  - The router answers `/health`, serves a landing page at `/`, and upgrades `/ws` to `Exoforge.Std.Ws.SocketHandler` with a 60 second idle timeout.
+  - A socket authenticates with a token query parameter on upgrade or a later auth frame; both verify through `:auth`, and a bad token closes the connection with code 4001.
+  - Frames are JSON: ping, pong, action, auth, subscribe and unsubscribe; actions go through `Exoforge.Std.Transport`.
+  - Subscribed sockets receive event frames from the event bus, carrying topic, payload, origin and the request id.
+  - The module implements the `Exoforge.Contracts.Transport` behaviour with id `:ws` and type `:realtime`, routing outbound pushes through the event bus.
+
+  ### Depends on
+  `:auth`.
   """
   use Exoforge.Extension, provides: [:ws]
   @behaviour Exoforge.Contracts.Transport

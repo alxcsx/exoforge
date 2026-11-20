@@ -2,6 +2,20 @@ defmodule Exoforge.Std.Transport do
   @moduledoc """
   Standard transport abstraction layer for Exoforge ingress gateways.
   Provides the :transport service contract and canonical RPC/event framing helpers.
+
+  The HTTP and WebSocket extensions share these helpers, so every ingress produces the same request, result and error shapes; a new gateway reuses this module instead of rewriting them.
+
+  ### How it works
+  - `normalize_action_request/1` turns an incoming request into a canonical service, action, payload and id tuple, refusing a missing service or action.
+  - `dispatch/4` copies the caller's verified player id and scopes into the dispatcher context, so attribution survives a chain of internal calls.
+  - `sanitize_payload/2` removes client-supplied auth fields and stamps the caller's identity, unless a staff or service scope names another player.
+  - `check/1` asks `:versioning` to resolve a client's game version when that service is registered, caching answers for 30 seconds in the ETS table `exoforge_game_version_cache`.
+  - A failed version lookup is not cached, because caching it would lock every client of that version out for the whole window.
+  - Errors leave through `action_error/1` and `error_body/2` as one shape (code, message, details and request id), and `http_status/1` maps the same reason to an HTTP status.
+  - `public_action?/2` names the auth actions an unauthenticated caller may invoke.
+
+  ### Depends on
+  `:versioning`, and only when that service is installed; without it every client is served.
   """
   use Exoforge.Extension, provides: [:transport]
 

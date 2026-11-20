@@ -4,6 +4,18 @@ defmodule Exoforge.Std.DashboardViews do
   Provides the :dashboard_view contract, implementing specialized Producer Studio
   visual controls for core services (player_data, extension_manager, auth)
   strictly via service contracts without depending on concrete plugin implementations.
+
+  The Studio renders these LiveComponents wherever a core service needs a screen; they stay an extension so a team can add its own views beside them.
+
+  ### How it works
+  - Views are resolved by convention: an id is camelized and suffixed with View under `Exoforge.Std.DashboardViews`, after the exoforge_std_ prefix is stripped; an unloaded module resolves to nil.
+  - Three ids are registered: `:player_data`, `:extension_manager` and `:auth`.
+  - Each view is a `Phoenix.LiveComponent` that talks only through `ActionDispatcher`, never to another extension's module.
+  - `Exoforge.Std.DashboardViews.UserPlayersTab` is the module the player data extension names in its user inspect hook.
+  - Supporting components cover the dependency graph modal, icons, upload forms and inspector popups.
+
+  ### Depends on
+  `:dashboard`; each view calls the service its screen presents.
   """
   use Exoforge.Extension, provides: [:dashboard_view], system: true
 

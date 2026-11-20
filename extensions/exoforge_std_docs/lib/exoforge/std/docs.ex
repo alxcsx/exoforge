@@ -4,6 +4,19 @@ defmodule Exoforge.Std.Docs do
   Provides the :docs service contract, dynamically generating API catalogs
   from the Extension Manager, serving Markdown documentation with code highlighting,
   and supporting print/PDF export.
+
+  Teams read it inside the Studio and in exported manuals; it stays an extension so the guide follows the cluster's running extensions instead of a checked-in copy.
+
+  ### How it works
+  - Chapters are the Markdown files under priv/guide, ordered by file name within their front-matter group.
+  - `load_extension_pages/0` gathers the docs folder of every running extension into the Extensions group, capped at 24 pages of 256 KB each.
+  - `Exoforge.Std.Docs.Pages` orders the groups and appends two live pages: the architecture map and the API catalog.
+  - `build_api_catalog/0` asks `:extension_manager` for the export and falls back to the kernel registry when it is unavailable.
+  - The directives {{about}}, {{actions}}, {{events}} and {{resources}} expand from the extension's own contract; {{about}} is the module's `@moduledoc`.
+  - `Exoforge.Std.Docs.PdfManual` writes a standalone PDF 1.4 manual with no external dependencies, and the HTML and Markdown exports render the same pages.
+
+  ### Depends on
+  `:extension_manager`; without it the catalog falls back to the local `ExtensionRegistry`.
   """
   use Exoforge.Extension, provides: [:docs]
 
@@ -385,11 +398,16 @@ defmodule Exoforge.Std.Docs do
     if String.contains?(content, "{{") do
       services = catalog_services(extension_id)
 
-      content
-      |> String.replace("{{about}}", about_markdown(extension_id))
-      |> String.replace("{{actions}}", actions_markdown(services))
-      |> String.replace("{{events}}", events_markdown(services))
-      |> String.replace("{{resources}}", resources_markdown(extension_id))
+      # One pass over the page's own text: what a directive inserts is never scanned again, so a module's doc that
+      # talks about `{{actions}}` stays as written.
+      Regex.replace(~r/\{\{(about|actions|events|resources)\}\}/, content, fn _, directive ->
+        case directive do
+          "about" -> about_markdown(extension_id)
+          "actions" -> actions_markdown(services)
+          "events" -> events_markdown(services)
+          "resources" -> resources_markdown(extension_id)
+        end
+      end)
     else
       content
     end

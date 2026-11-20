@@ -5,6 +5,20 @@ defmodule Exoforge.Std.Versioning do
 
   Persisted in the instance database. The status rules are `Exoforge.Std.Versioning.Policy`; this
   module reads the rows, asks the policy what moves, and writes the moves in one statement.
+
+  Clients declare their game version at sign-in, and the ingress layers ask this extension whether that version may be served; that is why the registry is separate from any one game's code.
+
+  ### How it works
+  - Rows live in the game_versions table (version, status, locks, created_at), written through `:database` in this extension's own namespace.
+  - A new version registers as dev; promoting it makes the previous live version outdated.
+  - At most three versions are served: past the cap the oldest outdated one is blocked, configurable through the max_active_versions application setting.
+  - Locks of a dev version can still change; live, outdated and blocked versions are immutable.
+  - `Exoforge.Std.Versioning.Serializer` is a GenServer that serializes every mutation, so two changes never decide from the same stale row list.
+  - Status changes are applied with one UPDATE built from a VALUES list, so a promotion and the demotion that goes with it are never half-written.
+  - With no registered versions at all, resolution answers live with empty locks: versioning is off and every client is served.
+
+  ### Depends on
+  `:database`.
   """
 
   use Exoforge.Extension, provides: [:versioning]

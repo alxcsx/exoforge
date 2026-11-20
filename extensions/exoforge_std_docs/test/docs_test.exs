@@ -277,7 +277,8 @@ defmodule Exoforge.Std.DocsTest do
 
       [page] = Docs.load_extension_pages()
       assert page.content =~ "Developer Guide"
-      refute page.content =~ "{{about}}"
+      # the directive line itself was replaced (the module may of course talk about directives in its own text)
+      refute page.content =~ "# Cron\n\n{{about}}"
     end
 
     test "an Elixir extension's priv/docs is the same folder, and an extension without docs adds nothing", %{root: root} do
