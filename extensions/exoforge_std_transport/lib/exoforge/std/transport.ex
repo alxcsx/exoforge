@@ -6,6 +6,10 @@ defmodule Exoforge.Std.Transport do
   use Exoforge.Extension, provides: [:transport]
 
   alias Exoforge.ActionDispatcher
+  alias Exoforge.ExtensionRegistry
+
+  @game_version_cache :exoforge_game_version_cache
+  @game_version_cache_ttl 30_000
 
   @manifest %{
     title: "Transport Abstraction Layer",
@@ -45,6 +49,89 @@ defmodule Exoforge.Std.Transport do
   end
 
   def normalize_action_request(_), do: {:error, "Action request must be a JSON object"}
+
+  @doc "Checks an optional client game version when the versioning service is installed."
+  @spec check(nil | binary()) :: {:ok, nil | %{version: binary(), status: term()}} | {:error, :upgrade_required}
+  def check(nil), do: {:ok, nil}
+
+  def check(version) when is_binary(version) do
+    if ExtensionRegistry.fetch_service(:versioning) do
+      case resolve_game_version(version) do
+        # Failing to ask must not lock players out: the call goes on without a game version.
+        {:error, :versioning_unavailable} -> {:ok, nil}
+        answer -> answer
+      end
+    else
+      {:ok, nil}
+    end
+  end
+
+  def check(_), do: {:ok, nil}
+
+  defp resolve_game_version(version) do
+    now = System.monotonic_time(:millisecond)
+
+    case cache_lookup(version, now) do
+      nil ->
+        result =
+          case ActionDispatcher.dispatch_internal(:versioning, :resolve, %{version: version}) do
+            {:ok, response} -> version_result(version, response)
+            # An unknown version is final; anything else is a failure to ask.
+            {:error, :not_found} -> {:error, :upgrade_required}
+            {:error, {:not_found, _}} -> {:error, :upgrade_required}
+            _ -> {:error, :versioning_unavailable}
+          end
+
+        # A failed lookup (the database was busy) is not an answer about the version: caching it would
+        # lock every client of that version out for the whole TTL.
+        if cacheable?(result), do: cache_put(version, result, now)
+        result
+
+      result ->
+        result
+    end
+  end
+
+  defp cacheable?({:ok, _}), do: true
+  defp cacheable?({:error, :upgrade_required}), do: true
+  defp cacheable?(_), do: false
+
+  defp version_result(version, response) when is_map(response) do
+    status = Map.get(response, :status) || Map.get(response, "status")
+
+    if status in [:blocked, "blocked", nil],
+      do: {:error, :upgrade_required},
+      else: {:ok, %{version: version, status: status}}
+  end
+
+  defp version_result(_version, _response), do: {:error, :upgrade_required}
+
+  defp cache_lookup(version, now) do
+    ensure_game_version_cache()
+
+    case :ets.lookup(@game_version_cache, version) do
+      [{^version, expires_at, result}] when expires_at > now -> result
+      _ -> nil
+    end
+  end
+
+  defp cache_put(version, result, now) do
+    ensure_game_version_cache()
+    :ets.insert(@game_version_cache, {version, now + @game_version_cache_ttl, result})
+    :ok
+  end
+
+  defp ensure_game_version_cache do
+    if :ets.whereis(@game_version_cache) == :undefined do
+      try do
+        :ets.new(@game_version_cache, [:named_table, :public, read_concurrency: true])
+      rescue
+        ArgumentError -> @game_version_cache
+      end
+    else
+      @game_version_cache
+    end
+  end
 
   @doc """
   Checks whether an action is allowed for unauthenticated callers (e.g. auth login, register, anonymous).
@@ -210,6 +297,7 @@ defmodule Exoforge.Std.Transport do
   """
   @spec http_status(term()) :: non_neg_integer()
   def http_status(:service_not_found), do: 404
+  def http_status(:upgrade_required), do: 426
   def http_status({:action_not_found, _}), do: 404
   def http_status(:unauthorized), do: 401
   def http_status(:forbidden_scope), do: 403
