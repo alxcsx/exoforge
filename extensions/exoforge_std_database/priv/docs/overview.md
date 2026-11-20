@@ -1,6 +1,6 @@
 ---
 nav: Overview
-summary: The helper every extension uses for `Get`, `Put`, `All`, `Delete`, `Query` and `Execute.
+summary: Get, put, query and execute on an extension's own schema.
 ---
 # Database
 

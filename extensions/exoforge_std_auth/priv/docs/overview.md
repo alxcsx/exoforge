@@ -1,6 +1,6 @@
 ---
 nav: Overview
-summary: Accounts, sessions (an access token plus a single-use refresh token), roles and scopes.
+summary: Accounts, sessions, roles and scopes.
 ---
 # Auth
 

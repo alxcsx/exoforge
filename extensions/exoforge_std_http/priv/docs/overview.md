@@ -1,6 +1,6 @@
 ---
 nav: Overview
-summary: The REST transport on port 4001, with OpenAPI routes derived from the service contracts .
+summary: The REST transport and CORS settings (port 4001).
 ---
 # HTTP transport
 

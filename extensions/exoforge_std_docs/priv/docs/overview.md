@@ -1,6 +1,6 @@
 ---
 nav: Overview
-summary: The Developer Guide, the live API catalog and the PDF export.
+summary: The Developer Guide, API catalog and PDF export.
 ---
 # Docs
 

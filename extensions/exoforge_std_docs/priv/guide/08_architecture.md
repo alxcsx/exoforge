@@ -15,14 +15,14 @@ Technical reference for .NET OS process isolation, stdio wire frames, and ahead-
 Communication between the host cluster supervisor (Elixir BEAM) and the native C# worker process (`.NET`) takes place over standard I/O (`stdin`/`stdout`) using newline-delimited JSON frames:
 
 - **Host-to-Worker Process IPC Only**: Game clients (Unity) never speak this protocol; clients communicate over WebSocket (`:ws`) or REST (`:http`).
-- **Zero Reflection Overhead**: Roslyn-generated entry points dispatch actions directly to static method delegates.
+- **No Reflection Over Your Actions**: Roslyn-generated entry points call your action methods directly, with no lookup by name at run time.
 
 ### Wire Frame Types & Triggers
 
 | Frame `type` | Direction | What Triggers This Frame | Carries |
 |---|---|---|---|
 | `hello` | Host ➔ Worker | Host spawns the native OS process. Initiates capability handshake. | `protocol: 1`, `host: "exoforge"`, `capabilities: ["action_result", "host_call", "host_log", "lifecycle_result"]` |
-| `hello` | Worker ➔ Host | Worker starts and answers within 5-second timeout, declaring what it can receive. | `protocol: 1`, `plugin: "<name>"`, `capabilities: ["action", "event", "host_call_result"]` plus optional `"lifecycle"` |
+| `hello` | Worker ➔ Host | Worker starts and answers within 5-second timeout, declaring what it can receive. | `protocol: 1`, `plugin: "<extension id>"` (the field keeps its early name), `capabilities: ["action", "event", "host_call_result"]` plus optional `"lifecycle"` |
 | `action` | Host ➔ Worker | A player calls an action, or a background cron triggers a scheduled task. | `id: <integer>`, `action: "method_name"`, `payload: { ... }` |
 | `action_result` | Worker ➔ Host | The C# action method finishes execution (or throws an unhandled exception). | `id: <integer>`, `status: "ok" \| "error"`, `data: { ... }` or `error: { "code": "...", "message": "..." }` |
 | `event` | Host ➔ Worker | An event that this extension subscribed to is published on the cluster event bus. | `event: "topic.name"`, `payload: { ... }` |
@@ -43,10 +43,10 @@ Communication between the host cluster supervisor (Elixir BEAM) and the native C
 
 Game extensions in Exoforge are native C# compiled to a **framework-dependent single file**:
 
-- **Zero Reflection at Runtime**: The `Exoforge.Plugin.Generator` Roslyn source generator runs during compilation. It emits the dispatch table (`ExoforgeDispatch`) and entry point (`ExoforgeEntryPoint`), so the runtime invokes actions via direct static delegates without `System.Reflection`.
+- **No Reflection Over Your Actions**: The `Exoforge.Plugin.Generator` Roslyn source generator runs during compilation. It emits the dispatch table (`ExoforgeDispatch`) and entry point (`ExoforgeEntryPoint`), so your action methods are called directly. The SDK still reflects to serialize records, which is cheap on a framework-dependent build.
 - **Framework-Dependent, Not Trimmed**: The extension carries its own IL and dependencies and takes the runtime from the host, so the published binary is a few hundred kilobytes without any trimming. `Directory.Build.targets` strips `PublishAot`, `PublishTrimmed`, `SelfContained` and `PublishSingleFile` on purpose: trimming an extension that is reflected over by the host is a class of bug worth not having, and a framework-dependent file deploys to any host image that already has .NET.
 - **Pure C# Records**: Data contracts are typed C# records with parameter names matching action arguments. The SDK owns JSON serialization, and generated stubs preserve end-to-end typing from server to client.
-- **Multi-Engine Isolated Storage**: Extensions access the database through `Exo.Database`, which scopes queries and KV storage to the extension's own schema — `plugin_<extension_id>`, inside a per-instance database named `exoforge_<extension_id>`. Both prefixes are configurable (`:schema_prefix`, `:db_prefix`), so an operator can separate tenants without touching extension code.
+- **Multi-Engine Isolated Storage**: Extensions access the database through `Exo.Database`, which scopes queries and KV storage to the extension's own schema — `plugin_<extension_id>` (the prefix keeps its early name), inside a per-instance database named `exoforge_<extension_id>`. Both prefixes are configurable (`:schema_prefix`, `:db_prefix`), so an operator can separate tenants without touching extension code.
 
 ---
 

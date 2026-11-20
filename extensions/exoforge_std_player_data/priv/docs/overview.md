@@ -1,6 +1,6 @@
 ---
 nav: Overview
-summary: The canonical player profile and key-value store, with lifecycle events for creation and.
+summary: Player profiles and a key-value store per player.
 ---
 # Player data
 

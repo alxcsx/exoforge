@@ -17,6 +17,9 @@ Exoforge combines **long-running stateful native C# processes**, **isolated rela
 
 ---
 
+> [!NOTE]
+> These blueprints are design sketches that show how the pieces combine. They are not shipped samples and are not compiled by the build; for code that runs, read [The Arcade](guide:06_arcade_walkthrough).
+
 ## How Exoforge differs from PlayFab & UGS
 
 | Dimension | PlayFab (CloudScript) | Unity Gaming Services (Cloud Code) | Exoforge Native Extensions |

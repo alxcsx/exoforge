@@ -1,6 +1,6 @@
 ---
 nav: Overview
-summary: The gateway behind `ws` and `http`: framing, dispatch to the kernel, and the game-versio.
+summary: The gateway shared by ws and http, with the game-version check.
 ---
 # Transport gateway
 

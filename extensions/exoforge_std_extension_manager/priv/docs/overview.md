@@ -1,6 +1,6 @@
 ---
 nav: Overview
-summary: Upload, reload and removal of extensions, and the export of their manifests.
+summary: Upload, reload and remove extensions.
 ---
 # Extension manager
 

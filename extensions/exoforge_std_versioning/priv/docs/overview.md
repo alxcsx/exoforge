@@ -1,6 +1,6 @@
 ---
 nav: Overview
-summary: Game versions (`dev`, `live`, `outdated`, `blocked`, at most three not blocked) and the .
+summary: Game versions, their statuses and the extension versions they lock.
 ---
 # Versioning
 

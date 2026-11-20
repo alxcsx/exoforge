@@ -1,6 +1,6 @@
 ---
 nav: Overview
-summary: The Producer Studio web app (port 4005), hosting the Overview, the extension inspector a.
+summary: The Producer Studio web app (port 4005).
 ---
 # Studio
 

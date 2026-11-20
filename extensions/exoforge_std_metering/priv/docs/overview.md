@@ -1,6 +1,6 @@
 ---
 nav: Overview
-summary: Usage per extension and action (invocations, errors, latency, bytes), persisted on the i.
+summary: Usage counters per extension and action.
 ---
 # Metering
 

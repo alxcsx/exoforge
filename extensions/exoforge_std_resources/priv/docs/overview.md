@@ -1,6 +1,6 @@
 ---
 nav: Overview
-summary: Turns `[ExoResource]` declarations into tables, reconciles them on deploy, and serves th.
+summary: Turns resource declarations into tables and keeps them in line.
 ---
 # Resource store
 

@@ -1,6 +1,6 @@
 ---
 nav: Overview
-summary: The realtime transport on port 4000: it carries actions and event subscriptions over a W.
+summary: The realtime WebSocket transport (port 4000).
 ---
 # WebSocket transport
 

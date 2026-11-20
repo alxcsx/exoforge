@@ -1,6 +1,6 @@
 ---
 nav: Overview
-summary: Binary assets with metadata.
+summary: Binary assets in public or private buckets.
 ---
 # File bucket
 

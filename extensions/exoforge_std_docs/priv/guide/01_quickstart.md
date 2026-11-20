@@ -55,7 +55,7 @@ public class GameInitializer : MonoBehaviour
 
 Scaffold clean, modern C# backend services in seconds.
 
-In Unity Studio, navigate to the **Extensions** tab and click **New Extension...**. Choose the standard template. Studio creates the extension solution outside `Assets/`, so modern C# and .NET features work without Unity compiling them.
+In Unity Studio, navigate to the **Extensions** tab and click **New Extension...**. Choose the `standard` template to start (`persistent`, `config` and `events` add a table, a settings record and event publishing). Studio creates the extension solution outside `Assets/`, so modern C# and .NET features work without Unity compiling them.
 
 ```csharp
 using System;
@@ -83,17 +83,7 @@ public record CalculateScoreResponse(int TotalScore, DateTime CalculatedAt);
 > [!NOTE]
 > Extensions execute as supervised native .NET processes. Use modern C# records, type-safe APIs, and throw canonical `ExoActionException` for domain errors.
 
-If the extension needs to seed data or warm a cache after the protocol handshake, add an optional parameterless hook:
-
-```csharp
-public void OnExtensionStart()
-{
-    // Runs once per extension process after the handshake and resource migration.
-    // Keep it idempotent; it also runs after a restart.
-}
-```
-
-`OnExtensionStart()` needs no attribute. It is optional, and an extension without it starts normally.
+To seed data or warm a cache when the extension starts, add an optional `OnExtensionStart()` method; see [the lifecycle hook](guide:03_csharp_attributes#onextensionstart-lifecycle-hook).
 
 ---
 
@@ -167,3 +157,14 @@ Enter Play Mode and trigger the call. The Unity Console prints the returned scor
 - [C# attributes](guide:03_csharp_attributes): everything you can declare on a service, action, event, resource and column.
 - [Versions & Migrations](guide:04_versions_and_migrations): change your tables and code while players are online.
 - [The Arcade, piece by piece](guide:06_arcade_walkthrough): real extensions that use all of the above.
+
+## Words you will meet
+
+| Word | Meaning here |
+|---|---|
+| **Extension** | A server-side service you write in C#; it runs as its own process and is deployed on its own. |
+| **Action** | A method a client or another extension can call (`[ExoAction]`). |
+| **Scope** | The role a caller needs to run an action: `guest`, `player`, `service`, `studio` or `admin` (see [the attribute reference](guide:03_csharp_attributes#exoaction)). |
+| **Resource** | A record type stored as a database table (`[ExoResource]`). |
+| **Manifest** | The `manifest.json` the build writes: the extension's actions, events and resources, which the server and the generated Unity client both read. |
+| **Stub** | The typed client code generated from a manifest, so calls are checked at compile time. |

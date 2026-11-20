@@ -459,3 +459,23 @@ public class EconomyService
 
 - **Type-Safe Table Repository (`Exo.Database.Table<T>()`):** Pure C# CRUD with auto-resolved table names, primary keys, and singleton lookups. Zero SQL strings needed.
 - **Parameterized Raw SQL (`Exo.Database.Query<T>()`):** High-performance SQL queries with positional `$1, $2, ...` arguments, automatic record mapping, and atomic in-place updates.
+
+## Plugs
+
+A plug is middleware you write around the SDK: it sees every action call or every database call of your extension and can log, change, refuse or answer it. Register plugs once, for example in `OnExtensionStart()`; the first registered runs outermost, and with none registered a call goes straight through.
+
+```csharp
+public sealed class AuditPlug : IActionPlug
+{
+    public object? Invoke(ActionCall call, Func<object?> next)
+    {
+        Exo.Logger.Info($"{call.Action} by {call.PlayerId ?? "anonymous"} (game {call.GameVersion ?? "unknown"})");
+        return next();   // or throw new ExoActionException("code", "message") to refuse the call
+    }
+}
+
+// in OnExtensionStart():
+ExoPlugs.Use(new AuditPlug());
+```
+
+`IActionPlug` wraps every action; `IDatabasePlug` wraps `Get`, `All`, `Put` and `Delete` on the stored JSON, and you override only the calls you need. Plugs run outside the built-in row migration, so they see rows as stored.

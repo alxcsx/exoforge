@@ -1,6 +1,6 @@
 ---
 nav: Overview
-summary: Runs the schedules declared with `[ExoCron]` and lets the Studio list and trigger them.
+summary: Runs scheduled jobs and lets the Studio trigger them.
 ---
 # Cron
 

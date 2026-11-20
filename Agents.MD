@@ -243,7 +243,7 @@ newline-delimited JSON with a `type`:
 | type | direction | carries |
 | :--- | :--- | :--- |
 | `hello` | host → extension | `protocol`, `host`, `capabilities`, `dialect`? (e.g. `postgres`) |
-| `hello` | extension → host | `protocol`, `extension`, `capabilities` |
+| `hello` | extension → host | `protocol`, `plugin` (the extension id), `capabilities` |
 | `action` / `action_result` | host → extension / back | `id`, `action`, `payload` / `status`, `data` or `error` |
 | `event` | host → extension | `event`, `payload` |
 | `host_call` / `host_call_result` | extension → host / back | `id`, `op` (`emit_event`, `call_action`, `db_get`, `db_all`, `db_put`, `db_delete`, `db_batch`, `log`, `clock_now`), `args` / `result` |

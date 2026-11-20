@@ -1,6 +1,6 @@
 ---
 nav: Overview
-summary: The storage driver layer: connections, pools, schemas, roles, DDL and the migration runn.
+summary: Connections, pools, schemas and migrations for the database engine.
 ---
 # Storage driver layer
 

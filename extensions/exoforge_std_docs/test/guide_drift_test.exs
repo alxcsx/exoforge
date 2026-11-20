@@ -164,6 +164,22 @@ defmodule Exoforge.Std.GuideDriftTest do
     end
   end
 
+  test "every error code the troubleshooting chapter explains exists in the code" do
+    skip_without_repo()
+
+    sources =
+      ["core/lib/**/*.ex", "extensions/*/lib/**/*.ex", "sdk/csharp/**/*.cs"]
+      |> Enum.flat_map(&Path.wildcard(Path.join(@repo, &1)))
+      |> Enum.reject(&String.contains?(&1, ["/obj/", "/bin/"]))
+      |> Enum.map(&File.read!/1)
+      |> Enum.join("\n")
+
+    for [_, codes] <- Regex.scan(~r/^\|\s*((?:`[a-z_]+`(?:,\s*)?)+)\s*\|/m, chapter("11_troubleshooting")),
+        [_, code] <- Regex.scan(~r/`([a-z_]+)`/, codes) do
+      assert sources =~ code, "11_troubleshooting explains `#{code}`, which no code mentions"
+    end
+  end
+
   defp skip_without_repo do
     unless File.exists?(@attributes), do: flunk("the repository sources were not found; run the drift tests from a checkout")
   end

@@ -66,20 +66,6 @@ Migrations run in order of `To`, all inside one transaction, and the result is v
 
 The message says which game versions and how many rows. If the `versioning` extension is installed but does not answer, the drop is refused too: the answer is unknown and a drop cannot be undone.
 
-## When a row needs code: `[ExoRowMigration]`
-
-Some changes are not an `ALTER`: splitting a field, recomputing a value. Write a static method that turns the old row into the new record:
-
-```csharp
-[ExoRowMigration(typeof(AchievementDef), To = "2.0.0")]
-public static AchievementDef Up(JsonElement oldRow) =>
-    new(oldRow.GetProperty("id").GetString()!, ...);
-```
-
-The SDK runs it the first time a row stamped below `2.0.0` is read (`Get`, `All`, `Query<T>`) and writes the result back once, guarded so two callers cannot both win. A background sweeper migrates the rows nobody reads, 100 every 2 seconds, so a later `[ExoDrop]` is not blocked by players who never return.
-
-Do not use a declarative migration and a row migration for the same version.
-
 ## Game versions and old clients
 
 The client sends its game version when it signs in (Unity uses `Application.version`). The `versioning` extension keeps the list:
@@ -93,12 +79,33 @@ The client sends its game version when it signs in (Unity uses `Application.vers
 
 At most three versions are not blocked (`max_active_versions`). Promoting a new one blocks the oldest `outdated`. With **no** game version registered, versioning is off and every client is served: you opt in by registering your first version.
 
+## Advanced
+
+<details>
+<summary>Changing data per row, keeping old clients working, and tables you own</summary>
+
+### When a row needs code: `[ExoRowMigration]`
+
+Some changes are not an `ALTER`: splitting a field, recomputing a value. Write a static method that turns the old row into the new record:
+
+```csharp
+[ExoRowMigration(typeof(AchievementDef), To = "2.0.0")]
+public static AchievementDef Up(JsonElement oldRow) =>
+    new(oldRow.GetProperty("id").GetString()!, ...);
+```
+
+The SDK runs it the first time a row stamped below `2.0.0` is read (`Get`, `All`, `Query<T>`) and writes the result back once, guarded so two callers cannot both win. A background sweeper migrates the rows nobody reads, 100 every 2 seconds, so a later `[ExoDrop]` is not blocked by players who never return.
+
+Do not use a declarative migration and a row migration for the same version.
+
+### Keeping old clients working
+
 Two things protect an old client from new data:
 
 - **Action revisions.** Keep the old behavior under the same name with `[ExoAction("score", FromVersion = "2.0.0")]` on the new method. A caller whose game version locks the extension below `2.0.0` gets the previous method, everyone else the newest. Delete a revision once no served game version needs it.
 - **`client_outdated`.** If a row has already been through a row migration that the caller's game version predates, the read answers `client_outdated` instead of returning a shape the old client cannot understand. The client raises the same `OnUpgradeRequired` path.
 
-## Opting out: tables you own
+### Opting out: tables you own
 
 ```csharp
 [ExoResource("orders", SchemaVersioningMode = SchemaVersioningMode.Manual)]
@@ -106,22 +113,9 @@ Two things protect an old client from new data:
 
 A `Manual` resource gets no `_v`, no automatic ALTERs, no gate. You write plain SQL files `migrations/0001_name.sql` and apply them with `exo db migrate <extension>`. At deploy Exoforge only checks that the table matches the record; a mismatch fails that extension alone and is never rebuilt, even in `reset` mode. Auto and Manual resources can sit side by side in one extension.
 
-## Adding your own behavior: plugs
+</details>
 
-Anything beyond the above (a versioned config, an audit trail, a per-version rule) is a plug, written by you on top of the SDK:
-
-```csharp
-public sealed class RequireRecentClient : IActionPlug
-{
-    public object? Invoke(ActionCall call, Func<object?> next) =>
-        call.GameVersion == "0.9" ? throw new ExoActionException("upgrade_required", "Update the game") : next();
-}
-
-// in OnExtensionStart():
-ExoPlugs.Use(new RequireRecentClient());
-```
-
-`IActionPlug` wraps every action; `IDatabasePlug` wraps `Get`, `All`, `Put` and `Delete` on the stored JSON (override only what you need). Plugs run first-registered-outermost, outside the built-in row migration.
+To add rules of your own around actions or data (an audit trail, a per-version rule), write a [plug](guide:03_csharp_attributes#plugs).
 
 > [!NOTE]
 > The versioning extension, row stamps and migrations apply to the extensions **you** write. The standard extensions that ship with the server (`auth`, `player_data`, `metering`, ...) are versioned by the server release instead and are `Manual`: their tables change with their own SQL migrations.

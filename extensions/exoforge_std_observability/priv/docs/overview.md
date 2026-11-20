@@ -1,6 +1,6 @@
 ---
 nav: Overview
-summary: Event history, request timelines, failure groups and the live tail, with an archive and .
+summary: Event history, request timelines and failure groups.
 ---
 # Observability
 
