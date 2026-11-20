@@ -105,9 +105,9 @@ By default, `Mode` is set to `ActionMode.Auto`, which is recommended for almost 
 |---|---|---|---|
 | Name (positional) | string | Method name | Wire action name. When omitted, automatically converted from method PascalCase to `snake_case` (e.g. `TransferItem` → `transfer_item`). |
 | Mode | ActionMode | `ActionMode.Auto` | Execution mode (`Auto`, `Sync`, `Async`, `Cast`). `Auto` infers from return type: `Task`/`Task<T>` becomes `:async`, concrete returns become `:sync`. Set `Cast` for fire-and-forget. |
-| Scope | string | `"player"` | Minimum authorization scope required to invoke (`"guest"`, `"player"`, `"studio"`, `"admin"`). The dispatcher enforces it before the action runs; internal calls bypass it. |
-| Transport | ActionTransport | `ActionTransport.Auto` | Preferred transport mechanism (`Auto`, `WebSocket`, `Http`, `Webhook`). |
+| Scope | string | `"player"` | Minimum authorization scope required to invoke (`"guest"`, `"player"`, `"service"`, `"studio"`, `"admin"`; `"service"` is for trusted servers such as a game server or a CI job, and sits below `studio`). The dispatcher enforces it before the action runs; internal calls bypass it. |
 | Service | string | `null` | Owning service name when a single extension provides multiple `[ExoService]` contracts. Defaults to the primary service. |
+| FromVersion | string | `null` | Starts an action *revision* at this extension version (`"2.0.0"`). Several methods may share one action name when each has its own `FromVersion`: a caller whose game version locks the extension below it gets the previous revision, everyone else the newest. See the Versions chapter. |
 
 ```csharp
 [ExoAction(Scope = "player")]
@@ -204,7 +204,7 @@ ExoServices.PlayerData.OnPlayerCreated += evt => Debug.Log(evt.PlayerId);
 
 **Source / Provider:** Database & Resource Store Extensions (`exoforge_std_database`, `exoforge_std_resources`)
 
-Declares a typed entity record mapped directly to PostgreSQL storage. The Roslyn generator extracts typed columns, indexes, and primary keys to produce database tables without manual migration files.
+Declares a typed entity record mapped directly to PostgreSQL storage. The Roslyn generator extracts typed columns, indexes, and primary keys to create and evolve the database tables. Safe changes (a new column, a rename) apply on deploy; a change that would destroy data is refused until you declare it with an `[ExoMigration]` (see the Versions chapter).
 
 ### [ExoResource] Parameters
 
@@ -216,6 +216,7 @@ Declares a typed entity record mapped directly to PostgreSQL storage. The Roslyn
 | Singleton | bool | `false` | Indicates whether this resource stores exactly one record (e.g. server configuration). Creates a default record when empty and renders as a single form in Studio. (Or use `[ExoSingletonResource]`). |
 | DrawerTabs | string[] | `["overview"]` | Tab sections displayed when inspecting a row in the Studio drawer (e.g. `new[] { "overview", "attributes" }`). |
 | ResourceType | Type | `null` | Explicit record type when declared on a service class via `[ExoService(Resources = ...)]`. |
+| SchemaVersioningMode | SchemaVersioningMode | `Auto` | `Auto`: Exoforge keeps the table in line with the declaration (row stamps, migrations, deploy gates). `Manual`: your studio owns the table and its SQL migrations; Exoforge only checks at deploy that it matches. See the Versions chapter. |
 | AllowPlayerRead | bool | `false` | Makes the whole resource readable by player-scoped callers through `resource_store.list`/`get`. Enable only for public data (leaderboards, catalogues, config); it is not row-scoped. |
 
 ### [ExoColumn] Parameters

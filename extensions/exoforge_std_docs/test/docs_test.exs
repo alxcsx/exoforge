@@ -96,6 +96,24 @@ defmodule Exoforge.Std.DocsTest do
       assert Enum.any?(chapters, &(&1.id == "02_csharp_attributes"))
       assert Enum.any?(chapters, &(&1.id == "03_architecture"))
       assert Enum.any?(chapters, &(&1.id == "04_use_cases_and_patterns"))
+      assert Enum.any?(chapters, &(&1.id == "05_versions_and_migrations"))
+      assert Enum.any?(chapters, &(&1.id == "06_arcade_walkthrough"))
+    end
+
+    test "no chapter documents an attribute property that no longer exists" do
+      attributes = Path.expand("../../../sdk/csharp/Exoforge.Plugin.SDK/Attributes.cs", __DIR__)
+
+      if File.exists?(attributes) do
+        source = File.read!(attributes)
+        {:ok, %{chapters: chapters}} = Docs.list_chapters()
+
+        for %{id: id} <- chapters do
+          {:ok, %{chapter: %{html: html}}} = Docs.get_chapter(%{id: id})
+          refute html =~ "ActionTransport", "#{id} still documents ActionTransport"
+        end
+
+        refute source =~ "enum ActionTransport"
+      end
     end
 
     test "get_chapter returns chapter content and rendered html" do

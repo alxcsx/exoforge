@@ -4,7 +4,7 @@ A hands-on tutorial: create a native C# extension, deploy it with Unity Studio, 
 
 ## Prerequisites
 
-- Unity 2022.3 or newer with the **Exoforge SDK** package installed (`com.exoforge.sdk` 0.1.41+).
+- Unity 2022.3 or newer with the **Exoforge SDK** package installed (`com.exoforge.sdk`, a current release).
 - .NET 9 is the minimum required SDK. Install it from the [official .NET download page](https://dotnet.microsoft.com/download). The Unity editor validates it before building an extension.
 
 Exoforge lets you write strongly-typed native C# extensions that compile locally, deploy into a supervised extension runtime, and sync into Unity client code without manual networking boilerplate.
