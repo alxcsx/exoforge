@@ -53,7 +53,7 @@ defmodule Exoforge.ExtensionBootstrapper do
         Enum.map_join(changes, "; ", fn change ->
           column = if change[:column], do: ".#{change.column}", else: ""
           decl = if change[:decl], do: " [#{change.decl}]", else: ""
-          "#{change.table}#{column}#{decl} (#{change.change}): #{change.reason}"
+          "#{Map.get(change, :table, table)}#{column}#{decl} (#{change.change}): #{change.reason}"
         end)
 
       "extension #{id} cannot bring #{table} to its declared shape: #{where}. #{hint}"

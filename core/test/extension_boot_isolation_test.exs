@@ -241,6 +241,27 @@ defmodule Exoforge.ExtensionBootIsolationTest do
       assert ExtensionRegistry.get_failure(:healthy) == nil
     end
 
+    test "the message is built even when a change names no table of its own" do
+      StubResourceStore.answer(
+        {:error,
+         {:unsafe_schema_change,
+          %{
+            extension: "stores",
+            table: "inventory",
+            changes: [%{column: "qty", change: :add_column, reason: "Cannot add NOT NULL column without a default", decl: "Item.cs:9"}, %{column: nil, change: :version, reason: "table is at version 2"}],
+            hint: "Add a migration."
+          }}}
+      )
+
+      stores = with_resources(manifest(:stores, RaisingRunner, [:svc_stores]))
+      ExtensionBootstrapper.run(Driver, [stores])
+
+      assert %{stage: :storage, message: message} = ExtensionRegistry.get_failure(:stores)
+      assert message =~ "inventory.qty [Item.cs:9] (add_column): Cannot add NOT NULL column without a default"
+      assert message =~ "inventory (version): table is at version 2"
+      refute message =~ "KeyError"
+    end
+
     test "a dependent of an extension whose storage failed is blocked" do
       StubResourceStore.answer({:error, {:migration_failed, %{table: "inventory"}}})
 
