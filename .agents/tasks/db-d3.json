@@ -1,0 +1,26 @@
+{
+  "goal": "You are ONE worker (no subagents). Work in worktree /Users/alexcs/projects/exoforge-wt/d3 (branch wt/d3 already exists off projetao_mvp; commit there; no pushes/merges, no AI co-author trailers; follow .agents/handoff/wt-common.md; read docs/adr/002 and 003 first). Postgres for tests: start a temporary one with `/opt/homebrew/bin/initdb -D <tmp>/data -U postgres --auth=trust` and `/opt/homebrew/bin/pg_ctl -D <tmp>/data -o '-p 54329 -k <tmp>' start`, use PGHOST=127.0.0.1 PGPORT=54329 PGUSER=postgres PGPASSWORD=x, stop and delete it afterwards; another worker may use the same port for a spike, so if 54329 is taken use 54330; never touch 5432/4001. If ask --reply fails write the report to .agents/handoff/db-d3-report.md. Task: batched atomic writes in one stdio round trip. SDK: `Exo.Database.Transaction(Action<ITransaction>)` and `ExecuteBatch(IEnumerable<...>)`; the lambda only RECORDS operations (Execute(sql,args), Put, Delete; no reads inside, document that), then one new host_call op `db_batch` carries the ordered list to the host; the host (core/lib/drivers/runtime/native_extension_runner.ex run_host_call plus the database extension, Postgres adapter via Postgrex.transaction) runs them in ONE transaction and rolls everything back on any failure, returning a structured error naming the failing index; the same extension-schema isolation and the declared-dependency check as db_put/Database.Query apply. Use the existing interpolated-SQL helper (QuerySql/ExecuteSql) pattern where natural. HostBridge.cs, Interfaces.cs/DatabaseExtensions.cs, Plugin.SDK.Tests, core/test native_extension_runner_test.exs, a Postgres test in extensions/exoforge_std_database that proves atomic rollback; document in Agents.MD wire table (new host_call op) and the extensions skill SKILL.md. Do not bump the SDK version (D8). ",
+  "context": [
+    ".agents/handoff/db-improvement-plan.md",
+    ".agents/handoff/wt-common.md",
+    "docs/adr/002-database-read-grants.md",
+    "docs/adr/003-postgres-only.md",
+    "extensions/exoforge_std_database/lib/exoforge/std/database/adapters/postgres.ex",
+    "core/lib/drivers/runtime/native_extension_runner.ex",
+    "sdk/csharp/Exoforge.Plugin.SDK/HostBridge.cs"
+  ],
+  "files": [
+    "core",
+    "extensions/exoforge_std_database",
+    "sdk/csharp/Exoforge.Plugin.SDK",
+    "sdk/csharp/Exoforge.Plugin.SDK.Tests",
+    "sdk/unity/Exoforge.SDK/Agents~",
+    "Agents.MD",
+    ".agents/handoff"
+  ],
+  "accept": [
+    "D3: dotnet test sdk/csharp/Exoforge.Plugin.SDK.Tests (paste summary; new tests fail before); cd core && mix test test/native_extension_runner_test.exs test/extension_protocol_test.exs (paste summary); cd extensions/exoforge_std_database && mix test with the temp Postgres up (paste summary, includes the rollback test which fails before); dotnet build extensions_csharp/sample_plugin",
+    "git log --oneline -1 wt/d3"
+  ],
+  "report_max_lines": 15
+}

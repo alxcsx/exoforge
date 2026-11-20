@@ -1,0 +1,12 @@
+{
+  "goal": "Feature: Exoforge.Plugin.SDK has no [ExoSeed]; extension authors write a manual [ExoAction(Scope = \"studio\")] action to seed initial rows. Add a seed hook to Exoforge.Plugin.SDK + Exoforge.Plugin.Generator: an attribute [ExoSeed] on a method of the extension root (void or Task, no parameters, like the existing OnExtensionStart lifecycle hook) that the generated dispatch runs once after OnExtensionStart on every start. It must be idempotent by contract (authors check before inserting), and a throwing seed must log and fail the lifecycle like OnExtensionStart does. Reuse the existing lifecycle plumbing (generator DispatchEmitter / ExtensionHost lifecycle frame handling, AGENTS.md 'lifecycle' section); no new wire frame. Add generator + Plugin.SDK tests that fail before the change (seed method detected, runs after OnExtensionStart, runs once per start, error path). Document it in Agents.MD (extension runtime section) and sdk/unity/Exoforge.SDK/Agents~/skills/exoforge-extensions/SKILL.md. Do NOT bump the SDK version (already 0.1.55). No AI/Claude co-author trailers in commits. Work ONLY in /Users/alexcs/projects/exoforge-wt/exo-seed (branch wt/exo-seed); commit there; no push, no merge. Follow .agents/handoff/wt-common.md.",
+  "context": [".agents/handoff/wt-common.md", "sdk/csharp/Exoforge.Plugin.Generator/DispatchEmitter.cs", "sdk/csharp/Exoforge.Plugin.SDK"],
+  "files": ["sdk/csharp/Exoforge.Plugin.SDK", "sdk/csharp/Exoforge.Plugin.SDK.Tests", "sdk/csharp/Exoforge.Plugin.Generator", "sdk/csharp/Exoforge.Plugin.Generator.Tests", "Agents.MD", "sdk/unity/Exoforge.SDK/Agents~"],
+  "accept": [
+    "cd /Users/alexcs/projects/exoforge-wt/exo-seed && /Users/alexcs/.local/bin/mise exec dotnet@10.0.400 -- dotnet test sdk/csharp/Exoforge.Plugin.Generator.Tests and sdk/csharp/Exoforge.Plugin.SDK.Tests (paste both summary lines)",
+    "new tests fail on the pre-fix code and pass after (paste a failing assertion)",
+    "file:line of the attribute, the generator detection, and the lifecycle call",
+    "git show --stat HEAD"
+  ],
+  "report_max_lines": 15
+}

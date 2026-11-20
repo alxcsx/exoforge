@@ -1,0 +1,12 @@
+{
+  "goal": "Third Postgres arcade pass (item 3 of .agents/handoff/NEXT.md) after F34/F35 were merged into /Users/alexcs/projects/exoforge (projetao_mvp). Start the backend from the CURRENT checkout on a FRESH Postgres database and a fresh EXOFORGE_DATA_DIR temp dir (after `mise exec -- mix deps.compile --force`), redeploy all 7 arcade extensions in /Users/alexcs/projects/exoforge-arcade, MINT A NEW service token for the mock game server on the fresh instance (`exo user create <email> --role service` then `exo user token <id>`, as the admin; write it to the local, never-committed Exoforge/mock-game-server.token) so dungeon/achievements do not 401 on a stale token, then run tools/smoke.sh and SetUpAll in Unity. Every failure is a new F-number (F36+) appended to .agents/SAMPLES_FINDINGS.md with repro, error text, suspected file:line. DIAGNOSE ONLY: no platform or sample edits. Never commit arcade Exoforge/exoforge.json or mock-game-server.token. Tear the stack down at the end. Use Gemini models only.",
+  "context": [".agents/handoff/NEXT.md", ".agents/SAMPLES_FINDINGS.md"],
+  "files": [".agents/SAMPLES_FINDINGS.md"],
+  "accept": [
+    "paste the line proving adapter Postgres, and the deploy result per extension (all 7)",
+    "bash /Users/alexcs/projects/exoforge-arcade/tools/smoke.sh (paste pass/fail for each of economy, dungeon, achievements, doodle, menu)",
+    "SetUpAll in Unity: paste result",
+    "new F-numbers with one-line cause each (or 'none')"
+  ],
+  "report_max_lines": 15
+}

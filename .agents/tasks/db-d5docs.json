@@ -1,0 +1,11 @@
+{
+  "goal": "Docs only. Work in worktree /Users/alexcs/projects/exoforge-wt/d5docs (branch wt/d5docs exists off projetao_mvp; commit there; no pushes/merges; no AI co-author trailers). Read .agents/handoff/db-d5-spike.md. It proved that ADR 002 Decision 2 as written (one pool user plus `SET LOCAL ROLE ext_<id>` per query) is not a security boundary: free SQL can `SET ROLE`/`RESET ROLE` out of it. Rewrite ONLY Decision 2 in docs/adr/002-database-read-grants.md to the design the spike verified: a LOGIN role per extension, each extension's pool connects as its own role (no SET ROLE at query time), the admin pool (CREATEROLE, not superuser) provisions roles/schemas/grants idempotently on boot, grants for a declared reader are executed as the owner role, per-role statement_timeout, uninstall revokes as grantor before DROP OWNED/DROP ROLE, and the fallback when CREATEROLE is unavailable (refuse db_read at boot with a clear error). Add 2-3 lines under Consequences about the CREATEROLE requirement and the migration of existing schemas. Keep the ADR at most 60 lines. Fix any sentence in docs/adr/003-postgres-only.md or Agents.MD that repeats the old SET LOCAL ROLE mechanism (grep for `SET LOCAL ROLE`). Do not touch code.",
+  "context": [".agents/handoff/db-d5-spike.md", "docs/adr/002-database-read-grants.md"],
+  "files": ["docs/adr", "Agents.MD"],
+  "accept": [
+    "grep -rn 'SET LOCAL ROLE' docs/adr Agents.MD returns nothing (paste)",
+    "wc -l docs/adr/002-database-read-grants.md (<= 60)",
+    "git log --oneline -1 wt/d5docs"
+  ],
+  "report_max_lines": 6
+}

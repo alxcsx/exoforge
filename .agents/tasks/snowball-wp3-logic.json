@@ -1,0 +1,21 @@
+{
+  "goal": "Implement WP3 (WorldBossExtension logic) from section 5 and section 1 of the plan in /Users/alexcs/projects/exoforge/.agents/handoff/snowball-plan.md. This is the CRITICAL package: the exactly-once payout under concurrent hits. Read the whole plan section 1 first and implement it EXACTLY: overwrite the placeholder extensions/world_boss/src/WorldBossExtension.cs (the only file you may edit). Actions report_hit (service), get_state (player), spawn_boss (service), cron respawn_boss ([ExoCron(\"*/10 * * * *\",\"respawn_boss\")] plus OnExtensionStart running the same code), the 6-step hit sequence (TryApplyHit -> AddDamage -> Release -> emit boss_damaged -> TryClaimPayout(force:false) for EVERY accepted hit after its Release, so whichever hit finishes last wins the claim -> Pay), idempotent Pay with share_i = floor(Pool*Damage_i/total) in long arithmetic, remainder to rows[0], zero shares skipped, ExoServices.Wallet.CreditOnceAsync with Key=\"payout:\"+bossId+\":\"+playerId, SetLedgerCoins, MarkPaid then emit boss_defeated, Spawn on respawn. public static IBossStore Store {get;set;} = new SqlBossStore(); public static Func<long> Now {get;set;}. All business state goes through IBossStore (never call Exo.Database.Put/Execute from this file except through the store); no new SQL; do not change BossStore.cs or BossModels.cs. Add [ExoDependency(\"wallet\")]. Put the documented crash-window comment on the payout steps. Constants as in the plan (MaxHit=100, DefaultMaxHp=1000, DefaultPool=1000, StaleSeconds=60, BossNames cycle by Generation%3). Error codes: invalid_damage, invalid_player, unauthorized, invalid_hp, boss_alive. Work ONLY in /Users/alexcs/projects/exoforge-arcade-wt/world-boss-logic (branch wp/world-boss-logic; contains WP1, WP2, WP2b; extensions/.feed present). Use `/Users/alexcs/.local/bin/mise exec dotnet@10.0.400 -- dotnet ...` (bare mise exec fails in worktrees). Commit with a plain message, NO AI/Claude/co-author trailers; no push, no merge; install no system packages. Paste REAL output for every acceptance item; empty commits are rejected.",
+  "context": [
+    "/Users/alexcs/projects/exoforge/.agents/handoff/snowball-plan.md",
+    "extensions/world_boss/src/BossStore.cs",
+    "extensions/world_boss/src/BossModels.cs",
+    "extensions/world_boss/src/Generated/PluginServices.g.cs",
+    "extensions/brainrot_market/src/BrainrotMarketExtension.cs",
+    "extensions/adventure_world/src"
+  ],
+  "files": [
+    "extensions/world_boss/src/WorldBossExtension.cs"
+  ],
+  "accept": [
+    "cd /Users/alexcs/projects/exoforge-arcade-wt/world-boss-logic/extensions && /Users/alexcs/.local/bin/mise exec dotnet@10.0.400 -- dotnet build world_boss/src/world_boss.csproj (paste the Warning(s)/Error(s) lines; Error(s) must be 0)",
+    "python3 -c \"import json;m=json.load(open('extensions/world_boss/manifest.json'));print([a['name'] for a in m['services'][0]['actions']])\" (paste; must list report_hit, get_state, spawn_boss and the cron respawn_boss appears in the manifest)",
+    "grep -n 'TryClaimPayout' extensions/world_boss/src/WorldBossExtension.cs (paste; must show the call after Release inside the hit path and the force variant only in the cron path)",
+    "git show --stat HEAD (paste; only WorldBossExtension.cs)"
+  ],
+  "report_max_lines": 12
+}

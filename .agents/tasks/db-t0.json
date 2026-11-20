@@ -1,0 +1,7 @@
+{
+  "goal": "Docs only. Work in worktree /Users/alexcs/projects/exoforge-wt/t0 (`git worktree add -b wt/t0 ../exoforge-wt/t0 projetao_mvp`; commit there; no pushes/merges; no AI co-author trailers). Read .agents/handoff/db-typed-schema-plan.md and write docs/adr/004-typed-resource-schemas.md (<= 60 lines): context (declared resources used an id/data jsonb envelope, which blocked real columns, joins and indexes), the decision and shape exactly as in the plan (typed tables for declared resources, envelope kept for undeclared tables, no extra jsonb, the type mapping table, declarative migration with the safe/unsafe table, `_exo_schema` ledger with schema_hash, jsonb->typed conversion with `_legacy_data`, FK rules), consequences and the explicit-migration escape hatch, and why Ecto is not used. Same style as docs/adr/002 and 003. Add one pointer line in AGENTS.md section 2 next to the existing ADR pointers. Do not touch code or other docs.",
+  "context": [".agents/handoff/db-typed-schema-plan.md", "docs/adr/002-database-read-grants.md", "docs/adr/003-postgres-only.md"],
+  "files": ["docs/adr", "AGENTS.md"],
+  "accept": ["wc -l docs/adr/004-typed-resource-schemas.md (<= 60)", "git log --oneline -1 wt/t0"],
+  "report_max_lines": 5
+}

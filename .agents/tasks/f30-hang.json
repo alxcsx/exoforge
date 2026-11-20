@@ -1,0 +1,11 @@
+{
+  "goal": "F30: sdk/csharp/Exoforge.Plugin.SDK.Tests hung once for 10 min (7 reruns passed). Suspect the host-call reader thread blocking on a real stdin. Reproduce with --blame-hang-timeout, name the root cause from the dump, fix it, add a test that hangs without the fix. Work only in /Users/alexcs/projects/exoforge-wt/f30-hang (branch wt/f30-hang); commit there; do not push, merge or bump SDK version.",
+  "context": [".agents/handoff/wt-common.md", ".agents/handoff/NEXT.md", "sdk/csharp/Exoforge.Plugin.SDK"],
+  "files": ["sdk/csharp/Exoforge.Plugin.SDK", "sdk/csharp/Exoforge.Plugin.SDK.Tests"],
+  "accept": [
+    "cd /Users/alexcs/projects/exoforge-wt/f30-hang && /Users/alexcs/.local/bin/mise exec -- dotnet test sdk/csharp/Exoforge.Plugin.SDK.Tests --blame-hang-timeout 60s",
+    "run the same command 20 times in a loop; all 20 must pass (paste the summary lines)",
+    "git -C /Users/alexcs/projects/exoforge-wt/f30-hang log -1 --oneline  (paste the hash)"
+  ],
+  "report_max_lines": 15
+}

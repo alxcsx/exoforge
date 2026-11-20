@@ -1,0 +1,13 @@
+{
+  "goal": "Item 3 of .agents/handoff/NEXT.md: run the arcade samples (/Users/alexcs/projects/exoforge-arcade) against a Postgres-backed backend. Start the backend with Postgres (`just compose-up`, or a local PG) and EXOFORGE_DATA_DIR pointing at a temp dir; redeploy all arcade extensions; run tools/smoke.sh, the 7 test projects, and SetUpAll in Unity (use the `unity` CLI; if Unity cannot run headless, say so and skip that step). DIAGNOSE ONLY: do not fix platform code and do not edit samples (standing rule: no workarounds in samples). Never commit arcade Exoforge/exoforge.json or Exoforge/mock-game-server.token. Each failure becomes a new F-number (next after F30) appended to .agents/SAMPLES_FINDINGS.md with exact repro command, error text and suspected file:line. Tear the stack down when finished. Use Gemini models only.",
+  "context": [".agents/handoff/NEXT.md", ".agents/SAMPLES_FINDINGS.md", "AGENTS.md"],
+  "files": [".agents/SAMPLES_FINDINGS.md"],
+  "accept": [
+    "backend up on Postgres: paste the database driver/pool status line proving it is Postgres not SQLite",
+    "bash /Users/alexcs/projects/exoforge-arcade/tools/smoke.sh (paste pass/fail summary)",
+    "the 7 arcade test projects: paste one pass/fail line each",
+    "SetUpAll in Unity: paste result or the reason it was skipped",
+    "list of new F-numbers with one-line cause each (or 'none')"
+  ],
+  "report_max_lines": 15
+}

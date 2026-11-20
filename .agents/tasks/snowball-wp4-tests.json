@@ -1,0 +1,19 @@
+{
+  "goal": "Implement WP4 (world_boss tests) from section 5 of the plan in /Users/alexcs/projects/exoforge/.agents/handoff/snowball-plan.md. Create extensions/world_boss.Tests/world_boss.Tests.csproj (copy extensions/brainrot_market.Tests', referencing ../world_boss/src/world_boss.csproj) and WorldBossTests.cs, and add the test project to extensions/Exoforge.Extensions.sln (`dotnet sln add`). Style: extensions/brainrot_market.Tests/BrainrotMarketTests.cs (see how it injects the wallet stub and Exo context). Test-only `MemoryBossStore : IBossStore` must reproduce the SQL semantics of extensions/world_boss/src/BossStore.cs EXACTLY under a lock (TryApplyHit: only when status alive and boss_id matches, hp floored at 0 via the CASE rule, status becomes defeated at 0, inflight+1; Release: inflight-1; TryClaimPayout: only defeated+none, plus inflight==0 unless force; MarkPaid only claimed->paid; AddDamage accumulates), and a `FakeWallet : IWalletService` that dedupes CreditOnceAsync by Key and records credits. Tests (>= 8, all must pass): HP floors at 0 and a hit on a dead boss returns Accepted=false; no hits means no events and no payout after RespawnBoss; a burst of 100 concurrent Task.Run report_hit calls (damage 10 on a 300 HP boss: 30 accepted, 70 rejected) gives exactly ONE boss_defeated event and the FakeWallet credits sum to exactly Pool, each (boss, player) key credited once; the remainder goes to the top damager and equal damage 100/100/100 with Pool 1000 gives 334/333/333; a second Pay re-run (call respawn_boss for a claimed boss after setting Now past StaleSeconds) credits nobody twice; respawn_boss leaves an alive boss alone and spawns the next generation after paid; spawn_boss without force on an alive boss throws boss_alive; report_hit damage 0 and 101 throw invalid_damage; empty player throws invalid_player. You may ONLY create/edit the files above. Do NOT edit world_boss/src (if a test reveals a real bug in WorldBossExtension.cs, DO NOT fix it: keep the failing test, say so clearly in your report with the test name and the observed vs expected values). Work ONLY in /Users/alexcs/projects/exoforge-arcade-wt/world-boss-tests (branch wp/world-boss-tests; extensions/.feed present). Use `/Users/alexcs/.local/bin/mise exec dotnet@10.0.400 -- dotnet ...` (bare mise exec fails in worktrees);. Commit with a plain message, NO AI/Claude/co-author trailers; no push, no merge; install no system packages. Paste REAL output for every acceptance item; empty commits are rejected.",
+  "context": [
+    "/Users/alexcs/projects/exoforge/.agents/handoff/snowball-plan.md",
+    "extensions/world_boss/src/WorldBossExtension.cs",
+    "extensions/world_boss/src/BossStore.cs",
+    "extensions/brainrot_market.Tests/BrainrotMarketTests.cs"
+  ],
+  "files": [
+    "extensions/world_boss.Tests",
+    "extensions/Exoforge.Extensions.sln"
+  ],
+  "accept": [
+    "cd /Users/alexcs/projects/exoforge-arcade-wt/world-boss-tests/extensions && /Users/alexcs/.local/bin/mise exec dotnet@10.0.400 -- dotnet test world_boss.Tests (paste the Passed!/Failed! line; at least 8 tests)",
+    "dotnet test Exoforge.Extensions.sln with the same prefix (paste the summary of every test assembly; 0 failed)",
+    "git show --stat HEAD (paste; only the files listed)"
+  ],
+  "report_max_lines": 12
+}

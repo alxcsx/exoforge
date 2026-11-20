@@ -1,0 +1,15 @@
+{
+  "goal": "Implement WP2 (world_boss models and store) from section 5 and section 1 of the plan in /Users/alexcs/projects/exoforge/.agents/handoff/snowball-plan.md: create extensions/world_boss/src/world_boss.csproj (copy extensions/adventure_world/src's csproj and keep the same Exoforge.Plugin.SDK version as the other csprojs), BossModels.cs (records and events exactly as in section 1) and BossStore.cs (IBossStore + SqlBossStore with the exact SQL of section 1), and add the project to extensions/Exoforge.Extensions.sln. Do NOT write WorldBossExtension.cs (WP3). The build needs an [ExoExtension] class, so add a minimal placeholder `WorldBossExtension.cs` containing only the attribute-annotated empty partial class that WP3 will overwrite. Read the plan file first and follow your work package EXACTLY (it is decision-complete: do not redesign, do not add features, do not touch files outside your list). Work ONLY in your arcade worktree on its branch; commit there with a plain message, NO AI/Claude/co-author trailers; no push, no merge; install NO system packages. Toolchain: prefix dotnet with `/Users/alexcs/.local/bin/mise exec --`. The worktree already has extensions/.feed. Paste REAL command output for every acceptance item; an item without pasted output counts as not done, and an empty or no-change commit is rejected. Worktree: /Users/alexcs/projects/exoforge-arcade-wt/world-boss-models, branch wp/world-boss-models.",
+  "files": [
+    "extensions/world_boss",
+    "extensions/Exoforge.Extensions.sln"
+  ],
+  "accept": [
+    "cd /Users/alexcs/projects/exoforge-arcade-wt/world-boss-models/extensions && /Users/alexcs/.local/bin/mise exec -- dotnet build world_boss/src/world_boss.csproj (paste the Error(s) line; must be 0)",
+    "grep -c 'UPDATE boss_state' extensions/world_boss/src/BossStore.cs (paste; must be >= 3) and git show --stat HEAD"
+  ],
+  "context": [
+    "/Users/alexcs/projects/exoforge/.agents/handoff/snowball-plan.md"
+  ],
+  "report_max_lines": 10
+}

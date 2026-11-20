@@ -1,0 +1,6 @@
+{
+  "goal": "Design only, no code. Exoforge feedback: (1) an extension's Database.Query runs in its own Postgres schema (search_path, extensions/exoforge_std_database/lib/exoforge/std/database/adapters/postgres.ex:82,602), so JOIN onto another extension's table fails with relation does not exist, even with [ExoDependency]. (2) inter-extension calls duplicate DTOs and use magic strings in ExoServices.Actions.CallAction; wanted: typed client stubs generated into obj/ from [ExoDependency] (sibling manifests or cluster contracts, like `exo extension stubs`) plus shared record types / ReferencesType = typeof(Item). Recommend ONE approach for each respecting AGENTS.md doctrine (zero module coupling, deny by default, SQLite adapter parity, deletion over addition). For (1) compare: schema-qualified read grants for declared dependencies vs read views vs keep RPC batch hydration; state SQLite behaviour and security. Then split the chosen approach into 2-4 small implementable specs (goal, files, accept commands).",
+  "context": ["AGENTS.md", "extensions/exoforge_std_database/lib/exoforge/std/database/adapters/postgres.ex", "sdk/csharp/Exoforge.Management", "sdk/csharp/Exoforge.Plugin.Generator"],
+  "accept": ["write the design to .agents/handoff/fb-xext-design.md (<=80 lines) and reply with the path"],
+  "report_max_lines": 10
+}

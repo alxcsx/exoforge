@@ -1,0 +1,15 @@
+{
+  "goal": "Implement WP11 (docs) from section 5 of the plan in /Users/alexcs/projects/exoforge/.agents/handoff/snowball-plan.md: README.md and packages/exoforge.arcade.common/package.json only, exactly the changes listed. For the test-count sentence leave the current number untouched and add the marker <!-- TODO real count after WP4 --> next to it. Read the plan file first and follow your work package EXACTLY (it is decision-complete: do not redesign, do not add features, do not touch files outside your list). Work ONLY in your arcade worktree on its branch; commit there with a plain message, NO AI/Claude/co-author trailers; no push, no merge; install NO system packages. Toolchain: prefix dotnet with `/Users/alexcs/.local/bin/mise exec --`. The worktree already has extensions/.feed. Paste REAL command output for every acceptance item; an item without pasted output counts as not done, and an empty or no-change commit is rejected. Worktree: /Users/alexcs/projects/exoforge-arcade-wt/docs, branch wp/docs.",
+  "files": [
+    "README.md",
+    "packages/exoforge.arcade.common/package.json"
+  ],
+  "accept": [
+    "cd /Users/alexcs/projects/exoforge-arcade-wt/docs && grep -c '3d-snowball-siege' README.md (paste; must be >= 3)",
+    "git show --stat HEAD (non-empty diff limited to the 2 files)"
+  ],
+  "context": [
+    "/Users/alexcs/projects/exoforge/.agents/handoff/snowball-plan.md"
+  ],
+  "report_max_lines": 10
+}

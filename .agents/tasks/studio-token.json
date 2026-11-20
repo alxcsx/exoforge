@@ -1,0 +1,12 @@
+{
+  "goal": "Bug: signing in again through the Unity Studio (Exoforge Control Center) leaves the old, refused token in Exoforge/exoforge.json; the user had to run `exo connect --token ... --save` manually before `exo` commands worked. Find how Studio login stores its session (ExoTokenStore.SaveStudioSession in sdk/unity/Exoforge.SDK/Editor/ExoforgeControlCenter.Connection.cs lines ~174, 304, 476) versus where the CLI/ExoDeployer reads its token (Exoforge/exoforge.json via ExoWorkspace / ExoDeployer.CreateConnectedClientAsync in sdk/csharp/Exoforge.Management) and make a successful Studio login (and a token refresh/rotation) write the new token into the workspace's active environment in Exoforge/exoforge.json, the same place `exo connect --save` writes. Put the writing logic in Exoforge.Management (pure C#, testable) and call it from the Editor. Never write a token into Assets/Resources/exoforge.json. Add tests in sdk/csharp/Exoforge.Management.Tests (temp dir workspace) that fail before the fix. Do NOT bump the SDK version (already 0.1.55). No AI/Claude co-author trailers in commits. Work ONLY in /Users/alexcs/projects/exoforge-wt/studio-token (branch wt/studio-token); commit there; no push, no merge. Follow .agents/handoff/wt-common.md.",
+  "context": [".agents/handoff/wt-common.md", "sdk/csharp/Exoforge.Management/ExoDeployer.cs", "sdk/csharp/Exoforge.CLI/Program.cs"],
+  "files": ["sdk/csharp/Exoforge.Management", "sdk/csharp/Exoforge.Management.Tests", "sdk/unity/Exoforge.SDK/Editor"],
+  "accept": [
+    "cd /Users/alexcs/projects/exoforge-wt/studio-token && /Users/alexcs/.local/bin/mise exec dotnet@10.0.400 -- dotnet test sdk/csharp/Exoforge.Management.Tests (paste summary line)",
+    "new tests fail on the pre-fix code and pass after (paste the failing assertion)",
+    "state exactly which Editor call sites now call the new writer (file:line)",
+    "git show --stat HEAD"
+  ],
+  "report_max_lines": 15
+}

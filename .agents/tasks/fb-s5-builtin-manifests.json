@@ -1,0 +1,13 @@
+{
+  "goal": "Fix a regression found after S4 in worktree /Users/alexcs/projects/exoforge-wt/s4-cleanup (branch wt/s4-cleanup; add a commit there, do not create a new branch). With the committed src/Generated stubs deleted, building sdk/unity/sample_unity/Exoforge/extensions/snake_config and unity_addressables offline fails: `exo extension stubs` prints 'No contracts for: file_bucket' because the sibling-manifest lookup (ExoDeployer / ExoCodeGenerator manifest overlay, reached from Directory.Build.targets ExoforgeTypedStubs) does not read builtin Elixir extensions' manifests, e.g. extensions/exoforge_std_file_bucket/priv/manifest.json (check which of priv/manifest.json is the source of truth and whether it carries the service contract the stub generator needs: actions with typed request/response; if it does not, say so in the report rather than inventing a format). Make the lookup also scan the repo's extensions/*/priv/manifest.json when the build is in-repo, keeping the cluster export as fallback. Shortest diff, a Management test that fails before. No AI co-author trailers.",
+  "context": [".agents/handoff/fb-s4-report.md", ".agents/handoff/wt-common.md", "Directory.Build.targets", "sdk/csharp/Exoforge.Management/ExoDeployer.cs", "sdk/csharp/Exoforge.Management/ExoCodeGenerator.cs"],
+  "files": ["sdk/csharp/Exoforge.Management", "sdk/csharp/Exoforge.Management.Tests", "sdk/csharp/Exoforge.CLI", "Directory.Build.targets"],
+  "accept": [
+    "cd /Users/alexcs/projects/exoforge-wt/s4-cleanup && /Users/alexcs/.local/bin/mise exec -- dotnet build sdk/unity/sample_unity/Exoforge/extensions/snake_config (paste result line)",
+    "same build for sdk/unity/sample_unity/Exoforge/extensions/unity_addressables (paste result line)",
+    "/Users/alexcs/.local/bin/mise exec -- dotnet build extensions_csharp/sample_plugin (paste result line)",
+    "dotnet test sdk/csharp/Exoforge.Management.Tests: only the 3 known env failures allowed; new test fails before",
+    "git show --stat HEAD"
+  ],
+  "report_max_lines": 12
+}

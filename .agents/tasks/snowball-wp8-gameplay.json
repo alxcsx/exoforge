@@ -1,0 +1,18 @@
+{
+  "goal": "Implement WP8 (3D gameplay) from section 5 and section 2 ('Gameplay') of the plan in /Users/alexcs/projects/exoforge/.agents/handoff/snowball-plan.md. Work ONLY in /Users/alexcs/projects/exoforge-arcade-wt/gameplay (branch wp/gameplay). Create, under 3d-snowball-siege/Assets/Samples/SnowballSiege/ (namespace Arcade.SnowballSiege): Samples.SnowballSiege.asmdef (copy 2d-echo-dungeon/Assets/Samples/EchoDungeon/Samples.EchoDungeon.asmdef, changing name/rootNamespace; refs Exoforge.SDK, Exoforge.Generated, Samples.Common, Unity.InputSystem), BossGame.cs, PlayerRig.cs, Snowball.cs, BossTarget.cs exactly as in the plan (about 220 lines in all, no art assets). Also create the .meta files Unity needs: NOT by hand, skip them (Unity generates them on first import). NO file here may mention Exoforge.Client or ExoServices (BossBridge in WP9 is the only caller): `grep -rn \"ExoServices\\|Exoforge.Client\" 3d-snowball-siege/Assets/Samples/SnowballSiege` must print nothing. Use only UnityEngine, UnityEngine.InputSystem and System APIs; Keyboard.current/Mouse.current with null checks. Public surface BossGame (exact): `bool BossAlive; int Hp, MaxHp; string BossName; event Action<int,string> SnowballHit; void ApplyState(string name,int hp,int maxHp,bool alive); void PushFeed(string line); void ShowPayout(int coins);` plus OnGUI with boss bar, crosshair, feed, payout toast and the label \"MOCK GAME SERVER (editor only)\". Snowball.OnCollisionEnter -> BossTarget damage (head 30, body 10, base 5) -> game.SnowballHit. Keep it compile-clean C# for Unity 6 (nullable enabled via Assets/csc.rsp: annotate nullable fields). You cannot compile with Unity before WP7, so re-read each file for syntax and unresolved names. Commit with a plain message, NO AI/Claude/co-author trailers; no push, no merge; install NO system packages. Use `/Users/alexcs/.local/bin/mise exec dotnet@10.0.400 -- dotnet ...` for dotnet inside worktrees (bare `mise exec -- dotnet` fails there). Paste REAL output for every acceptance item; an item without pasted output is not done, and an empty commit is rejected.",
+  "context": [
+    "/Users/alexcs/projects/exoforge/.agents/handoff/snowball-plan.md",
+    "/Users/alexcs/projects/exoforge-arcade/2d-echo-dungeon/Assets/Samples/EchoDungeon",
+    "/Users/alexcs/projects/exoforge-arcade/packages/exoforge.arcade.common"
+  ],
+  "files": [
+    "3d-snowball-siege/Assets/Samples/SnowballSiege"
+  ],
+  "accept": [
+    "ls 3d-snowball-siege/Assets/Samples/SnowballSiege (paste: asmdef + 4 .cs files)",
+    "grep -rn \"ExoServices\\|Exoforge.Client\" 3d-snowball-siege/Assets/Samples/SnowballSiege prints nothing (paste)",
+    "wc -l of the four .cs files (paste; total about 220 and under 300) and `grep -n 'event Action<int,string> SnowballHit' 3d-snowball-siege/Assets/Samples/SnowballSiege/BossGame.cs` (paste)",
+    "git show --stat HEAD (paste; only that folder)"
+  ],
+  "report_max_lines": 10
+}

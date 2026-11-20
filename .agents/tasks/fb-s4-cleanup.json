@@ -1,0 +1,13 @@
+{
+  "goal": "Implement S4 of .agents/handoff/fb-xext-design.md on top of wt/s3-types: create worktree /Users/alexcs/projects/exoforge-wt/s4-cleanup with `git worktree add -b wt/s4-cleanup ../exoforge-wt/s4-cleanup wt/s3-types`. Delete the old path now that stubs build into obj/: remove committed src/Generated/PluginServices.g.cs (or ExtensionServices.g.cs) files and hand-copied DTOs in extensions_csharp/** and sdk/unity/sample_unity/Exoforge/extensions/**, fix the 'exo extension new' templates (sdk/csharp/Exoforge.Management scaffolder) so they no longer write or reference src/Generated, migrate raw CallAction<...>(\"svc\",\"act\") callers in those samples to the generated typed stubs, and add a get_many(ids) action to the sample producer if one exists. Also fix the two leftovers from S2: the Studio quickstart doc and SyncCompanionAttributes still point at src/Generated. Only delete/migrate what the build still compiles; if a sample cannot build offline, say so rather than guessing. Shortest diff, no AI co-author trailers, commit on wt/s4-cleanup, follow .agents/handoff/wt-common.md. If ask --reply fails, write the report to .agents/handoff/fb-s4-report.md.",
+  "context": [".agents/handoff/fb-xext-design.md", ".agents/handoff/fb-s3-report.md", ".agents/handoff/wt-common.md"],
+  "files": ["extensions_csharp", "sdk/unity/sample_unity/Exoforge/extensions", "sdk/csharp/Exoforge.Management", "sdk/csharp/Exoforge.Management.Tests", "Agents.MD"],
+  "accept": [
+    "/Users/alexcs/.local/bin/mise exec -- dotnet build extensions_csharp/sample_plugin (paste result line)",
+    "/Users/alexcs/.local/bin/mise exec -- dotnet test sdk/csharp/Exoforge.Management.Tests: only the 3 known env failures allowed",
+    "grep -rn 'CallAction<' extensions_csharp sdk/unity/sample_unity/Exoforge/extensions returns none (paste)",
+    "git ls-files | grep -E 'src/Generated' returns none (paste)",
+    "git show --stat HEAD"
+  ],
+  "report_max_lines": 15
+}

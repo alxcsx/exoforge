@@ -1,0 +1,12 @@
+{
+  "goal": "Implement S3 of .agents/handoff/fb-xext-design.md on top of branch wt/s2-stubs: create worktree /Users/alexcs/projects/exoforge-wt/s3-types with `git worktree add -b wt/s3-types ../exoforge-wt/s3-types wt/s2-stubs`. Stubs emit one record per contract type, reused by every action naming it. `ReferencesType = typeof(T)` where T is a stub (or local) type resolves the FK to the producing service/resource via its manifest instead of a string; an unknown type is a compile diagnostic. Note the main tree has an uncommitted change in ExoforgePluginGenerator.cs (auto 'database' dependency, ~lines 558/623/702) from another worker: do not touch those spots, and avoid conflicts. Shortest diff, match style, tests that fail before. Bump the SDK version once only if wt/s2-stubs did not already. No AI co-author trailers. Commit on wt/s3-types; follow .agents/handoff/wt-common.md. Reply to t4m with `ask --reply t4m ...`; if that fails, write the report to .agents/handoff/fb-s3-report.md.",
+  "context": [".agents/handoff/fb-xext-design.md", ".agents/handoff/wt-common.md", "sdk/csharp/Exoforge.Plugin.Generator/ExoforgePluginGenerator.cs", "sdk/csharp/Exoforge.Management/ExoCodeGenerator.cs"],
+  "files": ["sdk/csharp/Exoforge.Plugin.Generator", "sdk/csharp/Exoforge.Plugin.Generator.Tests", "sdk/csharp/Exoforge.Management", "sdk/csharp/Exoforge.Management.Tests", "Agents.MD"],
+  "accept": [
+    "/Users/alexcs/.local/bin/mise exec -- dotnet test sdk/csharp/Exoforge.Plugin.Generator.Tests (paste summary; new tests fail before, pass after)",
+    "/Users/alexcs/.local/bin/mise exec -- dotnet test sdk/csharp/Exoforge.Plugin.SDK.Tests (paste summary)",
+    "dotnet test sdk/csharp/Exoforge.Management.Tests: only the 3 known env failures (missing Cli~/exo, Exoforge.Client.dll, Cli_Agents_Install) allowed",
+    "git show --stat HEAD"
+  ],
+  "report_max_lines": 15
+}

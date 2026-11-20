@@ -1,0 +1,11 @@
+{
+  "goal": "D1 of .agents/handoff/db-improvement-plan.md. Create worktree /Users/alexcs/projects/exoforge-wt/d1 (`git worktree add -b wt/d1 ../exoforge-wt/d1 projetao_mvp`). Add to Exoforge.Plugin.SDK `QuerySql<T>(FormattableString)` and `ExecuteSql(FormattableString)` on IDatabase (extension methods are fine if that keeps IDatabase implementers untouched; match how DatabaseExtensions.cs is organised). Each interpolated argument becomes a positional parameter ($1, $2, ... in order, the same index reused is fine to repeat as new params) and is passed as args to the existing Query/Execute; the SQL text is only the format's literal parts, so values can never be concatenated into SQL. Handle format specifiers/alignment by ignoring them (document it). Pure C#, no new dependency. Tests in sdk/csharp/Exoforge.Plugin.SDK.Tests that fail before (SQL text, argument order, injection-looking string stays an argument, null arg). Document in sdk/unity/Exoforge.SDK/Agents~/skills/exoforge-extensions/SKILL.md and Agents.MD (extension runtime section). Do not bump the SDK version (D8 does). No AI co-author trailers; commit on wt/d1; follow .agents/handoff/wt-common.md. If ask --reply fails write the report to .agents/handoff/db-d1-report.md.",
+  "context": [".agents/handoff/db-improvement-plan.md", ".agents/handoff/wt-common.md", "sdk/csharp/Exoforge.Plugin.SDK/Interfaces.cs", "sdk/csharp/Exoforge.Plugin.SDK/DatabaseExtensions.cs"],
+  "files": ["sdk/csharp/Exoforge.Plugin.SDK", "sdk/csharp/Exoforge.Plugin.SDK.Tests", "sdk/unity/Exoforge.SDK/Agents~", "Agents.MD"],
+  "accept": [
+    "cd /Users/alexcs/projects/exoforge-wt/d1/sdk/csharp && /Users/alexcs/.local/bin/mise exec -- dotnet test Exoforge.Plugin.SDK.Tests (paste summary; new tests fail before, pass after)",
+    "/Users/alexcs/.local/bin/mise exec -- dotnet build extensions_csharp/sample_plugin (paste result line)",
+    "git show --stat HEAD"
+  ],
+  "report_max_lines": 10
+}

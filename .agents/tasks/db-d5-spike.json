@@ -1,0 +1,25 @@
+{
+  "goal": "You are ONE worker (no subagents). Work in worktree /Users/alexcs/projects/exoforge-wt/d5spike (branch wt/d5spike already exists; commit there; no pushes/merges, no AI co-author trailers). Postgres for tests: start a temporary one with `/opt/homebrew/bin/initdb -D <tmp>/data -U postgres --auth=trust` and `/opt/homebrew/bin/pg_ctl -D <tmp>/data -o '-p 54329 -k <tmp>' start`, use PGHOST=127.0.0.1 PGPORT=54329 PGUSER=postgres PGPASSWORD=x (psql is /opt/homebrew/bin/psql), stop and delete it afterwards; never touch 5432/4001. Read docs/adr/002 and 003 first. investigation only, NO production code. Prove or refute on a real temporary Postgres 16 that the database extension's connection user can: CREATE ROLE ext_<id> NOLOGIN per extension, be made a member of it, run a query in a transaction with `SET LOCAL ROLE ext_x; SET LOCAL search_path TO <schema>`, have SELECT-only grants on another extension's schema via `GRANT USAGE ON SCHEMA` + `GRANT SELECT ON ALL TABLES` + `ALTER DEFAULT PRIVILEGES`, and that writes to the foreign schema and reads from an undeclared schema are rejected by Postgres; also that DROP of an extension's schema/role cleans up. Measure the latency overhead of BEGIN+SET LOCAL ROLE+SET LOCAL search_path+COMMIT versus a plain query over 1000 queries, and state whether the plain Postgrex pool per extension (extensions/exoforge_std_database adapters/postgres.ex:82,602) needs to change. State what a managed Postgres without CREATEROLE would need (fallback). Deliver .agents/handoff/db-d5-spike.md (<=60 lines: verdict, the SQL that worked, numbers, risks, recommended D5 design) plus the throwaway script under .agents/handoff/db-d5-spike.sql; commit both on wt/d5spike.",
+  "context": [
+    ".agents/handoff/db-improvement-plan.md",
+    ".agents/handoff/wt-common.md",
+    "docs/adr/002-database-read-grants.md",
+    "docs/adr/003-postgres-only.md",
+    "extensions/exoforge_std_database/lib/exoforge/std/database/adapters/postgres.ex",
+    "core/lib/drivers/runtime/native_extension_runner.ex",
+    "sdk/csharp/Exoforge.Plugin.SDK/HostBridge.cs"
+  ],
+  "files": [
+    "core",
+    "extensions/exoforge_std_database",
+    "sdk/csharp/Exoforge.Plugin.SDK",
+    "sdk/csharp/Exoforge.Plugin.SDK.Tests",
+    "sdk/unity/Exoforge.SDK/Agents~",
+    "Agents.MD",
+    ".agents/handoff"
+  ],
+  "accept": [
+    "D5-spike: the report file exists with a clear verdict and measured numbers; git log --oneline -1 wt/d5spike"
+  ],
+  "report_max_lines": 15
+}

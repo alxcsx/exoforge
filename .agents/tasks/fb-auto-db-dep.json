@@ -1,0 +1,11 @@
+{
+  "goal": "Feedback: Database.Query fails with service_not_declared (core/lib/drivers/runtime/native_extension_runner.ex:678) unless the extension has [ExoDependency(\"database\")], while Database.Get/Put/All work. Make Exoforge.Plugin.Generator add \"database\" to manifest.json dependencies automatically whenever the extension declares a resource ([ExoResource]/[ExoSingletonResource]) or references Exo.Database / IDatabase / ExoServices.Database. Mirror how the generator already collects dependencies; shortest diff; no new attribute.",
+  "context": ["sdk/csharp/Exoforge.Plugin.Generator", "core/lib/drivers/runtime/native_extension_runner.ex"],
+  "files": ["sdk/csharp/Exoforge.Plugin.Generator", "sdk/csharp/Exoforge.Plugin.Generator.Tests", "AGENTS.md"],
+  "accept": [
+    "cd sdk/csharp && /Users/alexcs/.local/bin/mise exec -- dotnet test Exoforge.Plugin.Generator.Tests (paste summary line)",
+    "new generator test fails before the change and passes after: manifest of an extension using Exo.Database or declaring a resource lists database without [ExoDependency]",
+    "file:line of the change; git diff --stat"
+  ],
+  "report_max_lines": 15
+}

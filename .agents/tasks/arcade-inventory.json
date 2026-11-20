@@ -1,0 +1,7 @@
+{
+  "goal": "READ-ONLY inventory of /Users/alexcs/projects/exoforge-arcade to prepare splitting it into 4 Unity projects: 2d-hub (MainMenu + BrainrotExchange), 2d-echo-dungeon (EchoDungeon), 2d-doodle-dash (DoodleDash), 3d-snowball-siege (new). Edit NOTHING in the arcade. Write the result ONLY to /Users/alexcs/projects/exoforge/.agents/handoff/arcade-inventory.md (<=120 lines). For each of Assets/Scenes/*.unity, Assets/Samples/* (MainMenu, BrainrotExchange, EchoDungeon, DoodleDash, Common), Assets/Editor, Assets/Exoforge, Assets/Resources, Assets/Settings: list its asmdefs, what other folders/asmdefs/namespaces it references (grep real references, give file:line for the shared ones), and which Exoforge services it calls (ExoServices.* / ExoforgeSDK.Client). Then list: (a) what Samples/Common contains and who uses it; (b) every place a path, scene name or project-root assumption is hard-coded (tools/smoke.sh, tools/smoke/*, Assets/Editor setup scripts, README, AGENTS.md); (c) Exoforge/exoforge.json and Assets/Resources/exoforge.json usage; (d) Build Settings scene list in ProjectSettings/EditorBuildSettings.asset; (e) the 7 extensions and which scene calls each. End with a table: item -> go to which project, or SHARED.",
+  "context": [],
+  "files": [".agents/handoff/arcade-inventory.md"],
+  "accept": ["the file exists, <=120 lines, every claim cites a path (file:line where possible)"],
+  "report_max_lines": 5
+}

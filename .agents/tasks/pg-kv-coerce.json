@@ -1,0 +1,11 @@
+{
+  "goal": "Fix F34 and F35 in .agents/SAMPLES_FINDINGS.md, in the resource-table KV path of extensions/exoforge_std_database/lib/exoforge/std/database/adapters/postgres.ex (execute_resource_kv / real_table_info, ~lines 160-330). Values arrive as JSON (strings, ISO-8601 text, numbers) and are bound as-is, so Postgrex rejects them: F34 a string id/value into an integer column (daily_reward_table.day, int4 encode error); F35 an ISO-8601 string into a timestamp column (wallet_balances.updated_at, unlocks.unlocked_at, DateTime encode error). Coerce by the column's declared data_type (fetch data_type from information_schema in the same query real_table_info already makes, no extra round trip): integer/bigint/smallint from strings, timestamp/timestamptz from ISO-8601, boolean, numeric/float, json/jsonb as needed; on a value that cannot be coerced return a clear {:error, {:invalid_value, column, type}}. Reads must come back JSON-friendly (timestamps as ISO-8601 strings, as the SQLite path returns). Check how adapters/sqlite.ex and any resources code already decode by declared column type (commit 9aaf9d9) and reuse rather than duplicate. Platform fix only; shortest diff. Work ONLY in /Users/alexcs/projects/exoforge-wt/pg-kv-coerce (branch wt/pg-kv-coerce); commit there; no push/merge/SDK bump. Follow .agents/handoff/wt-common.md. Use Gemini models only.",
+  "context": [".agents/handoff/wt-common.md", ".agents/SAMPLES_FINDINGS.md", "extensions/exoforge_std_database/lib/exoforge/std/database/adapters/postgres.ex", "extensions/exoforge_std_database/lib/exoforge/std/database/adapters/sqlite.ex", "extensions/exoforge_std_database/test/postgres_test.exs"],
+  "files": ["extensions/exoforge_std_database"],
+  "accept": [
+    "tests that FAIL on the pre-fix code on a real local Postgres (paste failures: string->int4 and ISO string->timestamp, plus a round-trip read) and pass after; tag them so they skip when no PG is up",
+    "cd /Users/alexcs/projects/exoforge-wt/pg-kv-coerce/extensions/exoforge_std_database && /Users/alexcs/.local/bin/mise exec -- mix test (paste summary with and without PG)",
+    "git show --stat HEAD (paste; non-empty diff)"
+  ],
+  "report_max_lines": 15
+}

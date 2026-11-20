@@ -1,0 +1,12 @@
+{
+  "goal": "Implement S2 of .agents/handoff/fb-xext-design.md: build-time typed service stubs into obj/ from [ExoDependency]. A build target (Directory.Build.targets, next to ExoforgeStageForUnity) runs stub generation for the extension's declared dependencies (reuse ExoCodeGenerator.GeneratePluginStubsToFile; accept sibling manifests only, cluster export as fallback) and adds the generated file under $(IntermediateOutputPath) to Compile. No generated file in src/. `exo extension stubs` keeps working and prints the obj path. Fail the build with the existing 'No contracts for ...' message when no source has the contract. Do NOT edit ExoforgePluginGenerator.cs (another worker owns it). Shortest diff, match surrounding style, add a Management test that fails before the change. Bump nothing unless AGENTS.md rule 5 applies to files you touch (sdk/csharp/ counts: bump package.json + ExoforgePackageVersion.cs once). No AI co-author trailers; commit on a branch wt/s2-stubs in /Users/alexcs/projects/exoforge-wt/s2-stubs (git worktree add), follow .agents/handoff/wt-common.md.",
+  "context": [".agents/handoff/fb-xext-design.md", ".agents/handoff/wt-common.md", "Directory.Build.targets", "sdk/csharp/Exoforge.Management/ExoCodeGenerator.cs", "sdk/csharp/Exoforge.CLI/Program.cs"],
+  "files": ["Directory.Build.targets", "sdk/csharp/Exoforge.Management", "sdk/csharp/Exoforge.Management.Tests", "sdk/csharp/Exoforge.CLI", "AGENTS.md"],
+  "accept": [
+    "/Users/alexcs/.local/bin/mise exec -- dotnet test sdk/csharp/Exoforge.Management.Tests (paste summary, new test fails before, passes after)",
+    "/Users/alexcs/.local/bin/mise exec -- dotnet build extensions_csharp/sample_plugin then ls the generated stubs file under obj/ (paste path)",
+    "git status --short shows no new file under any src/ dir",
+    "git show --stat HEAD"
+  ],
+  "report_max_lines": 15
+}

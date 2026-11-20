@@ -1,0 +1,12 @@
+{
+  "goal": "Re-run item 3 of .agents/handoff/NEXT.md after the F31/F32/F33 platform fixes (now merged in /Users/alexcs/projects/exoforge, branch projetao_mvp): start the backend from the CURRENT checkout on Postgres (after `mise exec -- mix deps.compile --force`; fresh EXOFORGE_DATA_DIR temp dir and a FRESH Postgres database), redeploy ALL arcade extensions in /Users/alexcs/projects/exoforge-arcade, then run tools/smoke.sh and the SetUpAll Unity step. All 7 extensions must install; every failure is a new F-number (F34+) appended to .agents/SAMPLES_FINDINGS.md with repro, error text, suspected file:line. DIAGNOSE ONLY: no platform or sample edits. Never commit arcade Exoforge/exoforge.json or mock-game-server.token. Tear the stack down at the end. Use Gemini models only.",
+  "context": [".agents/handoff/NEXT.md", ".agents/SAMPLES_FINDINGS.md"],
+  "files": [".agents/SAMPLES_FINDINGS.md"],
+  "accept": [
+    "paste the line proving adapter Postgres, and the deploy result per extension (all 7 must say installed/running)",
+    "bash /Users/alexcs/projects/exoforge-arcade/tools/smoke.sh (paste pass/fail per script)",
+    "SetUpAll in Unity: paste result",
+    "new F-numbers with one-line cause each (or 'none')"
+  ],
+  "report_max_lines": 15
+}

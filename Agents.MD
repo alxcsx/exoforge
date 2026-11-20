@@ -21,6 +21,18 @@ without a default on a table with rows) is set at the deploy site by `EXOFORGE_S
 extension alone and says where (`table.column`, the change, why); `reset` drops and rebuilds the table, its rows lost. `just dev` sets
 `reset`; the compose file defaults to `refuse` and passes the variable through. See [ADR 004](docs/adr/004-typed-resource-schemas.md).
 
+**Versions.** One process per extension, always the latest. A row's `_v` is the extension version it was written under
+(`Exoforge.VersionStamp`: `major*1_000_000 + minor*1_000 + patch`), stamped by the database layer on every typed write.
+A migration leads to an extension version: `[ExoMigration(typeof(T), To = "1.2.0")]` in its own file, applied on the deploy
+that gets there (declarative ALTERs, one transaction, verified). A column the manifest stops listing is *retired*, not
+dropped; an explicit `[ExoDrop]` removes it and is refused while any row is stamped below that version or a served game
+version still locks the extension below it. Data that needs a per-row transform uses `[ExoRowMigration(typeof(T), To = "2.0.0")]`
+(`static T Up(JsonElement oldRow)`): the SDK migrates a row the first time it is read and writes it back guarded by `_if_v`.
+Do not use a declarative and a row migration for the same version. The `versioning` extension keeps game versions
+(`dev`, `live`, `outdated`, `blocked`; at most 3 not blocked) and their extension locks; clients send their game version at
+sign-in (WS `auth` frame `game_version`, HTTP header `x-exoforge-game-version`) and a blocked one gets `upgrade_required`
+(HTTP 426). With no game version registered, versioning is off and every client is served. See `.agents/handoff/versioning-spec.md`.
+
 **Test data does not outlive the test.** An integration run creates accounts, and they used to land in
 the developer's own database, indistinguishable from a player who signed up. Two things stop that: the
 live-test recipes run the backend with `EXOFORGE_DATA_DIR` pointing at a temporary directory, and an
@@ -94,6 +106,7 @@ file_bucket ──▶ database
 | `exoforge_std_file_bucket` | Storage / CDN | `file_bucket` | `database` | Pluggable binary/blob asset storage with metadata and HTTP file routes. Each bucket is `public` (anyone may download by URL) or `private` (default; staff, or a `signed_url` an extension issues). Staff toggle visibility in the Studio; the operator's `public_buckets` config only seeds it at boot. Raw access is staff-only. |
 | `exoforge_std_metering` | Operations | `metering` | `database` | Usage metering per extension and action, persisted on the instance. |
 | `exoforge_std_observability` | Debug / History | `observability` | `database` | Cluster event history (day-indexed, hourly rollups, gzip archive with retention) and the joins behind it: request timelines, failure groups, live-tail reads. |
+| `exoforge_std_versioning` | Releases | `versioning` | — | Game versions (`dev`/`live`/`outdated`/`blocked`, at most 3 served) and the extension version each one locks; `resolve` answers a client's version. |
 | `exoforge_std_transport` | Gateway Abstraction | `transport` | — | Common gateway abstraction, framing normalization, and RPC dispatching for network ingress. |
 | `exoforge_std_cron` | Operations | `cron` | — | Scheduled background task execution and recurring cron runner. |
 

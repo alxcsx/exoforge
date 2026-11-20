@@ -1,0 +1,26 @@
+{
+  "goal": "Implement .agents/handoff/db-b1-spec.md in full (read it first, plus docs/design/ui-standard.md for the Studio part). Work in worktree /Users/alexcs/projects/exoforge-wt/b1 (branch wt/b1 already exists off projetao_mvp; stay in it, do not edit /Users/alexcs/projects/exoforge; commit there; no pushes/merges; no AI co-author trailers; follow .agents/handoff/wt-common.md). Dependency decision from the user: a dependent of a failed extension is :blocked and NOT started, and calls to it return {:error, {:extension_unavailable, id}} with the reason readable so the cause can be explained to the caller. In a fresh worktree run `mix deps.get` in core and in extensions/exoforge_std_dashboard (and any other extension whose tests you run) before testing. Postgres is only needed if a test you run needs it: temp cluster with /opt/homebrew/bin/initdb -D <tmp>/data -U postgres --auth=trust and /opt/homebrew/bin/pg_ctl -D <tmp>/data -o '-p 54334 -k <tmp>' start, PGHOST=127.0.0.1 PGPORT=54334 PGUSER=postgres PGPASSWORD=x; stop and delete afterwards; never touch 5432/4001/54329-54333. If ask --reply fails write the report to .agents/handoff/db-b1-report.md.",
+  "context": [
+    ".agents/handoff/db-b1-spec.md",
+    ".agents/handoff/wt-common.md",
+    "docs/design/ui-standard.md",
+    "core/lib/extension_bootstrapper.ex",
+    "core/lib/extension_registry.ex",
+    "core/lib/drivers/runtime/elixir_extension_runner.ex",
+    "core/lib/drivers/runtime/native_extension_runner.ex"
+  ],
+  "files": [
+    "core",
+    "extensions/exoforge_std_dashboard",
+    "extensions/exoforge_std_extension_manager",
+    "Agents.MD"
+  ],
+  "accept": [
+    "cd core && mix test (paste summary; new tests fail before)",
+    "cd extensions/exoforge_std_dashboard && mix test (paste summary; includes ui_standard_test)",
+    "cd extensions/exoforge_std_extension_manager && mix test (paste summary) if touched",
+    "git grep -n 'Extension Start Failed' returns nothing (paste)",
+    "git log --oneline -1 wt/b1"
+  ],
+  "report_max_lines": 15
+}

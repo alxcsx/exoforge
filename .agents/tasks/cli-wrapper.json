@@ -1,0 +1,24 @@
+{
+  "goal": "The dev CLI wrapper (./exo, ./exo.cmd) is NOT an AI feature but today only `exo agents install` writes it (sdk/csharp/Exoforge.Management/ExoAgentInstaller.cs InstallWrappers ~line 444; Program.cs HandleAgentsInstall). The wrapper is already a path-resolving shim (it finds exo.dll in Packages/com.exoforge.sdk, Library/PackageCache/com.exoforge.sdk@*/Editor/Cli~, or the monorepo build, and adds --dir) - keep that logic, do not copy binaries. Change: (1) move wrapper writing into its own class (e.g. ExoCliInstaller in Exoforge.Management) with its own marked .gitignore block listing only exo/exo.cmd(/exo.ps1 if supported); idempotent; no AI files. (2) New command `exo cli install [--dir <path>]` and `exo cli status`. (3) Unity: an [InitializeOnLoadMethod] in sdk/unity/Exoforge.SDK/Editor (new small file or next to ExoforgeAgentTools.cs) that silently ensures the wrapper exists at the project root on package load (no dialogs, no AI files, no-op when already present and current; skip in batchmode only if it would fail), plus a menu item 'Exoforge/CLI/Install exo wrapper'. (4) `exo agents install` stops owning wrappers: it calls the same ExoCliInstaller (skills reference ./exo) but the gitignore blocks must not duplicate entries. Tests in sdk/csharp/Exoforge.Management.Tests (extend AgentOptInTests.cs or add CliWrapperTests.cs) that FAIL before: `cli install` creates exo/exo.cmd and NOTHING AI (no skills, AGENTS.md, .agents/.claude/.gemini); second run changes nothing; gitignore block appears once even after `agents install --all`; the generated shell wrapper still contains the PackageCache glob. Update Agents.MD, Agents~/AGENTS.md, sdk/unity/Exoforge.SDK/README.md. Do NOT bump the SDK version (orchestrator bumps). No AI or Claude co-author trailers in commit messages. Work ONLY in /Users/alexcs/projects/exoforge-wt/cli-wrapper (branch wt/cli-wrapper); commit there; no push, no merge. Follow .agents/handoff/wt-common.md.",
+  "context": [
+    ".agents/handoff/wt-common.md",
+    "sdk/csharp/Exoforge.Management/ExoAgentInstaller.cs",
+    "sdk/csharp/Exoforge.CLI/Program.cs",
+    "sdk/unity/Exoforge.SDK/Editor/ExoforgeAgentTools.cs",
+    "sdk/csharp/Exoforge.Management.Tests/AgentOptInTests.cs"
+  ],
+  "files": [
+    "sdk/csharp/Exoforge.Management",
+    "sdk/csharp/Exoforge.Management.Tests",
+    "sdk/csharp/Exoforge.CLI",
+    "sdk/unity/Exoforge.SDK",
+    "Agents.MD"
+  ],
+  "accept": [
+    "cd /Users/alexcs/projects/exoforge-wt/cli-wrapper && /Users/alexcs/.local/bin/mise exec -- dotnet test sdk/csharp/Exoforge.Management.Tests (paste summary)",
+    "new tests fail on pre-fix code (paste failures) and pass after",
+    "temp-dir transcript: `exo cli install` writes only exo/exo.cmd + gitignore block; `exo agents install --all` afterwards adds skills without duplicating the block; reruns change nothing",
+    "git show --stat HEAD (non-empty diff)"
+  ],
+  "report_max_lines": 12
+}

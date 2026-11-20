@@ -1,0 +1,12 @@
+{
+  "goal": "Bug: the generated ExoServices facade (e.g. Assets/Exoforge/Generated/ExoforgeServices.g.cs) exposes admin/Studio services (ResourceStore, ExtensionManager, Dashboard, Cron) on the same ExoServices class as gameplay services, with no separation and no #if UNITY_EDITOR guard. Find out why they are present (ExoCodeGenerator.Generate / includeStudio / IsClientVisibleService / IsClientAction in sdk/csharp/Exoforge.Management/ExoCodeGenerator.cs, and the callers in Exoforge.CLI and sdk/unity/Exoforge.SDK/Editor that pass includeStudio) and fix it so a game build never sees them: services whose actions are not player/global scope must not be on ExoServices at all; if the Unity Editor tooling needs them, emit them in a separate class (e.g. ExoStudioServices) wrapped in #if UNITY_EDITOR, reachable only from Editor assemblies. Keep gameplay stubs unchanged. Add tests in sdk/csharp/Exoforge.Management.Tests that fail before the fix (an export containing a studio-scoped service must not appear on ExoServices, and the studio class is guarded). Update docs that describe the facade (Agents.MD section on Unity SDK Surface, sdk/unity/Exoforge.SDK/Agents~/AGENTS.md, README) if they mention these services. Do NOT bump the SDK version (already 0.1.55). No AI/Claude co-author trailers in commits. Work ONLY in /Users/alexcs/projects/exoforge-wt/studio-split (branch wt/studio-split); commit there; no push, no merge. Follow .agents/handoff/wt-common.md.",
+  "context": [".agents/handoff/wt-common.md", "sdk/csharp/Exoforge.Management/ExoCodeGenerator.cs"],
+  "files": ["sdk/csharp/Exoforge.Management", "sdk/csharp/Exoforge.Management.Tests", "sdk/csharp/Exoforge.CLI", "sdk/unity/Exoforge.SDK", "Agents.MD"],
+  "accept": [
+    "cd /Users/alexcs/projects/exoforge-wt/studio-split && /Users/alexcs/.local/bin/mise exec dotnet@10.0.400 -- dotnet test sdk/csharp/Exoforge.Management.Tests (paste summary line)",
+    "new tests fail on the pre-fix code and pass after (paste the failing assertion)",
+    "paste the generated ExoServices class header and the studio class guard from a generated sample",
+    "git log --oneline origin..HEAD and git show --stat HEAD"
+  ],
+  "report_max_lines": 15
+}

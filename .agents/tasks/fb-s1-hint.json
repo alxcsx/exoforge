@@ -1,0 +1,10 @@
+{
+  "goal": "Implement S1 of .agents/handoff/fb-xext-design.md: when Database.Query fails because the table belongs to another extension (postgres 'relation \"x\" does not exist' / sqlite 'no such table'), the error message gains a hint: tables are private to each extension; fetch another extension's data through its action (e.g. a get_many) or a generated typed stub. Add the same note to the moduledoc of the database extension. Touch only extensions/exoforge_std_database (lib + test). Shortest diff, match surrounding style, test must fail before the change. Work in the main tree, do not commit.",
+  "context": [".agents/handoff/fb-xext-design.md", "extensions/exoforge_std_database/lib/exoforge/std/database/adapters/postgres.ex", "extensions/exoforge_std_database/lib/exoforge/std/database/adapters/sqlite.ex"],
+  "files": ["extensions/exoforge_std_database"],
+  "accept": [
+    "cd extensions/exoforge_std_database && /Users/alexcs/.local/bin/mise exec -- mix test <the test file you touched> (paste summary; new test fails before, passes after)",
+    "git diff --stat"
+  ],
+  "report_max_lines": 10
+}
