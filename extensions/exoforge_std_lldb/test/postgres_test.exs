@@ -8,13 +8,37 @@ defmodule Exoforge.Std.Lldb.Adapters.PostgresTest do
 
   defp pg_config, do: TestDB.config()
 
-  describe "F31: default pool_size" do
-    test "defaults to a small pool_size (2) and remains overridable via config" do
+  describe "pool size" do
+    test "defaults to 4 connections, overridable for everyone and for one extension" do
       {:ok, default_cfg} = Postgres.connection_config(:wallet, %{})
-      assert default_cfg.pool_size == 2
+      assert default_cfg.pool_size == 4
 
       {:ok, custom_cfg} = Postgres.connection_config(:wallet, %{pool_size: 6})
       assert custom_cfg.pool_size == 6
+
+      # an extension's own setting beats the shared one; the others keep the shared one
+      config = %{pool_size: 6, pool_sizes: %{"auth" => 12}}
+      assert {:ok, %{pool_size: 12}} = Postgres.connection_config(:auth, config)
+      assert {:ok, %{pool_size: 6}} = Postgres.connection_config(:wallet, config)
+
+      # nonsense falls back instead of starting a pool of nothing
+      assert {:ok, %{pool_size: 4}} = Postgres.connection_config(:wallet, %{pool_size: 0, pool_sizes: %{"wallet" => -1}})
+    end
+
+    test "the environment sets the shared size and per-extension sizes" do
+      System.put_env("EXOFORGE_DB_POOL_SIZE", "5")
+      System.put_env("EXOFORGE_DB_POOL_SIZES", "auth=9, player_data=7 ,bogus,x=0")
+
+      try do
+        {:ok, pid} = Manager.start_link([])
+        {_adapter, config} = :persistent_term.get({Manager, :runtime})
+        assert config.pool_size == 5
+        assert config.pool_sizes == %{"auth" => 9, "player_data" => 7}
+        GenServer.stop(pid)
+      after
+        System.delete_env("EXOFORGE_DB_POOL_SIZE")
+        System.delete_env("EXOFORGE_DB_POOL_SIZES")
+      end
     end
   end
 
@@ -281,7 +305,7 @@ defmodule Exoforge.Std.Lldb.Adapters.PostgresTest do
                  cfg
                )
 
-      assert {:ok, %{rows: [%{"rolconnlimit" => 4}]}} =
+      assert {:ok, %{rows: [%{"rolconnlimit" => 6}]}} =
                Postgres.execute(
                  store_id,
                  "SELECT rolconnlimit FROM pg_roles WHERE rolname = $1",

@@ -249,6 +249,33 @@ defmodule Exoforge.Std.Lldb.Manager do
     |> maybe_put_env(:password, "PGPASSWORD")
     |> maybe_put_env(:database, "PGDATABASE")
     |> maybe_put_env(:role_secret, "EXOFORGE_DB_ROLE_SECRET")
+    |> maybe_put_pool_size("EXOFORGE_DB_POOL_SIZE")
+    |> maybe_put_pool_sizes("EXOFORGE_DB_POOL_SIZES")
+  end
+
+  defp maybe_put_pool_size(acc, env_name) do
+    case Integer.parse(System.get_env(env_name) || "") do
+      {n, ""} when n > 0 -> Map.put(acc, :pool_size, n)
+      _ -> acc
+    end
+  end
+
+  # "auth=8,player_data=6": connections for the extensions that need more than the shared default.
+  defp maybe_put_pool_sizes(acc, env_name) do
+    sizes =
+      (System.get_env(env_name) || "")
+      |> String.split(",", trim: true)
+      |> Enum.flat_map(fn pair ->
+        with [name, n] <- String.split(pair, "=", parts: 2),
+             {size, ""} when size > 0 <- Integer.parse(String.trim(n)) do
+          [{Lldb.clean_id(String.trim(name)), size}]
+        else
+          _ -> []
+        end
+      end)
+      |> Map.new()
+
+    if sizes == %{}, do: acc, else: Map.put(acc, :pool_sizes, sizes)
   end
 
   defp maybe_put_env(acc, key, env_name) do

@@ -3,6 +3,11 @@ services:
     image: postgres:16-alpine
     container_name: exoforge_postgres
     restart: unless-stopped
+    # Every extension connects as its own role with its own pool (pool size + 2 connections at most), so the
+    # server needs room for all of them: roughly (extensions x (pool + 2)) plus the admin pool and headroom.
+    # Sixteen extensions at the default pool of 4 is under 100; 300 leaves room to raise pools (EXOFORGE_DB_POOL_SIZE,
+    # EXOFORGE_DB_POOL_SIZES="auth=8").
+    command: ["postgres", "-c", "max_connections=${POSTGRES_MAX_CONNECTIONS:-300}"]
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
@@ -39,6 +44,8 @@ services:
       # What an unsafe change to a typed table does: `refuse` fails that extension and says where; `reset`
       # drops and rebuilds the table (its rows are lost). A development stack can set `reset`.
       EXOFORGE_SCHEMA_CHANGE_MODE: ${EXOFORGE_SCHEMA_CHANGE_MODE:-refuse}
+      EXOFORGE_DB_POOL_SIZE: ${EXOFORGE_DB_POOL_SIZE:-4}
+      EXOFORGE_DB_POOL_SIZES: ${EXOFORGE_DB_POOL_SIZES:-auth=8}
       SECRET_KEY_BASE: ${SECRET_KEY_BASE:-exoforge_super_secret_key_base_at_least_64_bytes_long_for_dev_mode}
       LIVEVIEW_SIGNING_SALT: ${LIVEVIEW_SIGNING_SALT:-exoforge_liveview_salt_for_studio_sockets_at_least_8}
       RELEASE_COOKIE: ${RELEASE_COOKIE:-exoforge_cluster_cookie}

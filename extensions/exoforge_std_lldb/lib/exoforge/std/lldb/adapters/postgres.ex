@@ -2,7 +2,7 @@ defmodule Exoforge.Std.Lldb.Adapters.Postgres do
   # Postgrex connect timeout, in milliseconds.
   @connect_timeout 3000
   # Keep per-extension pools small so N extensions stay well under Postgres max_connections (100).
-  @default_pool_size 2
+  @default_pool_size 4
 
   @moduledoc """
   PostgreSQL database adapter providing strict per-plugin multi-tenant isolation.
@@ -105,7 +105,7 @@ defmodule Exoforge.Std.Lldb.Adapters.Postgres do
   defp provision_role_and_schema(conn, db_name, schema_name, plugin_id, admin_user, db_reads, config) do
     role = role_name(plugin_id, config)
     pass = role_password(role, config)
-    pool_size = Map.get(config, :pool_size, @default_pool_size)
+    pool_size = pool_size_for(plugin_id, config)
     conn_limit = valid_conn_limit!(Map.get(config, :connection_limit, pool_size + 2))
     stmt_timeout = valid_timeout!(Map.get(config, :statement_timeout, "30s"))
     idle_timeout = valid_timeout!(Map.get(config, :idle_in_transaction_session_timeout, "60s"))
@@ -496,7 +496,7 @@ defmodule Exoforge.Std.Lldb.Adapters.Postgres do
     role = role_name(plugin_id, config)
     host = Map.get(config, :host, "localhost")
     port = Map.get(config, :port, 5432)
-    pool_size = Map.get(config, :pool_size, @default_pool_size)
+    pool_size = pool_size_for(plugin_id, config)
 
     url = "postgres://#{role}@#{host}:#{port}/#{db_name}?search_path=#{schema_name}"
 
@@ -829,7 +829,7 @@ defmodule Exoforge.Std.Lldb.Adapters.Postgres do
       extension_connection_opts(plugin_id, target_db, schema_name, config)
       |> Keyword.merge(
         name: name,
-        pool_size: Map.get(config, :pool_size, @default_pool_size),
+        pool_size: pool_size_for(plugin_id, config),
         parameters: [search_path: "#{quote_ident(schema_name)}, public"]
       )
 
@@ -911,6 +911,16 @@ defmodule Exoforge.Std.Lldb.Adapters.Postgres do
     :crypto.mac(:hmac, :sha256, secret, role)
     |> Base.encode16(case: :lower)
   end
+
+  # An extension's own setting (`pool_sizes: %{"auth" => 8}`) wins over the shared default (`pool_size`), which
+  # wins over the built-in one. A busy extension can have more connections without everyone paying for them.
+  defp pool_size_for(plugin_id, config) do
+    own = config |> Map.get(:pool_sizes, %{}) |> Map.get(Exoforge.Std.Lldb.clean_id(plugin_id))
+    positive(own) || positive(Map.get(config, :pool_size)) || @default_pool_size
+  end
+
+  defp positive(n) when is_integer(n) and n > 0, do: n
+  defp positive(_), do: nil
 
   defp root_database(config), do: valid_ident!(Map.get(config, :database, "postgres"))
 
