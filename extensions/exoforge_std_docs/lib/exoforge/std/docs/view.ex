@@ -382,7 +382,7 @@ defmodule Exoforge.Std.Docs.View do
         <div>
           <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold">
             
-            <span>Live Cluster Contracts</span>
+            <span>Live Server Contracts</span>
           </div>
           <h2 class="text-xl font-semibold text-gray-900 tracking-tight mt-1">
             Live Services &amp; Action Catalog

@@ -43,7 +43,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   type="text"
                   name="query"
                   value={@query}
-                  placeholder="Search extensions, resources, players, actions... (Cmd+K)"
+                  placeholder="Search, or paste a request id (r_…)"
                   class="w-full px-2 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none"
                   autofocus
                 />
@@ -355,7 +355,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
   end
 
   @doc """
-  Live Cluster Event Stream Dock component.
+  Live Server Event Stream Dock component.
   Renders a real-time console dock listening to :pg / EventDispatcher with
   pause/resume, topic search, payload viewer, and test simulator.
   """
@@ -381,7 +381,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           <div class="flex items-center gap-3">
             <div class="flex items-center gap-2">
               <span class={"w-2.5 h-2.5 rounded-full #{if @paused, do: "bg-amber-400", else: "bg-emerald-400 animate-pulse"}"}></span>
-              <span class="font-semibold text-gray-200 tracking-tight">Cluster Event Stream (:pg / EventDispatcher)</span>
+              <span class="font-semibold text-gray-200 tracking-tight">Server Event Stream (:pg / EventDispatcher)</span>
             </div>
             <span class="px-2 py-0.5 rounded-full bg-gray-800 font-mono font-semibold text-[10px] text-gray-300 border border-gray-700">
               <%= length(@events) %> captured
@@ -427,7 +427,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               type="button"
               phx-click={@on_simulate}
               class="px-2.5 py-1 bg-primary-600 hover:bg-primary-500 text-white rounded-lg font-semibold text-xs transition-colors flex items-center gap-1 shadow-sm"
-              title="Broadcast simulated event to cluster"
+              title="Broadcast simulated event to server"
             >
               <.icon name={:bolt} class="w-3 h-3" />
               <span>Simulate Event</span>
@@ -459,7 +459,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               <svg class="w-8 h-8 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
-              <p class="text-xs font-sans text-gray-400">Waiting for live cluster events on <code class="text-primary-400">EventDispatcher</code> bus...</p>
+              <p class="text-xs font-sans text-gray-400">Waiting for live server events on <code class="text-primary-400">EventDispatcher</code> bus...</p>
               <p class="text-[11px] font-sans text-gray-500">Dispatch an action or click "Simulate Event" above to verify.</p>
             </div>
           <% else %>
@@ -542,7 +542,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
       icon="gear"
       max_width="max-w-4xl"
       title="Project Settings & Topology"
-      subtitle={"#{@project_name} cluster configuration & extension options"}
+      subtitle={"#{@project_name} server configuration & extension options"}
       on_close={@on_close}
     >
       {project_settings_panel(assigns)}
@@ -584,9 +584,9 @@ defmodule Exoforge.Std.Dashboard.Overlays do
         <!-- Left Sidebar Navigation -->
         <div class="w-full md:w-56 p-3 bg-gray-50/70 flex flex-col justify-between shrink-0 overflow-y-auto custom-scrollbar">
           <div class="space-y-4">
-            <!-- Cluster & Core Settings -->
+            <!-- Server & Core Settings -->
             <div>
-              <span class="px-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Cluster &amp; Core</span>
+              <span class="px-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Server &amp; Core</span>
               <div class="mt-1.5 space-y-0.5">
                 <button
                   type="button"
@@ -649,7 +649,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
           <div class="pt-3 border-t border-gray-200/60 px-2 text-[10px] text-gray-400 space-y-1">
             <div class="truncate"><span>Node: </span><span class="font-mono text-gray-600"><%= @node_name %></span></div>
             <div class="truncate" title={@overview[:commit_hash]}>
-              <span>Cluster: </span><span class="font-mono text-gray-600">v<%= @overview[:version] || Exoforge.BuildInfo.version() %> (<%= String.slice(to_string(@overview[:commit_hash] || "dev"), 0, 7) %>)</span>
+              <span>Server: </span><span class="font-mono text-gray-600">v<%= @overview[:version] || Exoforge.BuildInfo.version() %> (<%= String.slice(to_string(@overview[:commit_hash] || "dev"), 0, 7) %>)</span>
             </div>
           </div>
         </div>
@@ -667,12 +667,12 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 <div>
                   <h4 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
                     <.icon name="gear" class="w-3.5 h-3.5" />
-                    <span>Project &amp; Cluster Metadata</span>
+                    <span>Project &amp; Server Metadata</span>
                   </h4>
                   <p class="text-xs text-gray-500 mt-0.5">Global configuration, studio identity, and runtime telemetry.</p>
                 </div>
                 <span class="px-2.5 py-1 text-[10px] font-semibold rounded-full bg-primary-50 text-primary-700 border border-primary-200">
-                  Cluster-wide
+                  Server-wide
                 </span>
               </div>
 
@@ -813,7 +813,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 </div>
 
                 <div class="exo-card p-3 space-y-2">
-                  <span class="font-semibold text-gray-800 text-xs block">Cluster Database Diagnostics</span>
+                  <span class="font-semibold text-gray-800 text-xs block">Server Database Diagnostics</span>
                   <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px]">
                     <div class="p-2 bg-gray-50 rounded border border-gray-100">
                       <span class="text-gray-400 text-[10px] block">Driver</span>
@@ -980,9 +980,9 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 <div>
                   <h4 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
                     <.icon name="monitor" class="w-3.5 h-3.5" />
-                    <span>Cluster Event Stream &amp; Console</span>
+                    <span>Server Event Stream &amp; Console</span>
                   </h4>
-                  <p class="text-xs text-gray-500 mt-0.5">Real-time cluster event stream via <code class="font-mono text-primary-600">EventDispatcher</code> &amp; <code class="font-mono text-primary-600">:pg</code></p>
+                  <p class="text-xs text-gray-500 mt-0.5">Real-time server event stream via <code class="font-mono text-primary-600">EventDispatcher</code> &amp; <code class="font-mono text-primary-600">:pg</code></p>
                 </div>
                 <div class="flex items-center gap-2">
                   <span class="px-2 py-0.5 rounded-full bg-gray-100 font-mono font-semibold text-[10px] text-gray-600 border border-gray-200">
@@ -1036,7 +1036,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                 <%= if Enum.empty?(@activity_events) do %>
                   <div class="h-full flex flex-col items-center justify-center text-center space-y-1.5 py-12">
                     <.icon name="radio" class="w-7 h-7" />
-                    <p class="text-xs text-gray-400 font-sans">Waiting for live cluster events on <code class="text-primary-400">EventDispatcher</code> bus...</p>
+                    <p class="text-xs text-gray-400 font-sans">Waiting for live server events on <code class="text-primary-400">EventDispatcher</code> bus...</p>
                     <p class="text-[11px] text-gray-500 font-sans">Click "Simulate Event" or dispatch an action to test.</p>
                   </div>
                 <% else %>
@@ -1888,8 +1888,8 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               <p class="mt-0.5">Download the <code class="font-mono text-primary-700">com.exoforge.sdk-*.tgz</code> tarball above, then in Unity open <strong>Window &rarr; Package Manager &rarr; + &rarr; Add package from tarball...</strong> and select the downloaded file.</p>
             </div>
             <div>
-              <span class="font-semibold text-gray-800">2. Configure Cluster Endpoint &amp; Generate Stubs</span>
-              <p class="mt-0.5">Open <strong>Exoforge &rarr; Studio</strong> in the Unity Editor toolbar, point the cluster URL to this server, and click <strong>Sync &amp; Generate Stubs</strong>.</p>
+              <span class="font-semibold text-gray-800">2. Configure Server Endpoint &amp; Generate Stubs</span>
+              <p class="mt-0.5">Open <strong>Exoforge &rarr; Studio</strong> in the Unity Editor toolbar, point the server URL to this server, and click <strong>Sync &amp; Generate Stubs</strong>.</p>
             </div>
             <div>
               <span class="font-semibold text-gray-800">3. Quick Connect in C#</span>
@@ -2091,7 +2091,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   <span><%= if @is_error_mode, do: "Action Exceptions & Error Breakdown", else: "Action Invocations & Telemetry Details" %></span>
                 </h3>
                 <p class="text-xs text-gray-500 mt-0.5">
-                  <%= if @is_error_mode, do: "Expanded error spikes, failure rates, and execution triggers.", else: "Expanded throughput graph and deep telemetry across all monitored cluster actions." %>
+                  <%= if @is_error_mode, do: "Expanded error spikes, failure rates, and execution triggers.", else: "Expanded throughput graph and deep telemetry across all monitored server actions." %>
                 </p>
               </div>
 
@@ -2176,7 +2176,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   <%= for s <- @expanded_series do %>
                     <div class="flex items-center gap-1.5">
                       <span class="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs" style={"background-color: #{Map.get(s, :color, "#8b5cf6")}"}></span>
-                      <span class="font-mono text-gray-800 font-semibold"><%= if s[:id] == "idle", do: "Cluster Idle", else: s[:id] %></span>
+                      <span class="font-mono text-gray-800 font-semibold"><%= if s[:id] == "idle", do: "Server Idle", else: s[:id] %></span>
                       <span class="text-gray-400 font-mono text-[10px]">(<%= s[:total] || 0 %> <%= if @is_error_mode, do: "errors", else: "calls" %> / <%= @telemetry[:window_minutes] || 30 %>m)</span>
                     </div>
                   <% end %>
@@ -2935,7 +2935,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
   defp context_value(value), do: to_string(value)
 
   @doc """
-  Renders the full cluster events history modal ("More" button on Latest Dispatched Events).
+  Renders the full server events history modal ("More" button on Latest Dispatched Events).
   """
   attr(:open, :boolean, default: false)
   attr(:events, :list, default: [])
@@ -2976,7 +2976,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               <div class="flex items-center gap-2.5">
                 <.icon name="radio" class="w-4 h-4 text-primary-600 shrink-0" />
                 <div>
-                  <h3 class="exo-modal-title">Cluster Event Stream &amp; History</h3>
+                  <h3 class="exo-modal-title">Server Event Stream &amp; History</h3>
                   <p class="exo-modal-subtitle">Live pub/sub stream captured across all nodes via EventDispatcher (:pg)</p>
                 </div>
               </div>
@@ -3056,7 +3056,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
               <%= if Enum.empty?(@events) do %>
                 <div class="h-full flex flex-col items-center justify-center text-center space-y-1.5 py-16">
                   <.icon name="radio" class="w-8 h-8" />
-                  <p class="text-sm font-semibold text-gray-300 font-sans">No cluster events captured yet.</p>
+                  <p class="text-sm font-semibold text-gray-300 font-sans">No server events captured yet.</p>
                   <p class="text-xs text-gray-500 font-sans">Dispatch an action, log in, or upload a file to see live events stream in real time.</p>
                 </div>
               <% else %>

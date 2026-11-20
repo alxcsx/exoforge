@@ -1,14 +1,14 @@
 defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
   @moduledoc """
   Phoenix LiveComponent providing the dynamic Producer & Designer Studio visualization
-  for the Extension Manager & Cluster Runtime service (:extension_manager).
+  for the Extension Manager & Server Runtime service (:extension_manager).
 
   Enables game producers and backend engineers to:
   - Inspect installed standard and native extensions, entity schemas, and manifests
     (capability inspection lives in the Extensions Registry; this view owns lifecycle)
   - Monitor live BEAM node metrics, memory, process counts, and active stateful entities
-  - Drag-and-drop or upload new native C# extensions directly into the running cluster
-  - Hot-reload and restart the cluster runtime supervision tree
+  - Drag-and-drop or upload new native C# extensions directly into the running server
+  - Hot-reload and restart the server runtime supervision tree
   - Remove dynamically installed extensions safely
   """
   use Phoenix.LiveComponent
@@ -227,7 +227,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
           socket
           |> assign(
             show_restart_modal: false,
-            restart_status: "Runtime cluster restarted. #{count} extensions reloaded successfully."
+            restart_status: "Runtime server restarted. #{count} extensions reloaded successfully."
           )
           |> load_data()
 
@@ -387,7 +387,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
       <div class="exo-page-header">
         <div>
           <div class="flex items-center gap-2.5">
-            <h2 class="exo-page-title">Extension Manager &amp; Cluster Runtime</h2>
+            <h2 class="exo-page-title">Extension Manager &amp; Server Runtime</h2>
             <span class="exo-badge bg-emerald-100 text-emerald-700">
               <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
               Extension Live
@@ -415,7 +415,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
             title="Hot-reload extension supervision trees and clear cache"
           >
             <.studio_icon icon="refresh" class="w-3.5 h-3.5" />
-            Restart Cluster
+            Restart Server
           </button>
 
           <button
@@ -473,10 +473,10 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
           <div class="exo-metric-value"><%= @memory_mb %> MB</div>
         </div>
 
-        <!-- 3. Cluster Node & Uptime -->
+        <!-- 3. Server Node & Uptime -->
         <div class="exo-metric-card" title={"Node: #{@node_name}"}>
           <div class="exo-metric-label">
-            <span>Cluster Node</span>
+            <span>Server Node</span>
             <span class="exo-badge bg-blue-50 text-blue-700"><%= @uptime %></span>
           </div>
           <div class="exo-metric-value text-base font-mono truncate"><%= @node_name %></div>
@@ -485,7 +485,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
         <!-- 4. Version & Engine -->
         <div class="exo-metric-card" title={"OTP #{@otp_release} • Built #{Map.get(@system_info, "build_date", "—")}"}>
           <div class="exo-metric-label">
-            <span>Cluster Build</span>
+            <span>Server Build</span>
             <span class="exo-badge font-mono bg-primary-50 text-primary-700">
               #<%= Map.get(@system_info, "commit_hash", "dev") %>
             </span>
@@ -567,6 +567,9 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
                             <%= if plugin["status"] == "blocked" do %>
                               <span class="exo-badge bg-amber-50 text-amber-700">Blocked</span>
                             <% end %>
+                            <%= if plugin["status"] == "crashed" do %>
+                              <span class="exo-badge bg-red-50 text-red-700">Crashed</span>
+                            <% end %>
                           </div>
                           <span class="font-mono text-[11px] text-gray-400"><%= plugin["id"] %></span>
                           <%= if plugin["failure"] do %>
@@ -633,7 +636,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
                               phx-value-id={plugin["id"]}
                               phx-target={@myself}
                               data-confirm={"Are you sure you want to unload extension #{plugin["id"]}?"}
-                              title="Unload and remove extension from cluster"
+                              title="Unload and remove extension from server"
                               class="exo-menu-item exo-menu-danger"
                             >
                               <.studio_icon icon="trash" class="w-3 h-3" /> <span>Remove</span>
@@ -683,6 +686,10 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
                           <% "blocked" -> %>
                             <span class="text-sm font-semibold text-amber-700 mt-1 block flex items-center gap-1.5">
                               <span class="w-2 h-2 rounded-full bg-amber-500"></span> Blocked by a dependency
+                            </span>
+                          <% "crashed" -> %>
+                            <span class="text-sm font-semibold text-red-700 mt-1 block flex items-center gap-1.5">
+                              <span class="w-2 h-2 rounded-full bg-red-500"></span> Stopped after a crash
                             </span>
                           <% _ -> %>
                             <span class="text-sm font-semibold text-emerald-600 mt-1 block flex items-center gap-1.5">
@@ -959,7 +966,7 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
           <div class="exo-modal-panel max-w-md animate-in fade-in duration-150">
             <div class="exo-modal-header">
               <div>
-                <h3 class="exo-modal-title">Restart Cluster Supervision?</h3>
+                <h3 class="exo-modal-title">Restart Server Supervision?</h3>
                 <p class="exo-modal-subtitle">Hot-reloads all extension supervision trees and manifests.</p>
               </div>
               <button

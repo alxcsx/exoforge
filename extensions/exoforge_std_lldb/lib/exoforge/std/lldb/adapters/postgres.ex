@@ -59,7 +59,7 @@ defmodule Exoforge.Std.Lldb.Adapters.Postgres do
 
   @doc """
   Deterministic per-extension PostgreSQL LOGIN role name (`<= 63` bytes).
-  Includes an 8-character hash of the target database name because roles are cluster-global.
+  Includes an 8-character hash of the target database name because roles are server-global.
   """
   def role_name(plugin_id, config) do
     clean = valid_plugin_id!(plugin_id)

@@ -201,7 +201,7 @@ defmodule Exoforge.Std.DocsTest do
       assert title =~ "Exoforge Complete Developer Guide"
       assert md =~ "Developer Quickstart"
       assert md =~ "C# Attributes Reference"
-      assert md =~ "Dynamic Cluster API Reference"
+      assert md =~ "Dynamic Server API Reference"
 
       {:ok, %{content: html, format: "html"}} = Docs.export_docs(%{format: "html"})
       assert html =~ "<h1"

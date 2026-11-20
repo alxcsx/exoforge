@@ -1023,6 +1023,15 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
 
   defp flush_stderr(state), do: state
 
+  # What a process wrote can be anything: a shell that was asked to run a Windows executable echoes the file's first
+  # bytes. Kept as text a person can read, so the reason shown in the Studio and in an error is not a list of byte values.
+  defp printable_line(line) do
+    line
+    |> String.replace(~r/[^\x20-\x7E\t]/, "?")
+    |> String.replace(~r/\?{4,}/, "…")
+    |> String.slice(0, 300)
+  end
+
   defp read_stderr_tail(nil), do: []
 
   defp read_stderr_tail(stderr_path) do
@@ -1046,6 +1055,7 @@ defmodule Exoforge.Drivers.Runtime.NativeExtensionRunner do
                       trimmed
                       |> String.split(~r/\r?\n/)
                       |> Enum.take(-@max_stderr_lines)
+                      |> Enum.map(&printable_line/1)
                   end
 
                 _ ->

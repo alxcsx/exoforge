@@ -5,7 +5,7 @@ defmodule Exoforge.Std.Docs do
   from the Extension Manager, serving Markdown documentation with code highlighting,
   and supporting print/PDF export.
 
-  Teams read it inside the Studio and in exported manuals; it stays an extension so the guide follows the cluster's running extensions instead of a checked-in copy.
+  Teams read it inside the Studio and in exported manuals; it stays an extension so the guide follows the server's running extensions instead of a checked-in copy.
 
   ### How it works
   - Chapters are the Markdown files under priv/guide, ordered by file name within their front-matter group.
@@ -508,7 +508,7 @@ defmodule Exoforge.Std.Docs do
   end
 
   defp format_catalog_as_markdown(catalog) do
-    header = "# Dynamic Cluster API Reference\n\nLive service catalog generated across active cluster extensions.\n\n"
+    header = "# Dynamic Server API Reference\n\nLive service catalog generated across active server extensions.\n\n"
 
     sections =
       Enum.map(catalog, fn svc ->

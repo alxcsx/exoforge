@@ -37,7 +37,24 @@ defmodule Exoforge.Std.DashboardViews.ObservabilityView do
   @impl true
   def update(assigns, socket) do
     socket = assign(socket, assigns)
-    {:ok, if(socket.assigns.loaded, do: socket, else: socket |> assign(:loaded, true) |> load_tab())}
+
+    socket =
+      case socket.assigns[:focus] do
+        # `?focus=request:<rid>`: the command palette, an error row elsewhere or a pasted link lands on that request.
+        %{kind: "request", id: rid} when is_binary(rid) and rid != "" ->
+          if socket.assigns[:focused_rid] == rid do
+            socket
+          else
+            socket
+            |> assign(loaded: true, focused_rid: rid, tab: "request", lookup: %{"rid" => rid, "player" => ""})
+            |> load_timeline()
+          end
+
+        _ ->
+          if socket.assigns.loaded, do: socket, else: socket |> assign(:loaded, true) |> load_tab()
+      end
+
+    {:ok, socket}
   end
 
   ## ---- events ----
@@ -203,7 +220,7 @@ defmodule Exoforge.Std.DashboardViews.ObservabilityView do
     end
   end
 
-  defp capture_started("global", _value, seconds), do: "Capturing the whole cluster for #{seconds} s."
+  defp capture_started("global", _value, seconds), do: "Capturing the whole server for #{seconds} s."
   defp capture_started(kind, value, seconds), do: "Capturing #{kind} #{value} for #{seconds} s."
 
   defp node_classes("log"), do: "bg-gray-100 text-gray-700 border-gray-200"

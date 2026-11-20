@@ -6,7 +6,7 @@ defmodule Exoforge.Std.Observability do
   The kernel produces the primitives — `Exoforge.ActionTrace` (bounded, in-memory), `Exoforge.
   ErrorGroups`, `Exoforge.ExtensionLogs`, `Exoforge.Metering`, `Exoforge.EventDispatcher` — because
   `ActionDispatcher` writes to them on every call and cannot depend on an extension. This
-  extension owns what the kernel must not: the persisted, queryable history of cluster events,
+  extension owns what the kernel must not: the persisted, queryable history of server events,
   and the `observability` contract other surfaces (Studio, Unity, CLI) read.
 
   The event store subscribes to the global event bus, keeps the most recent ring in ETS for the

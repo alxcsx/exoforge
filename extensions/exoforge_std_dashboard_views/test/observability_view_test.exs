@@ -105,6 +105,22 @@ defmodule Exoforge.Std.ObservabilityViewTest do
     assert {:timeline, %{rid: "r_abc"}} in Stub.calls()
   end
 
+  test "a focus link (?focus=request:<rid>) lands on that request, once" do
+    socket = start()
+    {:ok, socket} = ObservabilityView.update(%{focus: %{kind: "request", id: "r_pasted123"}}, socket)
+
+    assert socket.assigns.tab == "request"
+    assert socket.assigns.lookup["rid"] == "r_pasted123"
+    assert {:timeline, %{rid: "r_pasted123"}} in Stub.calls()
+
+    # a re-render with the same focus does not ask again, and the person can leave the tab
+    before = length(Stub.calls())
+    {:ok, socket} = ObservabilityView.update(%{focus: %{kind: "request", id: "r_pasted123"}}, socket)
+    assert length(Stub.calls()) == before
+    socket = event(socket, "tab", %{"tab" => "failures"})
+    assert socket.assigns.tab == "failures"
+  end
+
   test "failures are grouped with a way to open a sample request" do
     Stub.put(:groups, [%{service: "auth", action: "login", reason: ":invalid_credentials", count: 3, callers: ["http"], rid: "r_1", last_seen: System.system_time(:millisecond) - 120_000}])
 

@@ -250,6 +250,23 @@ defmodule Exoforge.Std.ExtensionManagerTest do
                )
     end
 
+    test "a crash is explained in words, and a wrong-OS binary says what to build" do
+      alias Exoforge.Std.ExtensionManager, as: M
+
+      {message, detail} = M.describe_crash({:exit_before_handshake, 2, ["/app/items: line 1: syntax error: unexpected word"]})
+      assert message =~ "built for another operating system"
+      assert message =~ "deploy again"
+      assert detail =~ "syntax error"
+
+      {message, nil} = M.describe_crash({:exit_before_handshake, 134, []})
+      assert message == "The process exited with status 134 before it finished starting."
+
+      assert {"Its start-up hook failed: seed failed", nil} = M.describe_crash({:startup_failed, %{message: "seed failed"}})
+      assert {message, nil} = M.describe_crash({:binary_not_found, "/x"})
+      assert message =~ "missing"
+      assert {"The extension stopped unexpectedly.", _} = M.describe_crash(:weird)
+    end
+
     test "upload_extension refuses an executable built for another OS and says what to build" do
       windows_exe = Base.encode64(<<"MZ", 0x90, 0, 3, 0, 0, 0, 4, 0, 0, 0>> <> String.duplicate(<<0>>, 64))
 

@@ -15,8 +15,8 @@ defmodule Exoforge.Std.Docs.Pages do
   @groups ["Get started", "Build", "Operate", "Learn by example", "Understand", "Live reference", "Extensions"]
 
   @live_pages [
-    %{id: "architecture", title: "Architecture map", nav: "Architecture map", group: "Understand", icon: "graph", summary: "How the extensions on this cluster fit together.", kind: :architecture},
-    %{id: "catalog", title: "API catalog", nav: "API catalog", group: "Live reference", icon: "book", summary: "Every service and action registered on this cluster, right now.", kind: :catalog}
+    %{id: "architecture", title: "Architecture map", nav: "Architecture map", group: "Understand", icon: "graph", summary: "How the extensions on this server fit together.", kind: :architecture},
+    %{id: "catalog", title: "API catalog", nav: "API catalog", group: "Live reference", icon: "book", summary: "Every service and action registered on this server, right now.", kind: :catalog}
   ]
 
   # Links and bookmarks from before the guide was one source of truth.

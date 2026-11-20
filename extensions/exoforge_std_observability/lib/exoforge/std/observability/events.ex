@@ -1,6 +1,6 @@
 defmodule Exoforge.Std.Observability.Events do
   @moduledoc """
-  The cluster-wide event history: a ring in ETS for the live tail and a persisted store the Studio
+  The server-wide event history: a ring in ETS for the live tail and a persisted store the Studio
   and the other surfaces read through `observability.events`.
 
   Ingest is batched: the producer buffers events and flushes them in one multi-row INSERT every

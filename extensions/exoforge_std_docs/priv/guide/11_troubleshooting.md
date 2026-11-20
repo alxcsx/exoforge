@@ -21,6 +21,7 @@ When a call fails, the error carries a code, a message and the request id (`rid`
 | `forbidden_scope` | The caller's role is below the action's scope. | Check the scope in [Authentication & Scopes](guide:10_auth_and_scopes). |
 | `service_not_found` | No running extension provides that service. | Check the extension is running in the Studio's **Extensions** tab, then sync the client. |
 | `action_not_found`, `unknown_action` | The service has no such action. | Rebuild and redeploy the extension, then **Sync Client**. |
+| `extension_unavailable` | The extension that handles the call is not running (it crashed or never started). Players see only this; the reason is in the Studio. | Open **Extension Manager**: a crashed extension shows *Crashed* with what happened and the process's last output. Fix it and deploy again. |
 | `startup_failed` | The extension's `OnExtensionStart()` or `[ExoSeed]` threw. | Read the extension's **Logs** tab for the exception. |
 
 ## Deploy refusals

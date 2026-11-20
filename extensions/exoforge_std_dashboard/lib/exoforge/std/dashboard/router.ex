@@ -196,13 +196,13 @@ defmodule Exoforge.Std.Dashboard.Router do
       try do
         Exoforge.Std.Dashboard.ProjectMetadata.get()
       rescue
-        _ -> %{"project_name" => "Exoforge Cluster", "studio_name" => "Exoforge Studio"}
+        _ -> %{"project_name" => "Exoforge Server", "studio_name" => "Exoforge Studio"}
       end
 
     %{
       status: "running",
       kernel: "Exoforge Core",
-      project_name: meta["project_name"] || "Exoforge Cluster",
+      project_name: meta["project_name"] || "Exoforge Server",
       studio_name: meta["studio_name"] || "Exoforge Studio",
       project_metadata: meta,
       version: Exoforge.BuildInfo.version(),

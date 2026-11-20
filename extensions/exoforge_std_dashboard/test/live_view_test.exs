@@ -358,6 +358,27 @@ defmodule Exoforge.DashboardLiveViewTest do
     end
   end
 
+  describe "Request id in the command palette" do
+    test "a pasted request id becomes the first result and opens the request" do
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{"admin_player_id" => "admin", "admin_scopes" => ["admin"]})
+
+      {:ok, view, _html} = live(conn, "/")
+      render_click(view, "open_cmd_palette", %{})
+
+      html = render_change(view, "search_cmd_palette", %{"query" => "r_AbC123xyz_9"})
+      assert html =~ "Open request r_AbC123xyz_9"
+
+      # an ordinary word is not mistaken for an id
+      refute render_change(view, "search_cmd_palette", %{"query" => "overview"}) =~ "Open request"
+
+      render_change(view, "search_cmd_palette", %{"query" => "r_AbC123xyz_9"})
+      render_click(view, "select_cmd_item", %{"id" => "r_AbC123xyz_9", "type" => "request"})
+      assert_patch(view, "/tab/exoforge_std_observability?focus=request:r_AbC123xyz_9")
+    end
+  end
+
   describe "Escape" do
     test "closes only the window on top" do
       conn =
@@ -368,19 +389,19 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       render_click(view, "open_settings", %{})
       html = render(view)
-      assert html =~ "Cluster &amp; Core"
+      assert html =~ "Server &amp; Core"
 
       render_click(view, "open_cmd_palette", %{})
-      assert render(view) =~ "Search extensions, resources, players"
+      assert render(view) =~ "Search, or paste a request id"
 
       # the palette is on top: one press closes it and leaves the settings open
       html = render_hook(view, "handle_key", %{"key" => "Escape"})
-      refute html =~ "Search extensions, resources, players"
-      assert html =~ "Cluster &amp; Core"
+      refute html =~ "Search, or paste a request id"
+      assert html =~ "Server &amp; Core"
 
       # the next press closes the settings
       html = render_hook(view, "handle_key", %{"key" => "Escape"})
-      refute html =~ "Cluster &amp; Core"
+      refute html =~ "Server &amp; Core"
     end
   end
 
@@ -440,7 +461,7 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       # Open Command Palette (Cmd+K)
       html = render_click(view, "open_cmd_palette", %{})
-      assert html =~ "Search extensions, resources, players, actions... (Cmd+K)"
+      assert html =~ "Search, or paste a request id (r_…)"
 
       # Search in Command Palette for dynamic action
       html = render_change(view, "search_cmd_palette", %{"query" => "register"})
@@ -530,7 +551,7 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       # 1. Open event dock
       html = render_click(view, "toggle_event_dock", %{})
-      assert html =~ "Cluster Event Stream (:pg / EventDispatcher)"
+      assert html =~ "Server Event Stream (:pg / EventDispatcher)"
       assert html =~ "Clear"
       assert html =~ "Simulate Event"
 
@@ -548,9 +569,9 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       # Kind filter: the telemetry event is not a cron run, so the cron filter empties the dock.
       html = render_click(view, "filter_event_kind", %{"kind" => "cron"})
-      assert html =~ "Waiting for live cluster events"
+      assert html =~ "Waiting for live server events"
       html = render_click(view, "filter_event_kind", %{"kind" => "event"})
-      refute html =~ "Waiting for live cluster events"
+      refute html =~ "Waiting for live server events"
       html = render_click(view, "filter_event_kind", %{"kind" => "all"})
 
       # 4. Toggle pause
@@ -559,7 +580,7 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       # 5. Clear events
       html = render_click(view, "clear_events", %{})
-      assert html =~ "Waiting for live cluster events"
+      assert html =~ "Waiting for live server events"
     end
 
     test "mounts GenericExtensionView for extensions without custom LiveComponent" do
@@ -1017,11 +1038,11 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       # 1. Trigger Cmd+K keydown event
       html = render_hook(view, "handle_key", %{"key" => "k", "metaKey" => true})
-      assert html =~ "Search extensions, resources, players, actions... (Cmd+K)"
+      assert html =~ "Search, or paste a request id (r_…)"
 
       # 2. Trigger Escape keydown event to close modal
       html = render_hook(view, "handle_key", %{"key" => "Escape"})
-      refute html =~ "Search extensions, resources, players, actions... (Cmd+K)"
+      refute html =~ "Search, or paste a request id (r_…)"
     end
 
     test "topbar navigation orders overview first, extensions second, and enforces pin limit" do
@@ -1074,14 +1095,14 @@ defmodule Exoforge.DashboardLiveViewTest do
       render_click(view, "pin_extension", %{"id" => "exoforge_std_extension_manager"})
       html = render_click(view, "switch_tab", %{"tab" => "exoforge_std_extension_manager"})
 
-      assert html =~ "Extension Manager &amp; Cluster Runtime" or
-               html =~ "Extension Manager & Cluster Runtime"
+      assert html =~ "Extension Manager &amp; Server Runtime" or
+               html =~ "Extension Manager & Server Runtime"
 
       assert html =~ "Installed Extensions" or html =~ "Installed Plugins"
       assert html =~ "BEAM Memory &amp; Load" or html =~ "BEAM Memory & Load"
-      assert html =~ "Cluster Node"
+      assert html =~ "Server Node"
       assert html =~ "Upload Extension" or html =~ "Upload Plugin"
-      assert html =~ "Restart Cluster"
+      assert html =~ "Restart Server"
 
       # Open upload modal via ExtensionManagerView component
       html = view |> element("button", "Upload Extension") |> render_click()
@@ -1093,12 +1114,12 @@ defmodule Exoforge.DashboardLiveViewTest do
       refute html =~ "Upload C# Extension"
 
       # Open restart cluster modal
-      html = view |> element("button", "Restart Cluster") |> render_click()
-      assert html =~ "Restart Cluster Supervision?"
+      html = view |> element("button", "Restart Server") |> render_click()
+      assert html =~ "Restart Server Supervision?"
 
       # Close restart modal
       html = view |> element("button", "Cancel") |> render_click()
-      refute html =~ "Restart Cluster Supervision?"
+      refute html =~ "Restart Server Supervision?"
 
       # Open dependency graph modal
       html = view |> element("button", "Show Dependency Graph") |> render_click()
@@ -1401,7 +1422,7 @@ defmodule Exoforge.DashboardLiveViewTest do
       # Console is available in Settings modal only
       render_click(view, "open_settings", %{})
       console_html = render_click(view, "set_settings_tab", %{"tab" => "console"})
-      assert console_html =~ "Cluster Event Stream &amp; Console"
+      assert console_html =~ "Server Event Stream &amp; Console"
       render_click(view, "close_settings", %{})
 
       # Enable edit mode: size badges, movement arrows, and done editing appear
@@ -1449,8 +1470,11 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert sdk_html =~ "Unity Package Manager (UPM)"
 
       # Verify 0 error labels are hidden from Error Graph
-      assert html =~ "Errors detected" or
-               html =~ "Zero errors detected across all monitored actions"
+      # and the headline is the same 30 minutes the graph shows, with the lifetime total beside it
+      assert html =~ "errors in 30 min"
+      assert html =~ "calls in 30 min"
+      assert html =~ "since the server started"
+      refute html =~ "Zero errors detected"
 
       refute html =~ "(0 errors)"
 
@@ -1469,7 +1493,7 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       # Open Events History Modal via "More" button
       events_modal_html = render_click(view, "open_events_modal", %{})
-      assert events_modal_html =~ "Cluster Event Stream &amp; History"
+      assert events_modal_html =~ "Server Event Stream &amp; History"
       assert events_modal_html =~ "auth.login"
       assert events_modal_html =~ "Webhooks"
       assert events_modal_html =~ "Cron"

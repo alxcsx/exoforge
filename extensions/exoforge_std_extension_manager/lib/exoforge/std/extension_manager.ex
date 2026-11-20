@@ -322,14 +322,14 @@ defmodule Exoforge.Std.ExtensionManager do
         _ -> nil
       end
 
-    cluster = cluster_os()
+    server = cluster_os()
 
     cond do
       is_nil(built_for) -> nil
-      built_for == "linux" and String.starts_with?(cluster, "linux") -> nil
-      built_for == cluster -> nil
+      built_for == "linux" and String.starts_with?(server, "linux") -> nil
+      built_for == server -> nil
       true ->
-        "This extension was built for #{built_for}, but this server runs #{cluster}. " <>
+        "This extension was built for #{built_for}, but this server runs #{server}. " <>
           "Build it for #{cluster_target_rid()} (exo extension push does this by itself; in Unity set the build target to Auto or #{cluster_target_rid()}) and upload it again. The version that was running is untouched."
     end
   end
@@ -1285,7 +1285,7 @@ defmodule Exoforge.Std.ExtensionManager do
 
       nil ->
         case ExtensionRegistry.get_crash_info(manifest_id) do
-          {:crashed, reason} -> "crashed: #{inspect(reason)}"
+          {:crashed, _reason} -> "crashed"
           _ -> "running"
         end
     end
@@ -1304,9 +1304,44 @@ defmodule Exoforge.Std.ExtensionManager do
         }
 
       nil ->
+        crash_failure_info(manifest_id)
+    end
+  end
+
+  # An extension that started and then died is not in the failure table (it did not fail to load), but the developer
+  # needs the same answer for it: what happened, in words, with the process's own last output underneath.
+  defp crash_failure_info(manifest_id) do
+    case ExtensionRegistry.get_crash_info(manifest_id) do
+      {:crashed, reason} ->
+        {message, detail} = describe_crash(reason)
+        %{"kind" => "crashed", "stage" => "run", "message" => message, "detail" => detail, "at" => nil}
+
+      _ ->
         nil
     end
   end
+
+  @doc false
+  def describe_crash({:exit_before_handshake, status, tail}) do
+    output = tail |> List.wrap() |> Enum.join("\n")
+
+    message =
+      cond do
+        output =~ ~r/syntax error|Exec format error|cannot execute binary|not found/ ->
+          "The server could not run the file: it was built for another operating system or is not a program. Build for #{cluster_target_rid()} and deploy again."
+
+        true ->
+          "The process exited with status #{status} before it finished starting."
+      end
+
+    {message, if(output == "", do: nil, else: output)}
+  end
+
+  def describe_crash({:startup_failed, %{message: message}}), do: {"Its start-up hook failed: #{message}", nil}
+  def describe_crash({:startup_failed, other}), do: {"Its start-up hook failed.", inspect(other, printable_limit: 500)}
+  def describe_crash({:binary_not_found, _}), do: {"The program file is missing on the server. Deploy the extension again.", nil}
+  def describe_crash(%{kind: kind, message: message}), do: {"#{kind}: #{message}", nil}
+  def describe_crash(other), do: {"The extension stopped unexpectedly.", inspect(other, printable_limit: 500)}
 
   defp failed_manifest(id_str) do
     Enum.find_value(ExtensionRegistry.failed_extensions(), fn {manifest, _failure} ->

@@ -1,6 +1,6 @@
 defmodule Exoforge.Std.Dashboard.ProjectMetadata do
   @moduledoc """
-  Global cluster and project metadata, stored through the resource store.
+  Global server and project metadata, stored through the resource store.
 
   Reuses the `studio_preference` resource with a reserved key `"__project__"`
   so project metadata is durably persisted with zero extra migrations or tables.
@@ -13,7 +13,7 @@ defmodule Exoforge.Std.Dashboard.ProjectMetadata do
   @resource "studio_preference"
   @project_key "__project__"
 
-  @default_project_name "Exoforge Cluster"
+  @default_project_name "Exoforge Server"
   @default_studio_name "Exoforge Studio"
 
   @doc "Initializes project metadata at boot and synchronizes application environment."

@@ -276,6 +276,16 @@ defmodule Exoforge.Std.Transport do
     }
   end
 
+  # The reason holds the process's own output and host paths: staff read it in the Studio (Extension Manager), a
+  # caller is told only that the extension is not running.
+  def action_error({:extension_crashed, _reason}) do
+    %{
+      "code" => "extension_unavailable",
+      "message" => "The extension that handles this call is not running. Its developer can see why in the Studio.",
+      "details" => %{}
+    }
+  end
+
   def action_error({code, message}) when is_atom(code) or is_binary(code) do
     error_shape(code, message, nil)
   end

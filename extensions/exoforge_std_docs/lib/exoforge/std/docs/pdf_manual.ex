@@ -1,7 +1,7 @@
 defmodule Exoforge.Std.Docs.PdfManual do
   @moduledoc """
   Generates a high-quality, multi-page standalone PDF manual for Exoforge.
-  Combines markdown documentation chapters with dynamic cluster API catalog data.
+  Combines markdown documentation chapters with dynamic server API catalog data.
   Outputs a standard PDF 1.4 binary with zero external dependencies.
   """
 
@@ -108,7 +108,7 @@ defmodule Exoforge.Std.Docs.PdfManual do
       {"Chapter 2: C# Attributes & Core Contracts", "[ExoService], [ExoAction], [ExoCron], [ExoEvent], [ExoResource], static Exo.* helpers."},
       {"Chapter 3: Architectural Blueprints & Patterns", "Cross-Player Auction House, In-Memory Matchmaker, World Boss LiveOps, Guild Feeds."},
       {"Chapter 4: Architecture, OTP Topology & SLAs", "Single-title doctrine, ETS catalogs, :pg fanout SLA (< 0.1ms), process crash isolation."},
-      {"Chapter 5: Live Cluster API Reference", "All dynamic service endpoints and callable actions registered across the running instance."}
+      {"Chapter 5: Live Server API Reference", "All dynamic service endpoints and callable actions registered across the running instance."}
     ]
 
     toc_stream =
@@ -318,9 +318,9 @@ defmodule Exoforge.Std.Docs.PdfManual do
     state =
       state
       |> new_page_if_needed(120)
-      |> render_chapter_heading("Dynamic Cluster API Reference")
+      |> render_chapter_heading("Dynamic Server API Reference")
       |> render_paragraph(
-        "This chapter lists all live services, actions, parameters, scopes, and schemas extracted dynamically from active cluster extensions."
+        "This chapter lists all live services, actions, parameters, scopes, and schemas extracted dynamically from active server extensions."
       )
 
     Enum.reduce(catalog, state, fn svc, acc_svc ->

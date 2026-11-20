@@ -637,7 +637,7 @@ defmodule Exoforge.Std.FileBucket.DashboardView do
           <div>
             <div class="flex items-center gap-3">
               <h2 class="text-lg font-bold text-gray-900">File Bucket Storage</h2>
-              <span class="text-xs px-2.5 py-0.5 font-bold rounded-full bg-primary-50 text-primary-700 border border-primary-100">Cluster Engine</span>
+              <span class="text-xs px-2.5 py-0.5 font-bold rounded-full bg-primary-50 text-primary-700 border border-primary-100">Server Engine</span>
             </div>
             <p class="text-xs text-gray-400 mt-1">Pluggable binary asset storage for Unity, web clients, game media, and configurations</p>
           </div>

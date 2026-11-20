@@ -1357,7 +1357,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                     <span class="text-xs font-mono font-normal text-primary-600 bg-primary-50 px-2 py-0.5 rounded-lg">singleton</span>
                   </h3>
                   <p class="text-xs text-gray-500 mt-1">
-                    This resource contains a single instance configuration. Updating values persists directly into cluster storage.
+                    This resource contains a single instance configuration. Updating values persists directly into server storage.
                   </p>
                 </div>
                 <%= if @singleton_form && @singleton_form.saved do %>
@@ -1497,7 +1497,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
           <div class="flex items-center justify-between">
             <div>
               <h3 class="text-sm font-semibold text-gray-900">Declared Event Contracts</h3>
-              <p class="text-xs text-gray-400 mt-0.5">Cluster broadcasts emitted by this extension via EventDispatcher</p>
+              <p class="text-xs text-gray-400 mt-0.5">Server broadcasts emitted by this extension via EventDispatcher</p>
             </div>
           </div>
 

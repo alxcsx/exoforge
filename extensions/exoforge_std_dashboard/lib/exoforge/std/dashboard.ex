@@ -4,7 +4,7 @@ defmodule Exoforge.Std.Dashboard do
   Provides the :dashboard contract and mounts the Phoenix LiveView Endpoint
   backed by Bandit to host the Exoforge Game Producer & Designer Studio.
 
-  Operators and developers use it as the control plane of the cluster; it stays an extension so the whole Studio can be replaced by another implementation.
+  Operators and developers use it as the control plane of the server; it stays an extension so the whole Studio can be replaced by another implementation.
 
   ### How it works
   - `children/0` starts `Phoenix.PubSub` and `Exoforge.Std.Dashboard.Endpoint` on `Exoforge.Endpoints.dashboard_port/0`, forcing the Bandit adapter and `server: true`.
@@ -12,7 +12,7 @@ defmodule Exoforge.Std.Dashboard do
   - `on_init/1` migrates the studio_preference resource through `:resource_store` and loads `Exoforge.Std.Dashboard.ProjectMetadata`.
   - Project metadata is stored under a reserved key, and every update broadcasts a metadata event on the system topic.
   - `Exoforge.Std.Dashboard.Router.build_overview_data/0` assembles the overview from the extension registry, `:lldb` health and the project metadata.
-  - The Studio reaches cluster state only through service contracts, which is why the manifest declares `:database`, `:resource_store` and `:observability`.
+  - The Studio reaches server state only through service contracts, which is why the manifest declares `:database`, `:resource_store` and `:observability`.
 
   ### Depends on
   `:resource_store`, `:observability` and `:lldb`; `:database` is declared as a dependency.

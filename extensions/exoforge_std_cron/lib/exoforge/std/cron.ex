@@ -3,7 +3,7 @@ defmodule Exoforge.Std.Cron do
   Standard scheduled background task and cron execution extension for Exoforge.
   Provides the :cron service contract.
 
-  It exists as an extension so recurring work belongs to the cluster, not to any one game's process, and the Studio can list or trigger jobs directly.
+  It exists as an extension so recurring work belongs to the server, not to any one game's process, and the Studio can list or trigger jobs directly.
 
   ### How it works
   - `Exoforge.Std.Cron.Scheduler` is the supervised GenServer; it owns the ETS table `exo_cron_jobs_mem`.

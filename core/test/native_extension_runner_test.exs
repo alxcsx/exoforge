@@ -547,6 +547,27 @@ defmodule Exoforge.NativeExtensionRunnerTest do
     assert Enum.any?(stderr_tail, &(&1 =~ "Stack trace: at System.Runtime.Loader"))
   end
 
+  test "binary garbage in the process output reaches the crash reason as readable text", %{manifest: manifest} do
+    # A shell asked to run a Windows executable echoes the file's first bytes; the reason must not be a list of them.
+    noisy = """
+    #!/usr/bin/env bash
+    printf 'items: line 1: MZ\\220\\003\\004\\377\\377\\270@: not found\\n' >&2
+    exit 2
+    """
+
+    variant = write_variant(manifest, noisy)
+
+    Process.flag(:trap_exit, true)
+    pid = start_runner(manifest, variant)
+    assert_receive {:EXIT, ^pid, {:shutdown, {:extension_exited, 2}}}, 1_000
+
+    {:crashed, {:exit_before_handshake, 2, tail}} = Exoforge.ExtensionRegistry.get_crash_info(manifest.id)
+
+    assert Enum.all?(tail, &String.printable?/1)
+    assert Enum.all?(tail, &(String.length(&1) <= 300))
+    assert Enum.any?(tail, &(&1 =~ "not found"))
+  end
+
   test "an extension writing to stderr after handshake does not corrupt NDJSON protocol", %{
     manifest: manifest,
     binary: binary

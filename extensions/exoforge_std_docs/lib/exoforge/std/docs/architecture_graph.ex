@@ -33,7 +33,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       id: "exo_cli",
       title: "Exo CLI & Engine",
       subtitle: "Management Engine",
-      desc: "Local dev engine, Roslyn generator, C# extension compiler, and remote cluster push.",
+      desc: "Local dev engine, Roslyn generator, C# extension compiler, and remote server push.",
       icon: "💻",
       package: "Developer Tooling",
       group: "client",
@@ -51,7 +51,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       id: "producer_studio",
       title: "Producer Studio",
       subtitle: "LiveView Dashboard :4005",
-      desc: "Web-based actor inspector, live cluster metrics, extension lifecycle manager, and dev guide.",
+      desc: "Web-based actor inspector, live server metrics, extension lifecycle manager, and dev guide.",
       icon: "🎛",
       package: "Studio Operations",
       group: "client",
@@ -162,7 +162,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
     %{
       id: "event_dispatcher",
       title: "EventDispatcher",
-      subtitle: "Cluster Pub/Sub Bus",
+      subtitle: "Server Pub/Sub Bus",
       desc: "Pattern-matched topic fanout over distributed process groups (0.07 ms SLA to 50 concurrent subscribers).",
       icon: "📡",
       package: "Kernel Core",
@@ -187,7 +187,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       group: "kernel",
       category: "kernel",
       badge: "KERNEL [IMMUTABLE]",
-      protocol: "Cluster Supervision Tree",
+      protocol: "Server Supervision Tree",
       upstream: "event_dispatcher",
       downstream: "native_csharp,elixir_runner",
       x: 795,
@@ -219,7 +219,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       id: "elixir_runner",
       title: "Elixir Extensions",
       subtitle: "Actor Concurrency",
-      desc: "System extensions running directly inside the BEAM cluster supervision tree.",
+      desc: "System extensions running directly inside the BEAM server supervision tree.",
       icon: "🧪",
       package: "Extension Workers",
       group: "extension",
@@ -529,7 +529,7 @@ defmodule Exoforge.Std.Docs.ArchitectureGraph do
       badge: "Kernel",
       color: "amber",
       details:
-        "Cluster distributed pub/sub delivers messages directly to subscriber worker processes with zero central serialization bottleneck (0.07 ms verified SLA to 50 concurrent subscribers)."
+        "Server distributed pub/sub delivers messages directly to subscriber worker processes with zero central serialization bottleneck (0.07 ms verified SLA to 50 concurrent subscribers)."
     },
     %{
       step: 3,

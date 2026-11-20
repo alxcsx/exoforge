@@ -78,7 +78,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     overview = fetch_overview()
     action_catalog = ActionForms.catalog()
     project_metadata = Exoforge.Std.Dashboard.ProjectMetadata.get()
-    project_name = project_metadata["project_name"] || "Exoforge Cluster"
+    project_name = project_metadata["project_name"] || "Exoforge Server"
     studio_name = project_metadata["studio_name"] || "Exoforge Studio"
 
     # Discover extensions that declare a dashboard visualization or visual controls
@@ -484,10 +484,13 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       else
         all = default_cmd_results(socket)
 
-        Enum.filter(all, fn item ->
-          String.contains?(String.downcase(item.title), q) or
-            String.contains?(String.downcase(item.subtitle), q)
-        end)
+        found =
+          Enum.filter(all, fn item ->
+            String.contains?(String.downcase(item.title), q) or
+              String.contains?(String.downcase(item.subtitle), q)
+          end)
+
+        request_result(String.trim(query)) ++ found
       end
 
     {:noreply, assign(socket, cmd_query: query, cmd_results: results)}
@@ -497,6 +500,10 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     socket = assign(socket, cmd_palette_open: false)
 
     case type do
+      # A pasted request id (the `x-exoforge-rid` header, the Unity error message): its whole story, in one place.
+      "request" ->
+        {:noreply, push_patch(socket, to: focus_url("exoforge_std_observability", "request", id))}
+
       "navigation" ->
         target =
           resolve_tab(id, socket.assigns.overview.extensions)
@@ -1423,6 +1430,15 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     }
   end
 
+  # Request ids look like `r_` and twelve url-safe characters. Anything that does gets a first result that opens it.
+  defp request_result(text) do
+    if Regex.match?(~r/^r_[A-Za-z0-9_-]{8,}$/, text) do
+      [%{id: text, title: "Open request #{text}", subtitle: "Everything this request did: calls, events, logs, the failure", type: "request"}]
+    else
+      []
+    end
+  end
+
   defp default_cmd_results(socket) do
     # 1. Pinned Navigation items
     pinned_navs =
@@ -1495,7 +1511,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
       },
       %{
         id: "toggle_event_dock",
-        title: "Event Console: Live Cluster Event Stream",
+        title: "Event Console: Live Server Event Stream",
         subtitle: "Real-time telemetry from :pg and EventDispatcher",
         type: "action"
       }
@@ -1664,7 +1680,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
   defp slot_title("quickstart"), do: "Quickstart Guide (1×4)"
   defp slot_title("event_graph"), do: "Event & Action Throughput (2×2)"
   defp slot_title("error_graph"), do: "Error & Health Rate (2×1)"
-  defp slot_title("server_state"), do: "Cluster State (1×1)"
+  defp slot_title("server_state"), do: "Server State (1×1)"
   defp slot_title("download_sdk"), do: "Unity SDK Distribution (1×1)"
   defp slot_title("extension_health"), do: "Extension Health & Telemetry (2×1)"
   defp slot_title("widget:" <> id), do: "Widget: #{id}"
@@ -1975,7 +1991,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     action_errors = Map.new(metered_actions, &{act_key(&1, overview), Map.get(&1, :errors, 0)})
 
     # Actions the trace saw but metering has no lifetime row for (a call that failed before the
-    # plugin was reached, a freshly started cluster) still deserve a table row.
+    # plugin was reached, a freshly started server) still deserve a table row.
     action_stats =
       window_totals
       |> Map.new(fn {key, {count, errors}} ->
@@ -2000,6 +2016,10 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
     %{
       total_invocations: total_invocations,
       total_errors: total_errors,
+      # The graphs and legends are the last 30 minutes, so the headline numbers say the same thing; the lifetime
+      # totals above stay as the smaller "since the server started" figure.
+      window_invocations: window_totals |> Map.values() |> Enum.map(&elem(&1, 0)) |> Enum.sum(),
+      window_errors: window_totals |> Map.values() |> Enum.map(&elem(&1, 1)) |> Enum.sum(),
       action_series: action_series,
       action_max_val: action_max_val,
       error_series: error_series,
@@ -2365,7 +2385,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
             </div>
           </div>
 
-          <div id="overview-bento-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 auto-rows-fr [grid-auto-flow:dense]">
+          <div id="overview-bento-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 [grid-auto-rows:minmax(min-content,auto)] [grid-auto-flow:dense]">
             <%= for {slot_id, idx} <- Enum.with_index(@overview_slot_ids) do %>
               <%= case slot_id do %>
                 <% "quickstart" -> %>
@@ -2374,19 +2394,16 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                     id="slot-quickstart"
                     data-slot-id="quickstart"
                     data-slot-span="1x4"
-                    class={"col-span-1 md:col-span-2 lg:col-span-4 h-full exo-hero rounded-xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border #{if @grid_edit_mode, do: "border-primary-400 ring-2 ring-primary-500/20", else: "border-primary-500/30"}"}
+                    class={"col-span-1 md:col-span-2 lg:col-span-4 h-full exo-hero rounded-xl px-5 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3 border #{if @grid_edit_mode, do: "border-primary-400 ring-2 ring-primary-500/20", else: "border-primary-500/30"}"}
                   >
-                    <div class="space-y-1.5 flex-1 min-w-0">
-                      <div class="flex items-center gap-2">
-                        <span class="text-[10px] px-2 py-0.5 rounded-full bg-primary-500/30 text-primary-200 border border-primary-400/30 font-semibold uppercase tracking-wider">Quickstart Flow</span>
-                        <span class="font-semibold text-sm">New to Exoforge? Complete Developer Guide &amp; API Reference</span>
+                    <div class="flex-1 min-w-0">
+                      <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span class="font-semibold text-sm">New to Exoforge?</span>
+                        <span class="text-xs text-primary-200/90">Connect, scaffold an extension, deploy it, sync the stubs and call it from Unity.</span>
                         <%= if @grid_edit_mode do %>
                           <span class="px-2 py-0.5 text-[10px] font-mono font-semibold bg-white/20 text-white rounded-lg border border-white/20">1×4</span>
                         <% end %>
                       </div>
-                      <p class="text-xs text-primary-200/90 leading-relaxed max-w-2xl">
-                        Master the complete development flow: Connect &amp; Auth ➔ Scaffold Extension ➔ Hot-Deploy ➔ Sync Stubs ➔ Call from Unity.
-                      </p>
                     </div>
 
                     <div class="flex items-center gap-2 self-start md:self-auto shrink-0">
@@ -2435,6 +2452,17 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                         <.icon name="book" class="w-3.5 h-3.5" />
                         <span>Open Quickstart Guide</span>
                         <span>→</span>
+                      </button>
+                      <button
+                        :if={!@grid_edit_mode}
+                        type="button"
+                        phx-click="remove_overview_slot"
+                        phx-value-id="quickstart"
+                        title="Hide this. Edit Grid Order brings it back."
+                        aria-label="Hide the quickstart strip"
+                        class="w-7 h-7 rounded-lg text-white/80 hover:text-white hover:bg-white/15 flex items-center justify-center"
+                      >
+                        <.icon name="close" class="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
@@ -2508,10 +2536,11 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
 
                     <div class="flex flex-wrap items-center justify-between gap-2">
                       <div class="flex items-baseline gap-3">
-                        <span class="text-2xl font-semibold text-gray-900 tracking-tight tabular-nums"><%= @telemetry.total_invocations %></span>
+                        <span class="text-2xl font-semibold text-gray-900 tracking-tight tabular-nums"><%= @telemetry.window_invocations %></span>
                         <span class="text-xs font-semibold text-gray-500 bg-gray-100 px-2.5 py-0.5 rounded-full font-mono">
-                          action calls
+                          calls in 30 min
                         </span>
+                        <span class="text-xs text-gray-400"><%= @telemetry.total_invocations %> since the server started</span>
                       </div>
 
                       <!-- Needs attention: alongside the count, not below it, so the card stays short -->
@@ -2585,7 +2614,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                         <%= for s <- @telemetry.action_series do %>
                           <div class="flex items-center gap-1.5">
                             <span class="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs" style={"background-color: #{s.color}"}></span>
-                            <span class="font-mono text-gray-700 font-semibold"><%= if s.id == "idle", do: "Cluster Idle", else: s.id %></span>
+                            <span class="font-mono text-gray-700 font-semibold"><%= if s.id == "idle", do: "Idle", else: s.id %></span>
                             <span class="text-gray-400 font-mono text-[10px]">(<%= s.total %> calls / 30m)</span>
                           </div>
                         <% end %>
@@ -2612,7 +2641,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                       <% latest_ev = List.first(@activity_events) %>
                       <%= if is_nil(latest_ev) do %>
                         <div class="p-3 rounded-xl bg-gray-50 border border-gray-100 text-xs text-gray-400 text-center">
-                          Waiting for cluster events on EventDispatcher...
+                          Waiting for server events on EventDispatcher...
                         </div>
                       <% else %>
                         <% is_highlighted = (@highlight_event_id != nil and @highlight_event_id == latest_ev[:id]) %>
@@ -2704,12 +2733,13 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                     </div>
 
                     <div class="flex items-baseline gap-3">
-                      <span class={"text-2xl font-semibold tracking-tight tabular-nums #{if @telemetry.total_errors > 0, do: "text-red-600", else: "text-gray-900"}"}>
-                        <%= @telemetry.total_errors %>
+                      <span class={"text-2xl font-semibold tracking-tight tabular-nums #{if @telemetry.window_errors > 0, do: "text-red-600", else: "text-gray-900"}"}>
+                        <%= @telemetry.window_errors %>
                       </span>
-                      <span class={"text-xs font-semibold px-2 py-0.5 rounded-full #{if @telemetry.total_errors > 0, do: "bg-red-50 text-red-700", else: "bg-emerald-50 text-emerald-700"}"}>
-                        <%= if @telemetry.total_errors > 0, do: "Errors detected", else: "0% error rate" %>
+                      <span class={"text-xs font-semibold px-2 py-0.5 rounded-full #{if @telemetry.window_errors > 0, do: "bg-red-50 text-red-700", else: "bg-emerald-50 text-emerald-700"}"}>
+                        errors in 30 min
                       </span>
+                      <span class="text-xs text-gray-400"><%= @telemetry.total_errors %> since the server started</span>
                     </div>
 
                     <!-- Error Multi-Line SVG Chart -->
@@ -2760,26 +2790,11 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
                             </div>
                           <% end %>
                         </div>
-                      <% else %>
-                        <div class="flex items-center gap-2 pt-1 text-xs text-emerald-600 font-semibold">
-                          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                          <span>Zero errors detected across all monitored actions</span>
-                        </div>
                       <% end %>
                     </div>
 
                     <!-- Structured Footer to Match Event Graph Bottom Section -->
                     <div class="space-y-2 pt-2 border-t border-gray-100">
-                      <div class="flex items-center justify-between">
-                        <div class="text-[10px] font-semibold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
-                          <span class={"w-1.5 h-1.5 rounded-full #{if @telemetry.total_errors > 0, do: "bg-red-500", else: "bg-emerald-500"}"}></span>
-                          <span>Cluster Health Status</span>
-                        </div>
-                        <span class={"px-2 py-0.5 text-[10px] font-semibold rounded-lg border #{if @telemetry.total_errors > 0, do: "text-red-700 bg-red-50 border-red-200", else: "text-emerald-700 bg-emerald-50 border-emerald-200"}"}>
-                          <%= if @telemetry.total_errors > 0, do: "Action Exceptions Present", else: "All Systems Normal" %>
-                        </span>
-                      </div>
-
                       <div class="flex items-center justify-between px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-xs">
                         <span class="text-gray-500">Monitored Callable Actions</span>
                         <span class="font-mono font-semibold text-gray-900"><%= @total_actions %> actions across <%= @overview.plugins_count %> extensions</span>
@@ -3187,7 +3202,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
               </div>
               <h3 class="text-base font-semibold text-gray-900">Extension Not Found</h3>
               <p class="text-xs text-gray-500 max-w-md mx-auto">
-                The extension <code class="font-mono text-primary-700 font-semibold"><%= current_tab_str %></code> is not loaded or registered in this cluster.
+                The extension <code class="font-mono text-primary-700 font-semibold"><%= current_tab_str %></code> is not loaded or registered on this server.
               </p>
               <button
                 phx-click="switch_tab"
@@ -3293,7 +3308,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         on_switch_mode="open_actions_detail_modal"
       />
 
-      <!-- Cluster Events Stream Modal -->
+      <!-- Server Events Stream Modal -->
       <.timeline_modal
         open={@timeline_open}
         rid={@timeline_rid}
@@ -3330,7 +3345,7 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
         on_close="close_sdk_modal"
       />
 
-      <!-- Live Cluster Event Stream Dock -->
+      <!-- Live Server Event Stream Dock -->
       <.event_stream_dock
         open={@event_dock_open}
         events={@filtered_activity_events}

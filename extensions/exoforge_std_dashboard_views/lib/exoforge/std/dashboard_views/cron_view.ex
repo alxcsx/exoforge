@@ -3,7 +3,7 @@ defmodule Exoforge.Std.DashboardViews.CronView do
   The Studio screen for scheduled jobs (service `:cron`): every `[ExoCron]` the running extensions declare, when it
   runs, what happened the last time, and a way to run it now.
 
-  Running a job calls the action it names with the cluster's trust, so Run now asks first and names the action.
+  Running a job calls the action it names with the server's trust, so Run now asks first and names the action.
   """
   use Phoenix.LiveComponent
   import Exoforge.Std.DashboardViews.Icons, only: [studio_icon: 1]

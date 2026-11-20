@@ -801,7 +801,7 @@ defmodule Exoforge.Std.Auth do
   Removes every account a test or a demo created.
 
   A player is disposable because it said so: `auth.anonymous` or `auth.register` with
-  `disposable: true`. Nothing is inferred from a name or a scope, so a purge on a live cluster
+  `disposable: true`. Nothing is inferred from a name or a scope, so a purge on a live server
   removes the guests a test made and leaves the players who signed up.
   """
   @impl true

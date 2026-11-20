@@ -184,6 +184,14 @@ defmodule Exoforge.Std.TransportTest do
   end
 
   describe "action_error/1" do
+    test "a crashed extension is reported as unavailable, without its process output" do
+      error = Transport.action_error({:extension_crashed, {:exit_before_handshake, 2, ["/app/x: line 1: secret path"]}})
+
+      assert error["code"] == "extension_unavailable"
+      assert error["message"] =~ "not running"
+      refute inspect(error) =~ "secret path"
+    end
+
     test "keeps a native extension's code and message map" do
       assert Transport.action_error(%{"code" => "invalid_png", "message" => "Not a PNG image."}) ==
                %{"code" => "invalid_png", "message" => "Not a PNG image.", "details" => %{}}
