@@ -279,6 +279,28 @@ defmodule Exoforge.Std.Lldb.SchemaMigrationTest do
     assert column_type(conn, schema, "qty") == nil
   end
 
+  defmodule BrokenVersioning do
+    use Exoforge.Extension
+
+    defaction(list(), scope: :server) do
+      {:error, :boom}
+    end
+  end
+
+  test "a drop is refused when versioning is installed but does not answer", %{conn: conn, schema: schema} do
+    Exoforge.ExtensionCase.start_kernel()
+    Exoforge.ExtensionCase.register_extension(BrokenVersioning, id: :versioning, provides: [:versioning])
+
+    seed_v1(conn, schema)
+    v2 = resource([col("nm", "text")], "h2")
+    drop_qty = migration("1.2.0", [%{op: "drop", column: "qty"}])
+
+    assert {:error, {:game_versions_unavailable, %{reason: :boom, tables: ["items"]}}} =
+             reconcile(conn, schema, v2, [drop_qty], @v120, extension: "pets_ext")
+
+    assert column_type(conn, schema, "qty") == "text"
+  end
+
   test "several migrations to versions up to the deploy run in order in one go", %{conn: conn, schema: schema} do
     seed_v1(conn, schema)
     v3 = resource([col("name", "text"), col("quantity", "int32")], "h3")

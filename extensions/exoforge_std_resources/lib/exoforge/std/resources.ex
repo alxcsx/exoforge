@@ -168,7 +168,7 @@ defmodule Exoforge.Std.Resources do
         unsafe_schema_change(pid, res, {:unsafe, ops})
 
       {:error, {kind, %{} = detail}}
-      when kind in [:migration_missing, :version_downgrade, :migration_incomplete, :rows_below_version, :game_versions_lock_older] ->
+      when kind in [:migration_missing, :version_downgrade, :migration_incomplete, :rows_below_version, :game_versions_lock_older, :game_versions_unavailable] ->
         unsafe_schema_change(pid, res, {kind, detail})
 
       # A table the studio owns is never rebuilt, whatever the mode: it is theirs, and its rows are theirs.
@@ -258,6 +258,11 @@ defmodule Exoforge.Std.Resources do
   defp changes_and_hint(_res, {:rows_below_version, %{rows: rows, to: to}}) do
     {[%{column: nil, change: :drop, reason: "#{rows} rows are still below version #{to}, so the column they hold would be lost"}],
      "Rows are brought up to date when they are read (or by the sweeper). Deploy the drop once none is left below #{to}, or set EXOFORGE_SCHEMA_CHANGE_MODE=reset in development."}
+  end
+
+  defp changes_and_hint(_res, {:game_versions_unavailable, %{reason: reason}}) do
+    {[%{column: nil, change: :drop, reason: "the versioning extension did not answer (#{inspect(reason)}), so it is unknown which game versions still read the column"}],
+     "Nothing was changed. Deploy again once the versioning extension is running."}
   end
 
   defp changes_and_hint(_res, {:game_versions_lock_older, %{to: to, game_versions: games}}) do

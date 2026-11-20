@@ -168,6 +168,10 @@ defmodule Exoforge.Std.Lldb.SchemaMigration do
           else: {:error, {:game_versions_lock_older, %{table: item.table, resource: item.resource, to: g(step, :to), game_versions: older, decl: g(step, :decl)}}}
       end)
     else
+      # No versioning service installed: there are no game versions to protect. Installed but unanswering is
+      # not the same: the answer is unknown, and a drop cannot be undone, so it is refused (fail closed).
+      {:error, :service_not_found} -> :ok
+      {:error, reason} -> {:error, {:game_versions_unavailable, %{reason: reason, tables: Enum.map(drops, fn {item, _} -> item.table end)}}}
       _ -> :ok
     end
   end
