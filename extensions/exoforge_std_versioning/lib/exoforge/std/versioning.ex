@@ -28,6 +28,7 @@ defmodule Exoforge.Std.Versioning do
     dependencies: [Exoforge.Std.Services.Database],
     title: "Game Versions",
     icon: "🏷️",
+    dashboard_view: %{id: :versioning, title: "Game Versions", icon: "🏷️"},
     category: "System"
   }
 

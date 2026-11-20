@@ -4,6 +4,11 @@ Method: real screenshots of the running Studio (throwaway server, `/private/tmp/
 three read-only reviewers (web layout, Unity editor, custom-UI candidates; same model family as the author, Unity not run, so all
 Unity visuals are reconstructed from code). I verified the claims below marked VERIFIED; the rest is reviewer judgment.
 
+## Capture note (important for the next review)
+The first set of screenshots was server-rendered only: headless Chrome on `127.0.0.1` fails the WebSocket origin check
+("Could not check origin"), so LiveView never connected and clicks did nothing (modals, tabs and the inspector were never seen).
+Use `http://localhost:4005` (the compose default `PHX_HOST`) with puppeteer-core in `/private/tmp/claude-501/studio`.
+
 ## Verified
 - VERIFIED (live DOM): buttons in Users and Extension Manager show the icon NAME as text ("refresh Refresh", "plus Register User"):
   `refresh` and `plus` were missing from the three icon sets. FIXED + regression test (`ui_standard_test`).
@@ -36,7 +41,7 @@ escape hatch; no new data bridge.
 0. DONE: icon bug + regression test. NEXT quick wins (S, web): rename "Interactive Action Control Panel" -> "Actions", "Technical
    Context & Scopes" -> "Access", drop the always-SYNC pill, display name as page title, empty (not "1") defaults for optional integers,
    "plugin" terminology leaks in descriptions, fix the Extensions counts, `aria-label`s on icon buttons, Esc closes the topmost modal.
-1. Versioning view (M): `Exoforge.Std.DashboardViews.VersioningView` (convention-resolved): status stats, versions table with chips, locks
+1. DONE (7e9ec8b+): Versioning view (M): `Exoforge.Std.DashboardViews.VersioningView` (convention-resolved): status stats, versions table with chips, locks
    as `extension@version`, Promote/Block with two-step confirm, Edit locks (dev only), Register form, and the "versioning is off until
    you register a version" empty state. Tests: LiveView render + actions.
 2. Metering and cron views (S each); declare `returns` fields for `list_jobs`/`usage` rows.
