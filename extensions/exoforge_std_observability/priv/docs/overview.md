@@ -13,13 +13,3 @@ summary: Event history, request timelines and failure groups.
 ## Events
 
 {{events}}
-
-## Settings
-
-- Environment variable `EXOFORGE_DATA_DIR`
-- Environment variable `EXOFORGE_EVENT_ARCHIVE_DIR`
-- Environment variable `EXOFORGE_EVENT_HOT_DAYS`
-
-## Data
-
-- Table `does`

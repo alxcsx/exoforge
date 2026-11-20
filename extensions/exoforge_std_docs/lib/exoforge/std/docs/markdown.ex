@@ -19,16 +19,132 @@ defmodule Exoforge.Std.Docs.Markdown do
   end
 
   def to_html(markdown) when is_binary(markdown) do
-    lines = String.split(markdown, ~r/\r?\n/)
+    {text, blocks} = extract_tab_blocks(markdown)
+    lines = String.split(text, ~r/\r?\n/)
     {html_blocks, _state} = parse_lines(lines, [], :normal)
 
     html_blocks
     |> Enum.reverse()
     |> Enum.join("\n")
+    |> put_blocks(blocks)
     |> Phoenix.HTML.raw()
   end
 
   def to_html(_), do: Phoenix.HTML.raw("")
+
+  # ---- COMPONENTS: tabs ----
+  #
+  #     :::tabs
+  #     :::tab Callback style
+  #     (any Markdown: text, tables, code)
+  #     :::tab Async style
+  #     (...)
+  #     :::end
+  #
+  # Way A and way B of doing one thing are tabs, not two long blocks one after the other. The block is lifted out
+  # before parsing (each tab body is rendered by this same module) and put back where its token stands.
+
+  defp extract_tab_blocks(markdown) do
+    {lines, blocks, _current} =
+      markdown
+      |> String.split(~r/\r?\n/)
+      |> Enum.reduce({[], [], nil}, fn line, {out, blocks, current} ->
+        trimmed = String.trim(line)
+
+        cond do
+          current == nil and trimmed == ":::tabs" ->
+            {out, blocks, []}
+
+          current != nil and trimmed == ":::end" ->
+            token = "EXOBLOCK#{length(blocks)}END"
+            {[token, "" | out], [{token, render_tabs(Enum.reverse(current))} | blocks], nil}
+
+          current != nil ->
+            {out, blocks, [line | current]}
+
+          true ->
+            {[line | out], blocks, nil}
+        end
+      end)
+
+    {lines |> Enum.reverse() |> Enum.join("\n"), blocks}
+  end
+
+  defp put_blocks(html, blocks) do
+    Enum.reduce(blocks, html, fn {token, rendered}, acc ->
+      String.replace(acc, ~s(<p class="text-sm text-gray-700 leading-7 my-3">#{token}</p>), rendered)
+    end)
+  end
+
+  defp render_tabs(lines) do
+    tabs =
+      lines
+      |> Enum.chunk_while(
+        nil,
+        fn line, acc ->
+          case Regex.run(~r/^\s*:::tab\s+(.+?)\s*$/, line) do
+            [_, title] -> {:cont, acc, {title, []}}
+            _ when acc == nil -> {:cont, nil}
+            _ -> {:cont, {elem(acc, 0), [line | elem(acc, 1)]}}
+          end
+        end,
+        fn acc -> {:cont, acc, nil} end
+      )
+      |> Enum.reject(&is_nil/1)
+      |> Enum.map(fn {title, body} -> {title, body |> Enum.reverse() |> Enum.join("\n")} end)
+
+    buttons =
+      for {{title, _}, index} <- Enum.with_index(tabs) do
+        active = index == 0
+
+        ~s(<button type="button" role="tab" data-tab="#{index}" aria-selected="#{active}" onclick="#{tab_script()}" ) <>
+          ~s(class="px-3 py-1.5 rounded-t-lg text-xs font-semibold transition-colors #{tab_classes(active)}">#{Plug.HTML.html_escape(title)}</button>)
+      end
+
+    panes =
+      for {{title, body}, index} <- Enum.with_index(tabs) do
+        hidden = if index == 0, do: "", else: " hidden"
+
+        ~s(<div role="tabpanel" data-pane="#{index}" class="px-4 py-2#{hidden} print:block">) <>
+          ~s(<p class="hidden print:block text-xs font-semibold text-gray-500 mt-2">#{Plug.HTML.html_escape(title)}</p>) <>
+          (body |> to_html() |> Phoenix.HTML.safe_to_string()) <> "</div>"
+      end
+
+    ~s(<div data-exo-tabs class="my-4 rounded-xl border border-gray-200 bg-white overflow-hidden print:border-gray-300">) <>
+      ~s(<div role="tablist" class="print:hidden flex flex-wrap gap-1 border-b border-gray-200 bg-gray-50 px-2 pt-2">#{Enum.join(buttons)}</div>) <>
+      Enum.join(panes) <> "</div>"
+  end
+
+  defp tab_classes(true), do: "bg-white text-primary-700 border border-gray-200 border-b-white -mb-px"
+  defp tab_classes(false), do: "text-gray-500 hover:text-gray-900 border border-transparent"
+
+  # Switches the tab in the browser: no round trip, and nothing to wire up on the server.
+  defp tab_script do
+    "(function(b){var g=b.closest('[data-exo-tabs]');" <>
+      "g.querySelectorAll('[role=tab]').forEach(function(t){var on=t===b;t.setAttribute('aria-selected',on);" <>
+      "t.classList.toggle('bg-white',on);t.classList.toggle('text-primary-700',on);t.classList.toggle('border-gray-200',on);" <>
+      "t.classList.toggle('-mb-px',on);t.classList.toggle('text-gray-500',!on);t.classList.toggle('border-transparent',!on)});" <>
+      "g.querySelectorAll('[data-pane]').forEach(function(p){p.classList.toggle('hidden',p.getAttribute('data-pane')!==b.getAttribute('data-tab'))})})(this)"
+  end
+
+  # ---- COMPONENTS: diagrams ----
+  #
+  # An SVG that lives next to the chapters is inlined, so it takes the page's text size and, through the Studio's
+  # `--exo-*` colour variables, both themes. The name is a word, never a path.
+  defp render_diagram(alt, name) do
+    path = Path.join([Exoforge.Std.Docs.docs_dir(), "diagrams", name <> ".svg"])
+
+    case File.read(path) do
+      {:ok, svg} ->
+        svg = String.replace(svg, "<svg ", ~s(<svg role="img" aria-label="#{Plug.HTML.html_escape(alt)}" class="w-full h-auto mx-auto max-w-4xl" ), global: false)
+
+        ~s(<figure class="my-6 rounded-xl border border-gray-200 bg-white p-4 overflow-x-auto print:border-gray-300 print:break-inside-avoid">) <>
+          svg <> ~s(<figcaption class="mt-3 text-center text-xs text-gray-500">#{inline_format(alt)}</figcaption></figure>)
+
+      _ ->
+        ~s(<p class="text-xs text-red-600">Missing diagram: #{Plug.HTML.html_escape(name)}</p>)
+    end
+  end
 
   # ---- LINE PARSER STATE MACHINE ----
 
@@ -115,6 +231,11 @@ defmodule Exoforge.Std.Docs.Markdown do
       # Tables
       String.starts_with?(trimmed, "|") and String.ends_with?(trimmed, "|") ->
         parse_table_lines(rest, [trimmed], acc)
+
+      # A diagram: `![What it shows](diagram:name)` inlines priv/guide/diagrams/name.svg
+      Regex.match?(~r/^!\[[^\]]*\]\(diagram:[\w-]+\)$/, trimmed) ->
+        [_, alt, name] = Regex.run(~r/^!\[([^\]]*)\]\(diagram:([\w-]+)\)$/, trimmed)
+        parse_lines(rest, [render_diagram(alt, name) | acc], :normal)
 
       # Collapsible sections: <details> / <summary>Title</summary> / </details> (progressive disclosure)
       String.starts_with?(trimmed, "<details") ->
@@ -442,8 +563,8 @@ defmodule Exoforge.Std.Docs.Markdown do
           end)
           |> Enum.join("\n")
 
-        """
-        <div class="overflow-x-auto my-3 rounded-xl border border-gray-200">
+        table = """
+        <div class="overflow-x-auto rounded-xl border border-gray-200">
           <table class="w-full text-left text-xs bg-white">
             <thead class="bg-gray-50 border-b border-gray-200 text-gray-600 uppercase text-[10px]">
               <tr>#{th_html}</tr>
@@ -454,6 +575,16 @@ defmodule Exoforge.Std.Docs.Markdown do
           </table>
         </div>
         """
+
+        # A wide or long table gets a button that shows it full width in a dialog.
+        if length(header) > 2 or length(filtered_data) > 5 do
+          ~s(<div data-exo-table class="mt-6 mb-3 relative"><button type="button" onclick="#{expand_script()}" aria-label="Show this table full width" ) <>
+            ~s(class="print:hidden absolute right-2 -top-2.5 z-10 inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-500 hover:text-primary-700 shadow-sm">) <>
+            ~s(<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5 M20 9V4h-5 M4 15v5h5 M20 15v5h-5" /></svg>Expand</button>) <>
+            table <> "</div>"
+        else
+          ~s(<div class="my-3">) <> table <> "</div>"
+        end
     end
   end
 
@@ -462,6 +593,15 @@ defmodule Exoforge.Std.Docs.Markdown do
   # Code spans are lifted out first (they escape their own content), everything else is escaped, then
   # links, bold and italic are applied to the escaped text, and the code spans go back in. Without the
   # escape a heading such as `[ExoDependency<T>]` produced a real `<T>` element.
+  # Opens a copy of the table in a native <dialog>, as wide as the window. Styled by `.exo-table-dialog` in the Studio's CSS.
+  defp expand_script do
+    "(function(b){var t=b.closest('[data-exo-table]').querySelector('table');var d=document.createElement('dialog');" <>
+      "d.className='exo-table-dialog';d.innerHTML='<div class=\\'exo-table-dialog-bar\\'><button type=\\'button\\'>Close</button></div><div class=\\'exo-table-dialog-body\\'></div>';" <>
+      "d.querySelector('.exo-table-dialog-body').appendChild(t.cloneNode(true));" <>
+      "d.addEventListener('click',function(e){if(e.target===d||e.target.closest('button'))d.close()});" <>
+      "d.addEventListener('close',function(){d.remove()});document.body.appendChild(d);d.showModal()})(this)"
+  end
+
   defp inline_format(text) do
     {text, codes} = stash_code(text)
 

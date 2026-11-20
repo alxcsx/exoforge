@@ -22,6 +22,8 @@ The [Exoforge Arcade](https://github.com/alxcsx/exoforge-arcade) is a set of sma
 
 A dungeon game server (the sample mocks one) tells `adventure_world` that a player killed a slime. By the time the player's screen shows a toast, four different pieces of code have run.
 
+![How one kill travels through the extensions and back to the player's screen](diagram:event-flow)
+
 ### The action: only a trusted server may call it
 
 `ReportKill` is called by the game server, never by a player's client, so it asks for the `service` scope (see the scopes in the [attribute reference](guide:03_csharp_attributes#exoaction)). It stores the new progress and raises an event.

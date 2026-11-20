@@ -13,11 +13,3 @@ summary: The realtime WebSocket transport (port 4000).
 ## Events
 
 {{events}}
-
-## Settings
-
-It reads no settings.
-
-## Data
-
-It creates no tables of its own.

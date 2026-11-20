@@ -1421,3 +1421,48 @@ html.light .exo-timeline-error {
     animation: none !important;
   }
 }
+
+/* Developer Guide: a table shown full width in a dialog (opened by the Expand button on a table). */
+.exo-table-dialog {
+  width: 96vw;
+  max-width: 96vw;
+  max-height: 90vh;
+  padding: 0;
+  border: 1px solid var(--exo-border);
+  border-radius: var(--exo-radius-xl);
+  background: var(--exo-surface);
+  color: var(--exo-text);
+  overflow: hidden;
+}
+
+.exo-table-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.exo-table-dialog-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--exo-border);
+}
+
+.exo-table-dialog-bar button {
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--exo-border);
+  border-radius: var(--exo-radius-lg);
+  background: transparent;
+  color: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.exo-table-dialog-body {
+  max-height: calc(90vh - 3rem);
+  padding: 1rem;
+  overflow: auto;
+}
+
+.exo-table-dialog-body table {
+  font-size: 0.8125rem;
+}

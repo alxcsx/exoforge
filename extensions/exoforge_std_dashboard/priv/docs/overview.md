@@ -13,11 +13,3 @@ summary: The Producer Studio web app (port 4005).
 ## Events
 
 {{events}}
-
-## Settings
-
-- Environment variable `EXOFORGE_ADMIN_EMAIL`
-
-## Data
-
-It creates no tables of its own.

@@ -13,11 +13,3 @@ summary: The Developer Guide, API catalog and PDF export.
 ## Events
 
 {{events}}
-
-## Settings
-
-It reads no settings.
-
-## Data
-
-It creates no tables of its own.

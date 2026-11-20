@@ -142,24 +142,22 @@ defmodule Exoforge.Std.GuideDriftTest do
     end
   end
 
-  test "a standard extension's page builds its action and event tables from the code and names only settings the code reads" do
+  test "a standard extension's page builds its action and event tables from the code" do
     skip_without_repo()
 
-    sources =
-      ["core/lib/**/*.ex", "extensions/*/lib/**/*.ex", "extensions/*/config/**/*.exs", "config/*.exs"]
-      |> Enum.flat_map(&Path.wildcard(Path.join(@repo, &1)))
-      |> Enum.map(&File.read!/1)
-      |> Enum.join("\n")
-
     for dir <- @std_dirs, File.exists?(overview(dir)) do
-      name = Path.basename(dir)
       text = File.read!(overview(dir))
 
       # the signatures are not typed into the page: a directive expands them from the contract at render time
-      assert text =~ "{{actions}}" and text =~ "{{events}}", "#{name}: the page should use {{actions}} and {{events}} instead of a hand-written table"
+      assert text =~ "{{actions}}" and text =~ "{{events}}",
+             "#{Path.basename(dir)}: the page should use {{actions}} and {{events}} instead of a hand-written table"
+    end
+  end
 
-      for [_, setting] <- Regex.scan(~r/`([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)`/, text) do
-        assert sources =~ setting, "#{name}: the page mentions setting `#{setting}`, which the code never reads"
+  test "the guide is written for game developers: no repository paths, build commands or hosting settings" do
+    for %{id: id, content: content} <- Docs.load_all_chapters() do
+      for banned <- ["Justfile", "just dev", "just compose", "docker-compose", "Dockerfile", "DATABASE_URL", "EXTENSIONS_PATH", "builtin_extensions", "core/lib", "mix test"] do
+        refute content =~ banned, "#{id} mentions #{inspect(banned)}, which is for maintainers (put it in docs/operations.md)"
       end
     end
   end
@@ -177,6 +175,24 @@ defmodule Exoforge.Std.GuideDriftTest do
     for [_, codes] <- Regex.scan(~r/^\|\s*((?:`[a-z_]+`(?:,\s*)?)+)\s*\|/m, chapter("11_troubleshooting")),
         [_, code] <- Regex.scan(~r/`([a-z_]+)`/, codes) do
       assert sources =~ code, "11_troubleshooting explains `#{code}`, which no code mentions"
+    end
+  end
+
+  test "every diagram a chapter shows exists, and every diagram on disk is used" do
+    dir = Path.join(Docs.docs_dir(), "diagrams")
+    used = for %{content: content} <- Docs.load_all_chapters(), [_, name] <- Regex.scan(~r/^!\[[^\]]*\]\(diagram:([\w-]+)\)$/m, content), do: name
+
+    for name <- used, do: assert(File.exists?(Path.join(dir, name <> ".svg")), "diagram #{name} is referenced but missing")
+
+    on_disk = dir |> Path.join("*.svg") |> Path.wildcard() |> Enum.map(&Path.basename(&1, ".svg"))
+    assert Enum.sort(Enum.uniq(used)) == Enum.sort(on_disk), "diagrams on disk and diagrams used differ"
+  end
+
+  test "a chapter's tab blocks are balanced" do
+    for %{id: id, content: content} <- Docs.load_all_chapters() do
+      opens = length(Regex.scan(~r/^:::tabs\s*$/m, content))
+      closes = length(Regex.scan(~r/^:::end\s*$/m, content))
+      assert opens == closes, "#{id}: #{opens} :::tabs but #{closes} :::end"
     end
   end
 

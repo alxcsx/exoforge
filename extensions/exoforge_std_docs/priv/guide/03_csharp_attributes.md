@@ -12,8 +12,6 @@ Comprehensive reference for all core attributes provided by the Exoforge Extensi
 
 ## [ExoService] / [ExoExtension]
 
-**Source / Provider:** Kernel & Extension Manager (`core/`, `exoforge_std_extension_manager`)
-
 Identifies a C# class or interface as a cluster-supervised native headless service contract and implementation.
 
 The `[ExoService]` attribute (and its standardized alias `[ExoExtension]`) is the root entry point for backend features in Exoforge.
@@ -75,8 +73,6 @@ public class InventoryExtension
 
 ## [ExoAction]
 
-**Source / Provider:** Kernel ActionDispatcher & Transports (`core/`, implemented via `exoforge_std_ws`, `exoforge_std_http`)
-
 Exposes public class methods as callable RPC endpoints over WebSocket, HTTP, and internal IPC.
 
 Decorate any public method with `[ExoAction]` to make it callable from Unity clients, Web UI, and CLI. Method arguments are automatically deserialized from incoming payloads, and return values are serialized back to the caller.
@@ -137,8 +133,6 @@ public TransferItemResponse TransferItem(TransferItemRequest req)
 
 ## [ExoCron]
 
-**Source / Provider:** Cron Extension (`exoforge_std_cron`)
-
 Executes scheduled recurring background tasks via the cluster scheduler.
 
 Decorate any service method with `[ExoCron("schedule")]` to turn it into an automated background job. Ideal for leaderboard rollovers, daily resets, state sweepers, and periodic syncs.
@@ -166,8 +160,6 @@ public void RolloverDailyLeaderboards()
 ---
 
 ## [ExoEvent]
-
-**Source / Provider:** Kernel EventDispatcher & Realtime Transport (`core/`, pushed via `exoforge_std_ws`)
 
 Declares an **event schema** on records, classes, or structs emitted or received on the cluster pub/sub bus.
 
@@ -211,8 +203,6 @@ ExoServices.PlayerData.OnPlayerCreated += evt => Debug.Log(evt.PlayerId);
 ---
 
 ## [ExoResource] & [ExoColumn]
-
-**Source / Provider:** Database & Resource Store Extensions (`exoforge_std_database`, `exoforge_std_resources`)
 
 Declares a typed entity record mapped directly to PostgreSQL storage. The Roslyn generator extracts typed columns, indexes, and primary keys to create and evolve the database tables. Safe changes (a new column, a rename) apply on deploy; a change that would destroy data is refused until you declare it with an `[ExoMigration]` (see [Versions & Migrations](guide:04_versions_and_migrations)).
 
@@ -325,8 +315,6 @@ public void SeedDefaults()
 
 ## [ExoDependency] & [ExoDependency<T>]
 
-**Source / Provider:** Kernel ExtensionBootstrapper (`core/`)
-
 Declares an explicit runtime dependency on another service contract, determining topological boot order and client stub generation scope.
 
 ```csharp
@@ -343,8 +331,6 @@ public class GuildExtension
 
 ## [ExoWebhook]
 
-**Source / Provider:** HTTP Gateway (`exoforge_std_http`)
-
 Marks a method as an inbound external webhook receiver (e.g. Stripe, GitHub, Discord) routed over HTTP POST. The handler's single parameter is a `WebhookPayload` bound to the whole request: `Body`/`RawBody`, `Json`, `Headers`, `Method` and `Query`.
 
 ```csharp
@@ -359,8 +345,6 @@ public async Task HandleStripeWebhook(WebhookPayload payload)
 ---
 
 ## [ExoSingletonResource]
-
-**Source / Provider:** Resource Store (`exoforge_std_resources`)
 
 Convenience attribute for configuration entities that store exactly one record (e.g. server settings, seasonal balance tuning). Rendered in Studio as a direct single-form editor rather than a multi-row table.
 
@@ -391,8 +375,8 @@ Extensions access the ambient cluster environment through the static `Exo` holde
 
 Exoforge provides two complementary database paradigms to eliminate ORM bloat and keep runtime memory minimal.
 
-### Table repository
-
+:::tabs
+:::tab Table repository
 ```csharp
 using System;
 using Exoforge.Plugin.SDK;
@@ -422,9 +406,7 @@ public class EconomyService
     }
 }
 ```
-
-### Parameterized SQL
-
+:::tab Parameterized SQL
 ```csharp
 using System;
 using System.Collections.Generic;
@@ -459,6 +441,8 @@ public class EconomyService
 
 - **Type-Safe Table Repository (`Exo.Database.Table<T>()`):** Pure C# CRUD with auto-resolved table names, primary keys, and singleton lookups. Zero SQL strings needed.
 - **Parameterized Raw SQL (`Exo.Database.Query<T>()`):** High-performance SQL queries with positional `$1, $2, ...` arguments, automatic record mapping, and atomic in-place updates.
+
+:::end
 
 ## Plugs
 

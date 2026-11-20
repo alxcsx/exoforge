@@ -45,7 +45,7 @@ sign-in (WS `auth` frame `game_version`, HTTP header `x-exoforge-game-version`) 
 `nav`, `group`, `icon`, `summary`) and is the only source: the Studio's Developer Guide tab, the PDF and the markdown export all render
 those files, and `guide:<chapter>#heading` links connect them. Adding a page is adding a file. Extension-specific documentation does not live there: each extension keeps its own pages in a reserved `docs/` folder (Elixir: `priv/docs/`) next to its manifest, `exo extension push` ships `docs/*.md`, and the guide gathers the pages of every running extension under *Extensions*. Any user-visible change (an attribute
 property, a CLI command, a standard extension, a behavior) updates the guide in the same change; `test/guide_drift_test.exs` fails when
-the attributes, the CLI verbs, the standard extensions or the cross-links no longer match the code. This file, `Agents.MD`, stays the
+the attributes, the CLI verbs, the standard extensions or the cross-links no longer match the code. The guide is for game developers who use an Exoforge instance and never see this repository: no Justfile, container, hosting or repository-path material belongs in it (a test enforces the obvious ones); that goes in `docs/operations.md`. Chapters can use components: `:::tabs` / `:::tab Title` / `:::end` for alternatives, `![caption](diagram:name)` for an SVG in `priv/guide/diagrams/`, and wide tables get an Expand button. This file, `Agents.MD`, stays the
 terse, agent-facing companion and does not replace it.
 
 **Test data does not outlive the test.** An integration run creates accounts, and they used to land in

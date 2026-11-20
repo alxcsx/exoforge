@@ -19,6 +19,8 @@ How a game keeps working while its extensions and its data change: what a versio
 
 The extension version describes *the data and the code on the server*. The game version describes *which clients are still out there*. The rule that ties them together: the server may change anything for the latest extension, but it must not break a game version that is still being served.
 
+![Game versions lock an extension version; one process serves them all and rows carry the version that wrote them](diagram:versions-locks)
+
 ## What Exoforge does for you
 
 (The attributes used below are listed in the [attribute reference](guide:03_csharp_attributes#exoresource-exocolumn).)
@@ -33,7 +35,7 @@ When you deploy a new extension version, Exoforge compares your declaration with
 | Remove a property from the record | The column is **retired**, not dropped: no SQL runs and old clients that still read it keep working. |
 | Rename a column, narrow a type, add `NOT NULL` without a default, drop a column | **Refused** until you declare it (next section). The deploy of that extension fails alone and the message names the table, the column and the file to write. |
 
-A deploy never loses data silently. `EXOFORGE_SCHEMA_CHANGE_MODE=reset` (what `just dev` uses) drops and rebuilds the table instead; it is for development only.
+A deploy never loses data silently. A development server can be set to rebuild the table instead, which loses its rows; a production server never does.
 
 ## Declaring a change Exoforge cannot guess
 

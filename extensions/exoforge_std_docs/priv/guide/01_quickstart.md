@@ -91,8 +91,16 @@ To seed data or warm a cache when the extension starts, add an optional `OnExten
 
 Fast local compilation and zero-downtime hot reloading.
 
-### Deploy in Unity Studio
+:::tabs
+:::tab In Unity Studio
 In the **Extensions** tab, find your extension card and click **Build & Deploy**. Your local .NET compiler publishes the binary and uploads it. Wait for the status to report **running**.
+:::tab From the command line
+```
+exo extension build economy_system
+exo extension push economy_system
+```
+`build` compiles the extension and writes its `manifest.json`; `push` builds and uploads it to the cluster your project is configured for. Use this in CI or when you prefer a terminal.
+:::end
 
 If the build fails, the deploy stops before upload. Open the extension's **Logs** tab to see the compiler output or a startup error.
 
@@ -112,29 +120,37 @@ In the **Extensions** tab, open your extension and click **Stubs**. Studio gener
 
 ## 5. Call from Unity Gameplay Code
 
+:::tabs
+:::tab Callback
 ```csharp
 using UnityEngine;
-using System.Threading.Tasks;
 using Exoforge.Client;
 using Exoforge.Client.Unity;
 
 public class GameplayRewardController : MonoBehaviour
 {
-    void OnLevelCompletedWithCallback(int points, int multiplier)
+    void OnLevelCompleted(int points, int multiplier)
     {
-        var client = ExoServices.GameplayCalculator;
-
-        // Style A: Unity Main-Thread Callback
-        client.CalculateScore(
+        ExoServices.GameplayCalculator.CalculateScore(
             new CalculateScoreRequest(points, multiplier),
             onComplete: res => Debug.Log($"Final Score: {res.TotalScore}"),
             onError: err => Debug.LogError($"Calculation failed: {err.Message}")
         );
     }
+}
+```
+The callbacks run on Unity's main thread, so they can touch the scene directly.
+:::tab async / await
+```csharp
+using System.Threading.Tasks;
+using UnityEngine;
+using Exoforge.Client;
+using Exoforge.Client.Unity;
 
-    async Task OnLevelCompletedAsync(int points, int multiplier)
+public class GameplayRewardController : MonoBehaviour
+{
+    async Task OnLevelCompleted(int points, int multiplier)
     {
-        // Style B: Task Async/Await Overload (via ExoServices or ExoforgeSDK.Client)
         try
         {
             var res = await ExoServices.GameplayCalculator
@@ -148,6 +164,8 @@ public class GameplayRewardController : MonoBehaviour
     }
 }
 ```
+Use this when the call is one step of a longer flow.
+:::end
 
 Enter Play Mode and trigger the call. The Unity Console prints the returned score; the same request appears in Studio's extension inspector and its **Logs** tab. If the action is missing, confirm the extension is **running** and click **Sync Client** after the build.
 

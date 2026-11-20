@@ -10,6 +10,8 @@ Technical reference for .NET OS process isolation, stdio wire frames, and ahead-
 
 ---
 
+![The path of one call from the game to the database](diagram:request-path)
+
 ## 1. Extension Wire Protocol (Host Supervisor ↔ Worker IPC)
 
 Communication between the host cluster supervisor (Elixir BEAM) and the native C# worker process (`.NET`) takes place over standard I/O (`stdin`/`stdout`) using newline-delimited JSON frames:
@@ -44,16 +46,8 @@ Communication between the host cluster supervisor (Elixir BEAM) and the native C
 Game extensions in Exoforge are native C# compiled to a **framework-dependent single file**:
 
 - **No Reflection Over Your Actions**: The `Exoforge.Plugin.Generator` Roslyn source generator runs during compilation. It emits the dispatch table (`ExoforgeDispatch`) and entry point (`ExoforgeEntryPoint`), so your action methods are called directly. The SDK still reflects to serialize records, which is cheap on a framework-dependent build.
-- **Framework-Dependent, Not Trimmed**: The extension carries its own IL and dependencies and takes the runtime from the host, so the published binary is a few hundred kilobytes without any trimming. `Directory.Build.targets` strips `PublishAot`, `PublishTrimmed`, `SelfContained` and `PublishSingleFile` on purpose: trimming an extension that is reflected over by the host is a class of bug worth not having, and a framework-dependent file deploys to any host image that already has .NET.
+- **Framework-Dependent, Not Trimmed**: The extension carries its own IL and dependencies and takes the .NET runtime from the host, so the published binary is a few hundred kilobytes.
 - **Pure C# Records**: Data contracts are typed C# records with parameter names matching action arguments. The SDK owns JSON serialization, and generated stubs preserve end-to-end typing from server to client.
-- **Multi-Engine Isolated Storage**: Extensions access the database through `Exo.Database`, which scopes queries and KV storage to the extension's own schema — `plugin_<extension_id>` (the prefix keeps its early name), inside a per-instance database named `exoforge_<extension_id>`. Both prefixes are configurable (`:schema_prefix`, `:db_prefix`), so an operator can separate tenants without touching extension code.
+- **Multi-Engine Isolated Storage**: Extensions access the database through `Exo.Database`, which scopes queries and KV storage to the extension's own schema — `plugin_<extension_id>` (the prefix keeps its early name), inside a per-instance database named `exoforge_<extension_id>`.
 
 ---
-
-## 3. Extension Discovery & Production Volume Isolation
-
-Exoforge boots by scanning configured paths for `manifest.json` files and constructing a topological dependency graph:
-
-- **Multi-Path Scanning**: `EXTENSIONS_PATH` (or `:scan_path` in application config) can be configured with multiple paths. The runtime accepts Elixir lists, comma-separated, semicolon-separated, or JSON array strings (e.g., `EXTENSIONS_PATH="/app/builtin_extensions,/app/uploaded_extensions"`).
-- **Static vs. Mutable Volume Separation**: In containerized production deployments (Docker / Kubernetes), pre-compiled standard extensions are baked into `/app/builtin_extensions` inside the immutable image. A persistent volume is mounted strictly over `/app/uploaded_extensions` (`UPLOADED_EXTENSIONS_PATH`). This ensures that image updates deploy new built-in extensions without overwriting or obscuring custom user extensions.
-- **Deduplication & Semver Precedence**: When an extension ID appears in multiple scanned directories, `ManifestLoader` resolves the collision by keeping the higher semantic version. If versions are identical, the later/uploaded directory takes precedence so that hot patches override built-ins seamlessly. Built-in files are protected against accidental file deletion.

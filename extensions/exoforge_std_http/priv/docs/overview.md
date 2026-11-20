@@ -13,11 +13,3 @@ summary: The REST transport and CORS settings (port 4001).
 ## Events
 
 {{events}}
-
-## Settings
-
-It reads no settings.
-
-## Data
-
-It creates no tables of its own.

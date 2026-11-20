@@ -13,11 +13,3 @@ summary: Get, put, query and execute on an extension's own schema.
 ## Events
 
 {{events}}
-
-## Settings
-
-It reads no settings.
-
-## Data
-
-It creates no tables of its own.

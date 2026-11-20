@@ -13,12 +13,3 @@ summary: Player profiles and a key-value store per player.
 ## Events
 
 {{events}}
-
-## Settings
-
-It reads no settings.
-
-## Data
-
-- Table `player_kv`
-- Table `players`

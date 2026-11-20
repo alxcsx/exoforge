@@ -13,11 +13,3 @@ summary: Views other standard extensions add to the Studio.
 ## Events
 
 {{events}}
-
-## Settings
-
-It reads no settings.
-
-## Data
-
-It creates no tables of its own.

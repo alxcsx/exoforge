@@ -144,6 +144,52 @@ defmodule Exoforge.Std.DocsTest do
       assert html =~ "More <strong"
     end
 
+    test "tabs, diagrams and expandable tables are components of the Markdown" do
+      html =
+        """
+        :::tabs
+        :::tab Callback
+        Text with `code`.
+
+        ```csharp
+        var a = 1;
+        ```
+        :::tab Async
+        | A | B | C |
+        |---|---|---|
+        | 1 | 2 | 3 |
+        :::end
+
+        ![Request path](diagram:request-path)
+
+        | Name | Scope | Takes |
+        |---|---|---|
+        | a | b | c |
+        """
+        |> Markdown.to_html()
+        |> Phoenix.HTML.safe_to_string()
+
+      # two tabs: the first shown, the second hidden, both present for printing
+      assert html =~ ~s(data-exo-tabs)
+      assert length(Regex.scan(~r/role="tab"/, html)) == 2
+      assert html =~ ~s(data-pane="1" class="px-4 py-2 hidden print:block")
+      assert html =~ "var"
+      refute html =~ ":::"
+      refute html =~ "EXOBLOCK"
+
+      # the diagram is inlined with a caption; a table with three columns can be expanded, in the tab and outside it
+      assert html =~ "<svg role=\"img\" aria-label=\"Request path\""
+      assert html =~ "<figcaption"
+      assert length(Regex.scan(~r/<div data-exo-table/, html)) == 2
+      assert html =~ "Expand</button>"
+
+      # a small table has no expand button
+      small = "| A | B |\n|---|---|\n| 1 | 2 |\n" |> Markdown.to_html() |> Phoenix.HTML.safe_to_string()
+      refute small =~ "<div data-exo-table"
+
+      assert "![x](diagram:no-such-diagram)" |> Markdown.to_html() |> Phoenix.HTML.safe_to_string() =~ "Missing diagram"
+    end
+
     test "get_chapter returns error for missing chapter" do
       assert {:error, :not_found} = Docs.get_chapter(%{id: "non_existent"})
     end

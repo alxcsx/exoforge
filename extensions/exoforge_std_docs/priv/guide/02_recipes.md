@@ -71,6 +71,8 @@ summary: How refunds and chargebacks work.
 
 Three directives on a line of their own are filled in from the code every time the page is shown, and link to the API catalog: `{{actions}}` (a table of the extension's actions with scope, fields and description), `{{events}}` and `{{resources}}`. The description is the `///` summary above the action method (or the event record) in C#, and the `@doc` above `action` in an Elixir contract, so documenting the code documents the guide. Link to a single entry from your own prose with `[credit](api:wallet.credit)`, `[balance_changed](event:wallet.balance_changed)` or `[the wallet service](service:wallet)`.
 
+Pages are plain Markdown plus three components. A `:::tabs` block with `:::tab Title` lines inside it, closed by `:::end`, shows alternatives (way A and way B) as tabs instead of one long page. A table with more than two columns or more than five rows gets an **Expand** button on its own. In this guide's own chapters, `![What it shows](diagram:name)` inlines the SVG `diagrams/name.svg` beside the chapters, in both themes.
+
 The front matter is optional (`nav` is the sidebar label, `summary` a one-line description). Pages are shown in file-name order, so prefix with `01_`, `02_` to order them; only files directly inside `docs/` are read, and plain text and a few headings are enough: the live API catalog already lists every action's signature.
 
 ## Where to go next

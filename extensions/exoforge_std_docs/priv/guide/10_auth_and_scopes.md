@@ -54,7 +54,7 @@ Tokens are listed and revoked by id, never by secret, and changing an account's 
 
 ## The administrator
 
-The `admin` account is created at every boot from `EXOFORGE_ADMIN_EMAIL` and `EXOFORGE_ADMIN_PASSWORD` and removed when they are unset. Nobody can delete, re-scope or re-password it through user actions. See [Run in production](guide:09_run_in_production).
+The `admin` account is set up by whoever runs the server, and every other account is created from it. Nobody can delete, re-scope or re-password the administrator through user actions.
 
 > [!NOTE]
 > Scripts that create test accounts should pass `disposable: true`, so `auth.purge_disposable` can remove exactly those.

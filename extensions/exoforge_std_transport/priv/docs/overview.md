@@ -13,11 +13,3 @@ summary: The gateway shared by ws and http, with the game-version check.
 ## Events
 
 {{events}}
-
-## Settings
-
-It reads no settings.
-
-## Data
-
-It creates no tables of its own.
