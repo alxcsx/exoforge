@@ -429,15 +429,16 @@ defmodule Exoforge.Std.Lldb.Adapters.Postgres do
   end
 
   @impl true
-  def apply_schema(plugin_id, resources_override, migrations_override, config) do
+  def apply_schema(plugin_id, resources_override, migrations_override, version_override, config) do
     clean_self = valid_plugin_id!(plugin_id)
     schema_name = valid_ident!(schema_name(clean_self, config))
     resources = resolve_manifest_resources(clean_self, resources_override)
     migrations = resolve_manifest_migrations(clean_self, migrations_override)
+    version = resolve_manifest_version(clean_self, version_override)
 
     with {:ok, {mode, conn}} <- pooled_connection(clean_self, schema_name, config) do
       try do
-        Exoforge.Std.Lldb.Schema.reconcile(conn, schema_name, resources, migrations)
+        Exoforge.Std.Lldb.Schema.reconcile(conn, schema_name, resources, migrations, version)
       after
         if mode == :unmanaged, do: GenServer.stop(conn)
       end
@@ -480,6 +481,18 @@ defmodule Exoforge.Std.Lldb.Adapters.Postgres do
   defp resolve_manifest_resources(_clean_self, resources) when is_list(resources), do: resources
 
   defp resolve_manifest_migrations(_clean_self, migrations) when is_list(migrations), do: migrations
+
+  # The extension version being deployed, as the stamp `Exoforge.VersionStamp` makes of it.
+  defp resolve_manifest_version(_clean_self, version) when is_integer(version), do: version
+
+  defp resolve_manifest_version(clean_self, _) do
+    case find_manifest_for(clean_self) do
+      nil -> 0
+      manifest -> Exoforge.VersionStamp.encode(Map.get(manifest, :version))
+    end
+  rescue
+    _ -> 0
+  end
 
   defp resolve_manifest_migrations(clean_self, _) do
     case find_manifest_for(clean_self) do

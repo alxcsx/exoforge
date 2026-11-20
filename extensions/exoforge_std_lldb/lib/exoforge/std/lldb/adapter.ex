@@ -37,8 +37,13 @@ defmodule Exoforge.Std.Lldb.Adapter do
   Brings the namespace's tables in line with `resources` (manifest shape, logical `storage` types) by
   applying only safe changes; an unsafe one applies nothing and is returned as `{:unsafe_schema_change, ops}`.
   """
-  @callback apply_schema(plugin_id, resources :: list() | nil, migrations :: list() | nil, config) ::
-              {:ok, map()} | {:error, term()}
+  @callback apply_schema(
+              plugin_id,
+              resources :: list() | nil,
+              migrations :: list() | nil,
+              version :: integer() | nil,
+              config
+            ) :: {:ok, map()} | {:error, term()}
 
   @doc "Applies hand-written SQL migrations in version order, recording each in the namespace ledger."
   @callback run_migrations(plugin_id, migrations :: list(), config) :: {:ok, map()} | {:error, term()}

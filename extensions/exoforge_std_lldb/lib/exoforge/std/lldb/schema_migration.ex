@@ -1,31 +1,37 @@
 defmodule Exoforge.Std.Lldb.SchemaMigration do
   @moduledoc """
-  Brings a table from one version of its resource to the next with plain `ALTER TABLE` statements (T6).
+  Brings a table to the shape of the extension version being deployed with plain `ALTER TABLE` statements.
 
-  The reconciler applies what is safe on its own. A change that is not safe (a rename, a type change, a
-  dropped column) needs the resource's `Version` raised and a migration from the version the table is at to
-  the one the manifest declares. The migrations arrive in the manifest, written as attributes in the
-  extension's source, so nothing of the extension runs: each step is an operation (`rename`, `convert`,
-  `fill`, `drop`, `set_not_null`) rendered here as SQL.
+  The reconciler applies what is safe on its own. A change that is not safe (a type change, a `NOT NULL` column
+  that existing rows cannot fill) needs a migration. The migrations arrive in the manifest, written as attributes in
+  the extension's source, each leading to an extension version (`To = "1.2.0"`), so nothing of the extension runs:
+  each step is an operation (`rename`, `convert`, `fill`, `drop`, `set_not_null`) rendered here as SQL.
+
+  The table's ledger records the extension version it was last reconciled at. A deploy runs the migrations with a
+  `To` after that and not past the deploy's own version, in order. A column the manifest no longer lists is retired,
+  not dropped; only an explicit `drop` removes it, and only once no row is stamped below that migration's version.
 
   The steps for one table run in ONE transaction (PostgreSQL DDL is transactional), under a lock timeout so
   a blocked `ALTER` fails the deploy instead of queueing every query behind it. Afterwards the table is
   compared with the manifest again, inside the same transaction: any difference left rolls everything back,
   so a migration that does not lead to the declared shape never half-applies.
 
-  Without a migration for an unsafe change, or when the table is already at a newer version than the
-  manifest, nothing is changed and the reason is returned.
+  Without a migration for an unsafe change, or when the table is already at a newer version than the deploy,
+  nothing is changed and the reason is returned.
   """
   alias Exoforge.Std.Lldb.Schema
 
   @default_lock_timeout "5s"
 
-  @doc "`Schema.reconcile/3` for resources that may need migrating."
-  def reconcile(conn, schema, resources, migrations) do
+  @doc """
+  `Schema.reconcile/3` for resources that may need migrating. `version` is the encoded extension version being
+  deployed (`Exoforge.VersionStamp`); `migrations` are the manifest's, each `%{resource, to, ops}`.
+  """
+  def reconcile(conn, schema, resources, migrations, version \\ 0) do
     with {:ok, s} <- Schema.validate_ident(schema),
          :ok <- Schema.ensure_ledgers(conn, s),
-         {:ok, plan} <- read_plan(conn, s, resources),
-         {:ok, work} <- decide(plan, resources, List.wrap(migrations)) do
+         {:ok, plan} <- read_plan(conn, s, resources, version),
+         {:ok, work} <- decide(plan, resources, List.wrap(migrations), version) do
       case work do
         [] -> Schema.apply(conn, plan)
         _ -> run(conn, s, plan, work)
@@ -36,7 +42,7 @@ defmodule Exoforge.Std.Lldb.SchemaMigration do
   # Reading the tables (are they empty, are there nulls) queries them, so it waits behind anyone holding an
   # exclusive lock on one. Take a shared lock on each under the lock timeout first: if the table is busy
   # the deploy fails now, and the reads that follow cannot wait.
-  defp read_plan(conn, schema, resources) do
+  defp read_plan(conn, schema, resources, version) do
     qs = Schema.quote_ident!(schema)
 
     result =
@@ -52,7 +58,7 @@ defmodule Exoforge.Std.Lldb.SchemaMigration do
         end
 
         with {:ok, live} <- Schema.read_live_state(tx, schema, resources),
-             {:ok, plan} <- Schema.plan(resources, live) do
+             {:ok, plan} <- Schema.plan(resources, live, version) do
           plan
         else
           {:error, reason} -> Postgrex.rollback(tx, reason)
@@ -67,43 +73,45 @@ defmodule Exoforge.Std.Lldb.SchemaMigration do
 
   ## ---- what has to be migrated ----
 
-  defp decide(plan, resources, migrations) do
+  defp decide(plan, resources, migrations, version) do
     unsafe_by_table = plan.ops |> Enum.filter(&(&1.safety == :unsafe)) |> Enum.group_by(& &1.table)
 
     result =
-      Enum.reduce_while(Enum.sort(Map.keys(unsafe_by_table)), {:ok, [], []}, fn table, {:ok, work, stuck} ->
-        ops = Map.fetch!(unsafe_by_table, table)
-        %{manifest: manifest_version, live: live_version, resource: resource} = Map.get(plan.versions, table, %{manifest: 1, live: 1, resource: table})
+      plan.versions
+      |> Enum.sort()
+      |> Enum.reduce_while({:ok, [], []}, fn {table, info}, {:ok, work, stuck} ->
+        %{live: live, resource: resource} = info
+        ops = Map.get(unsafe_by_table, table, [])
+        # A table with no ledger row was not made by a versioned deploy: history says nothing about it.
+        steps = if Map.get(info, :known, false), do: steps_for(migrations, resource, live, version), else: []
 
         cond do
-          manifest_version < live_version ->
-            {:halt, {:error, {:version_downgrade, %{table: table, resource: resource, live: live_version, manifest: manifest_version}}}}
+          live > version ->
+            {:halt, {:error, {:version_downgrade, %{table: table, resource: resource, live: live, manifest: version}}}}
 
-          # unsafe, and the version was not raised: the change is not declared
-          manifest_version == live_version ->
-            annotated = Enum.map(ops, &Map.merge(&1, %{live_version: live_version, manifest_version: manifest_version, resource: resource}))
+          steps != [] ->
+            item = %{table: table, resource: resource, steps: steps, version: version, raw: raw_resource(resources, table)}
+            {:cont, {:ok, [item | work], stuck}}
+
+          ops == [] ->
+            {:cont, {:ok, work, stuck}}
+
+          # unsafe, and no migration leads here: the version was not raised, or the migration was not written
+          live == version ->
+            annotated = Enum.map(ops, &Map.merge(&1, %{live_version: live, manifest_version: version, resource: resource}))
             {:cont, {:ok, work, stuck ++ annotated}}
 
           true ->
-            case chain(migrations, resource, live_version, manifest_version) do
-              {:ok, steps} ->
-                item = %{table: table, resource: resource, steps: steps, version: manifest_version, raw: raw_resource(resources, table)}
-                {:cont, {:ok, [item | work], stuck}}
-
-              {:missing, from} ->
-                {:halt,
-                 {:error,
-                  {:migration_missing,
-                   %{
-                     table: table,
-                     resource: resource,
-                     from: from,
-                     to: from + 1,
-                     live: live_version,
-                     manifest: manifest_version,
-                     changes: Enum.map(ops, &%{column: &1[:column], change: &1.op, reason: &1.reason})
-                   }}}}
-            end
+            {:halt,
+             {:error,
+              {:migration_missing,
+               %{
+                 table: table,
+                 resource: resource,
+                 live: live,
+                 manifest: version,
+                 changes: Enum.map(ops, &%{column: &1[:column], change: &1.op, reason: &1.reason})
+               }}}}
         end
       end)
 
@@ -114,13 +122,14 @@ defmodule Exoforge.Std.Lldb.SchemaMigration do
     end
   end
 
-  defp chain(migrations, resource, from, to) do
-    Enum.reduce_while(from..(to - 1)//1, {:ok, []}, fn version, {:ok, steps} ->
-      case Enum.find(migrations, &(g(&1, :resource) == resource and g(&1, :from) == version)) do
-        nil -> {:halt, {:missing, version}}
-        migration -> {:cont, {:ok, steps ++ [migration]}}
-      end
+  # The migrations of one resource that lead to a version after the table's and not beyond the deploy's, oldest first.
+  defp steps_for(migrations, resource, live, version) do
+    migrations
+    |> Enum.filter(fn m ->
+      to = Exoforge.VersionStamp.encode(g(m, :to))
+      g(m, :resource) == resource and to > live and to <= version
     end)
+    |> Enum.sort_by(&Exoforge.VersionStamp.encode(g(&1, :to)))
   end
 
   defp raw_resource(resources, table) do
@@ -152,7 +161,7 @@ defmodule Exoforge.Std.Lldb.SchemaMigration do
 
         Enum.each(plan.table_hashes, fn {table, hash, ops} ->
           if not MapSet.member?(migrating, table) and is_binary(hash) and hash != "" do
-            Schema.record_ledger(tx, qs, table, hash, ledger_plan(ops), get_in(plan, [:versions, table, :manifest]) || 1)
+            Schema.record_ledger(tx, qs, table, hash, ledger_plan(ops), plan.version)
           end
         end)
 
@@ -169,21 +178,28 @@ defmodule Exoforge.Std.Lldb.SchemaMigration do
     qt = Schema.quote_ident!(table)
     {:ok, [resource]} = Schema.normalized_resources([raw])
 
-    for step <- steps, op <- List.wrap(g(step, :ops)) do
-      case render(op, qs, qt, resource) do
-        {:ok, statements} -> Enum.each(statements, &Schema.run_tx!(tx, &1, []))
-        {:error, reason} -> Postgrex.rollback(tx, {:invalid_migration, %{table: table, resource: item.resource, reason: reason}})
+    # The stamp the gate below counts on; a table made before rows were stamped gains it here.
+    Schema.run_tx!(tx, ~s|ALTER TABLE #{qs}.#{qt} ADD COLUMN IF NOT EXISTS "_v" bigint NOT NULL DEFAULT 0|, [])
+
+    for step <- steps do
+      gate_drops!(tx, qs, qt, item, step)
+
+      for op <- List.wrap(g(step, :ops)) do
+        case render(op, qs, qt, resource) do
+          {:ok, statements} -> Enum.each(statements, &Schema.run_tx!(tx, &1, []))
+          {:error, reason} -> Postgrex.rollback(tx, {:invalid_migration, %{table: table, resource: item.resource, reason: reason}})
+        end
       end
     end
 
     # The verify gate: the table must now be what the manifest says, bar what is safe to finish by itself.
     {:ok, live} = Schema.read_live_state(tx, schema, [raw])
-    {:ok, remaining} = Schema.plan([raw], live)
+    {:ok, remaining} = Schema.plan([raw], live, version)
 
     case Enum.filter(remaining.ops, &(&1.safety == :unsafe)) do
       [] ->
         Enum.each(remaining.ops, &run_sql!(tx, &1))
-        steps_json = steps |> Enum.map(&%{"from" => g(&1, :from), "to" => g(&1, :to)}) |> Jason.encode!()
+        steps_json = steps |> Enum.map(&%{"to" => g(&1, :to)}) |> Jason.encode!()
         Schema.record_ledger(tx, qs, table, resource.schema_hash, steps_json, version)
 
       left ->
@@ -192,6 +208,22 @@ defmodule Exoforge.Std.Lldb.SchemaMigration do
           {:migration_incomplete,
            %{table: table, resource: item.resource, remaining: Enum.map(left, &%{column: &1[:column], change: &1.op, reason: &1.reason})}}
         )
+    end
+  end
+
+  # A drop destroys what is in the column. A row still stamped below the migration's version has not been brought
+  # up to date, so the column may be the only copy of its data: refuse until none is left.
+  defp gate_drops!(tx, qs, qt, item, step) do
+    if Enum.any?(List.wrap(g(step, :ops)), &(g(&1, :op) == "drop")) do
+      to = Exoforge.VersionStamp.encode(g(step, :to))
+      %{rows: [[below]]} = Schema.run_tx!(tx, ~s|SELECT count(*) FROM #{qs}.#{qt} WHERE "_v" < $1|, [to])
+
+      if below > 0 do
+        Postgrex.rollback(
+          tx,
+          {:rows_below_version, %{table: item.table, resource: item.resource, rows: below, to: g(step, :to), decl: g(step, :decl)}}
+        )
+      end
     end
   end
 

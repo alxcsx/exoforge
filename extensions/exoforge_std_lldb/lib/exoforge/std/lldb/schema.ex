@@ -226,8 +226,8 @@ defmodule Exoforge.Std.Lldb.Schema do
           "plan" jsonb NOT NULL DEFAULT '[]'::jsonb
         )
         """,
-        # The version of the resource shape each table was last brought to (T6). Older ledgers gain it here.
-        ~s|ALTER TABLE #{qs}."_exo_schema" ADD COLUMN IF NOT EXISTS "version" integer NOT NULL DEFAULT 1|,
+        ~s|ALTER TABLE #{qs}."_exo_schema" ADD COLUMN IF NOT EXISTS "version" bigint NOT NULL DEFAULT 0|,
+        ~s|ALTER TABLE #{qs}."_exo_schema" ALTER COLUMN "version" TYPE bigint|,
         """
         CREATE TABLE IF NOT EXISTS #{qs}."_exo_migrations" (
           "id" text PRIMARY KEY,
@@ -296,8 +296,7 @@ defmodule Exoforge.Std.Lldb.Schema do
     end
   end
 
-  # The resource version each table was last brought to. A table with no ledger row, or a ledger from before
-  # versions existed, is at version 1.
+  # The extension version each table was last reconciled at. Missing historical ledger values are zero.
   defp read_ledger_versions(conn, schema) do
     qs = quote_ident!(schema)
 
@@ -555,10 +554,12 @@ defmodule Exoforge.Std.Lldb.Schema do
 
   @doc """
   Pure schema planning function: diffs `resources` against `live_state` and returns
-  `{:ok, %{schema: schema, ops: ops, safe: boolean, skipped_tables: [...], table_hashes: [...]}}`
+  `{:ok, %{schema: schema, ops: ops, safe: boolean, version: version, skipped_tables: [...], table_hashes: [...]}}`.
+  `version` is the encoded extension version being deployed (`Exoforge.VersionStamp`); a table whose ledger is at another
+  version is planned again so its ledger row records the new one
   or `{:error, reason}` if validation fails.
   """
-  def plan(resources, live_state) when is_list(resources) and is_map(live_state) do
+  def plan(resources, live_state, version \\ 0) when is_list(resources) and is_map(live_state) do
     schema = Map.get(live_state, :schema) || Map.get(live_state, "schema") || "public"
 
     with {:ok, valid_schema} <- validate_ident(schema),
@@ -576,7 +577,7 @@ defmodule Exoforge.Std.Lldb.Schema do
           cond do
             not is_nil(live_tbl) and live_tbl[:exists] == true and
               is_binary(res.schema_hash) and res.schema_hash != "" and
-              recorded_hash == res.schema_hash and Map.get(ledger_versions, tbl, 1) == res.version ->
+              recorded_hash == res.schema_hash and Map.get(ledger_versions, tbl, 0) == version ->
               {ops_acc, [tbl | skip_acc], hash_acc}
 
             is_nil(live_tbl) or live_tbl[:exists] != true ->
@@ -609,12 +610,19 @@ defmodule Exoforge.Std.Lldb.Schema do
          schema: valid_schema,
          ops: ops,
          safe: all_safe?,
+         version: version,
          skipped_tables: Enum.reverse(skipped),
          table_hashes: Enum.reverse(table_hashes),
-         # per table: the version the manifest declares, the one the table is at, and the resource's name
+         # per table: the extension version at which the table was last reconciled and its resource name
          versions:
            Map.new(normalized_resources, fn res ->
-             {res.table, %{manifest: res.version, live: Map.get(ledger_versions, res.table, 1), resource: res.name}}
+             {res.table,
+              %{
+                live: Map.get(ledger_versions, res.table, 0),
+                known: Map.has_key?(ledger_versions, res.table),
+                target: version,
+                resource: res.name
+              }}
            end)
        }}
     end
@@ -647,6 +655,8 @@ defmodule Exoforge.Std.Lldb.Schema do
         chk_sql = enum_check_inline_sql(res.table, col)
         "#{qc} #{col.storage}#{pk_sql}#{null_sql}#{def_sql}#{chk_sql}"
       end)
+
+    col_defs = col_defs ++ [~s|"_v" bigint NOT NULL DEFAULT 0|]
 
     create_sql = "CREATE TABLE IF NOT EXISTS #{qs}.#{qt} (#{Enum.join(col_defs, ", ")})"
 
@@ -710,23 +720,36 @@ defmodule Exoforge.Std.Lldb.Schema do
         end
       end)
 
-    # 3. Check dropped columns (live columns absent from manifest)
+    # 3. Retire columns absent from the manifest. They remain for old rows, but cannot block new writes.
     drop_ops =
       live_cols
       |> Map.keys()
       |> Enum.sort()
-      |> Enum.reject(&Map.has_key?(manifest_cols_by_name, &1))
+      |> Enum.reject(&(&1 == "_v" or Map.has_key?(manifest_cols_by_name, &1)))
       |> Enum.map(fn dropped_col ->
-        %{
-          op: :drop_column,
-          safety: :unsafe,
-          table: res.table,
-          column: dropped_col,
-          sql: nil,
-          reason:
-            "Column '#{dropped_col}' on table '#{res.table}' is absent from the manifest; dropping columns requires an explicit migration"
-        }
+        lcol = Map.fetch!(live_cols, dropped_col)
+
+        if lcol.nullable do
+          nil
+        else
+          %{
+            op: :retire_column,
+            safety: :safe,
+            table: res.table,
+            column: dropped_col,
+            sql: "ALTER TABLE #{qs}.#{qt} ALTER COLUMN #{quote_ident!(dropped_col)} DROP NOT NULL",
+            reason: "Retire column '#{dropped_col}' on table '#{res.table}'"
+          }
+        end
       end)
+      |> Enum.reject(&is_nil/1)
+
+    stamp_ops =
+      if Map.has_key?(live_cols, "_v") do
+        []
+      else
+        [%{op: :add_version_stamp, safety: :safe, table: res.table, column: "_v", sql: "ALTER TABLE #{qs}.#{qt} ADD COLUMN IF NOT EXISTS \"_v\" bigint NOT NULL DEFAULT 0", reason: "Add row version stamp to table '#{res.table}'"}]
+      end
 
     # 4. Indexes & unique indexes
     index_ops =
@@ -742,7 +765,7 @@ defmodule Exoforge.Std.Lldb.Schema do
         )
       end)
 
-    pk_ops ++ col_ops ++ drop_ops ++ index_ops
+    pk_ops ++ col_ops ++ drop_ops ++ stamp_ops ++ index_ops
   end
 
   defp plan_add_column(qs, qt, table, mcol, live_tbl) do
@@ -1109,7 +1132,7 @@ defmodule Exoforge.Std.Lldb.Schema do
                        end)
                        |> Jason.encode!()
 
-                     record_ledger(tx, qs, tbl, schema_hash, plan_json, get_in(plan, [:versions, tbl, :manifest]) || 1)
+                     record_ledger(tx, qs, tbl, schema_hash, plan_json, Map.get(plan, :version, 0))
                    end
                  end)
 
@@ -1156,8 +1179,8 @@ defmodule Exoforge.Std.Lldb.Schema do
   @doc """
   Convenience helper that reads live state, plans, and applies in one call.
   """
-  def reconcile(conn, schema, resources, migrations \\ []) do
-    Exoforge.Std.Lldb.SchemaMigration.reconcile(conn, schema, resources, migrations)
+  def reconcile(conn, schema, resources, migrations \\ [], version \\ 0) do
+    Exoforge.Std.Lldb.SchemaMigration.reconcile(conn, schema, resources, migrations, version)
   end
 
   ## ---- MANIFEST RESOURCE NORMALIZATION & VALIDATION ----
@@ -1195,7 +1218,6 @@ defmodule Exoforge.Std.Lldb.Schema do
          %{
            table: table,
            name: to_string(Map.get(res, :name) || Map.get(res, "name") || table),
-           version: resource_version(res),
            schema_hash: schema_hash,
            columns: cols
          }}
@@ -1203,12 +1225,6 @@ defmodule Exoforge.Std.Lldb.Schema do
     end
   end
 
-  defp resource_version(res) do
-    case Map.get(res, :version) || Map.get(res, "version") do
-      v when is_integer(v) and v >= 1 -> v
-      _ -> 1
-    end
-  end
 
   defp extract_table_name(res) do
     source = Map.get(res, :source) || Map.get(res, "source")

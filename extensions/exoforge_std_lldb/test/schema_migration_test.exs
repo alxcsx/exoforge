@@ -1,7 +1,8 @@
 defmodule Exoforge.Std.Lldb.SchemaMigrationTest do
   @moduledoc """
-  A change that is not safe on its own is applied as plain ALTERs when the resource's version was raised and a
-  migration leads to it; otherwise it is refused and the table is left alone (T6).
+  A change that is not safe on its own is applied as plain ALTERs when a migration leads to the extension version being
+  deployed; otherwise it is refused and the table is left alone. Versions are stamps (`Exoforge.VersionStamp`):
+  1.0.0 is 1_000_000, 1.1.0 is 1_001_000, 1.2.0 is 1_002_000.
   """
   use ExUnit.Case, async: false
 
@@ -61,6 +62,10 @@ defmodule Exoforge.Std.Lldb.SchemaMigrationTest do
   end
 
 
+  @v100 1_000_000
+  @v110 1_001_000
+  @v120 1_002_000
+
   defp col(name, storage, opts \\ []) do
     Map.merge(
       %{name: name, storage: storage, nullable: true, primary_key: false, unique: false, indexed: false, default: nil, choices: nil},
@@ -68,13 +73,13 @@ defmodule Exoforge.Std.Lldb.SchemaMigrationTest do
     )
   end
 
-  defp resource(version, columns, hash) do
-    %{name: "items", source: %{table: "items"}, version: version, schema_hash: hash, columns: [col("id", "text", nullable: false, primary_key: true) | columns]}
+  defp resource(columns, hash) do
+    %{name: "items", source: %{table: "items"}, schema_hash: hash, columns: [col("id", "text", nullable: false, primary_key: true) | columns]}
   end
 
-  defp migration(from, ops), do: %{resource: "items", from: from, to: from + 1, ops: ops}
+  defp migration(to, ops), do: %{resource: "items", to: to, ops: ops}
 
-  defp reconcile(conn, schema, resource, migrations \\ []), do: Schema.reconcile(conn, schema, [resource], migrations)
+  defp reconcile(conn, schema, resource, migrations, version), do: Schema.reconcile(conn, schema, [resource], migrations, version)
 
   defp rows(conn, schema) do
     %Postgrex.Result{columns: columns, rows: rows} = Postgrex.query!(conn, ~s|SELECT * FROM "#{schema}".items ORDER BY id|, [])
@@ -99,59 +104,86 @@ defmodule Exoforge.Std.Lldb.SchemaMigrationTest do
   end
 
   defp seed_v1(conn, schema) do
-    assert {:ok, _} = reconcile(conn, schema, resource(1, [col("nm", "text"), col("qty", "text")], "h1"))
+    assert {:ok, _} = reconcile(conn, schema, resource([col("nm", "text"), col("qty", "text")], "h1"), [], @v100)
     Postgrex.query!(conn, ~s|INSERT INTO "#{schema}".items (id, nm, qty) VALUES ('a', 'sword', '5'), ('b', 'shield', '7')|, [])
   end
 
-  test "a rename with a migration keeps the data and records the new version", %{conn: conn, schema: schema} do
+  defp v2_renamed, do: resource([col("name", "text"), col("qty", "text")], "h2")
+  defp rename_nm, do: migration("1.1.0", [%{op: "rename", from: "nm", to: "name"}])
+
+  test "a new table carries the row stamp, at 0 until something writes it", %{conn: conn, schema: schema} do
     seed_v1(conn, schema)
-    assert ledger_version(conn, schema) == 1
+    assert column_type(conn, schema, "_v") == "bigint"
+    assert [%{"_v" => 0}, %{"_v" => 0}] = rows(conn, schema)
+    assert ledger_version(conn, schema) == @v100
+  end
 
-    v2 = resource(2, [col("name", "text"), col("qty", "text")], "h2")
+  test "a rename with a migration keeps the data and records the extension version", %{conn: conn, schema: schema} do
+    seed_v1(conn, schema)
 
-    assert {:ok, %{migrated: ["items"]}} = reconcile(conn, schema, v2, [migration(1, [%{op: "rename", from: "nm", to: "name"}])])
+    assert {:ok, %{migrated: ["items"]}} = reconcile(conn, schema, v2_renamed(), [rename_nm()], @v110)
 
     assert [%{"id" => "a", "name" => "sword", "qty" => "5"}, %{"id" => "b", "name" => "shield"}] = rows(conn, schema)
-    assert ledger_version(conn, schema) == 2
+    assert ledger_version(conn, schema) == @v110
 
     # and now it is simply at its version: nothing more to do
-    assert {:ok, %{applied: 0}} = reconcile(conn, schema, v2, [migration(1, [%{op: "rename", from: "nm", to: "name"}])])
+    assert {:ok, %{applied: 0}} = reconcile(conn, schema, v2_renamed(), [rename_nm()], @v110)
   end
 
   test "string keys work as well as atom keys, as a manifest read from JSON has them", %{conn: conn, schema: schema} do
     seed_v1(conn, schema)
-    v2 = resource(2, [col("name", "text"), col("qty", "text")], "h2")
 
-    json_migration = %{"resource" => "items", "from" => 1, "to" => 2, "ops" => [%{"op" => "rename", "from" => "nm", "to" => "name"}]}
-    assert {:ok, %{migrated: ["items"]}} = reconcile(conn, schema, v2, [json_migration])
+    json_migration = %{"resource" => "items", "to" => "1.1.0", "ops" => [%{"op" => "rename", "from" => "nm", "to" => "name"}]}
+    assert {:ok, %{migrated: ["items"]}} = reconcile(conn, schema, v2_renamed(), [json_migration], @v110)
   end
 
   test "an unsafe change with no migration is refused and nothing changes", %{conn: conn, schema: schema} do
     seed_v1(conn, schema)
-    v2 = resource(2, [col("name", "text"), col("qty", "text")], "h2")
 
-    assert {:error, {:migration_missing, %{table: "items", resource: "items", from: 1, to: 2, live: 1, manifest: 2, changes: changes}}} =
-             reconcile(conn, schema, v2)
+    # a required column existing rows cannot fill: not safe on its own
+    required_name = resource([col("name", "text", nullable: false), col("qty", "text")], "h2")
 
-    assert Enum.any?(changes, &(&1.column == "nm"))
+    assert {:error, {:migration_missing, %{table: "items", resource: "items", live: @v100, manifest: @v110, changes: changes}}} =
+             reconcile(conn, schema, required_name, [], @v110)
+
+    assert Enum.any?(changes, &(&1.column == "name"))
     assert [%{"nm" => "sword"} | _] = rows(conn, schema)
-    assert ledger_version(conn, schema) == 1
+    assert ledger_version(conn, schema) == @v100
   end
 
-  test "an unsafe change without raising the version is refused, naming the versions", %{conn: conn, schema: schema} do
+  test "an unsafe change without a new extension version is refused, naming the versions", %{conn: conn, schema: schema} do
     seed_v1(conn, schema)
-    same_version = resource(1, [col("nm", "text"), col("qty", "integer")], "h1b")
+    same_version = resource([col("nm", "text"), col("qty", "integer")], "h1b")
 
-    assert {:error, {:unsafe_schema_change, ops}} = reconcile(conn, schema, same_version)
-    assert [%{column: "qty", live_version: 1, manifest_version: 1} | _] = ops
+    assert {:error, {:unsafe_schema_change, ops}} = reconcile(conn, schema, same_version, [], @v100)
+    assert [%{column: "qty", live_version: @v100, manifest_version: @v100} | _] = ops
     assert column_type(conn, schema, "qty") == "text"
+  end
+
+  test "a renamed column with no migration is just a new column beside the retired one: nothing is lost", %{conn: conn, schema: schema} do
+    seed_v1(conn, schema)
+
+    assert {:ok, _} = reconcile(conn, schema, v2_renamed(), [], @v110)
+    assert [%{"nm" => "sword", "name" => nil} | _] = rows(conn, schema)
+  end
+
+  test "a migration is not needed for a column that is no longer declared: it is retired, not dropped", %{conn: conn, schema: schema} do
+    assert {:ok, _} = reconcile(conn, schema, resource([col("nm", "text", nullable: false)], "h1"), [], @v100)
+    Postgrex.query!(conn, ~s|INSERT INTO "#{schema}".items (id, nm) VALUES ('a', 'sword')|, [])
+
+    # the next version no longer declares nm
+    assert {:ok, _} = reconcile(conn, schema, resource([], "h2"), [], @v110)
+
+    # old rows keep their data, and a new row can be written without the retired column
+    assert [%{"nm" => "sword"}] = rows(conn, schema)
+    assert {:ok, _} = Postgrex.query(conn, ~s|INSERT INTO "#{schema}".items (id) VALUES ('b')|, [])
   end
 
   test "convert changes a column's type in place, USING the cast, and keeps the values", %{conn: conn, schema: schema} do
     seed_v1(conn, schema)
-    v2 = resource(2, [col("nm", "text"), col("qty", "int32")], "h2")
+    v2 = resource([col("nm", "text"), col("qty", "int32")], "h2")
 
-    assert {:ok, _} = reconcile(conn, schema, v2, [migration(1, [%{op: "convert", column: "qty", to: "int32"}])])
+    assert {:ok, _} = reconcile(conn, schema, v2, [migration("1.1.0", [%{op: "convert", column: "qty", to: "int32"}])], @v110)
 
     assert column_type(conn, schema, "qty") == "integer"
     assert [%{"qty" => 5}, %{"qty" => 7}] = rows(conn, schema)
@@ -160,23 +192,23 @@ defmodule Exoforge.Std.Lldb.SchemaMigrationTest do
   test "a conversion the data cannot take rolls the whole migration back", %{conn: conn, schema: schema} do
     seed_v1(conn, schema)
     Postgrex.query!(conn, ~s|INSERT INTO "#{schema}".items (id, nm, qty) VALUES ('c', 'bow', 'many')|, [])
-    v2 = resource(2, [col("name", "text"), col("qty", "int32")], "h2")
+    v2 = resource([col("name", "text"), col("qty", "int32")], "h2")
 
     ops = [%{op: "rename", from: "nm", to: "name"}, %{op: "convert", column: "qty", to: "int32"}]
-    assert {:error, %Postgrex.Error{}} = reconcile(conn, schema, v2, [migration(1, ops)])
+    assert {:error, %Postgrex.Error{}} = reconcile(conn, schema, v2, [migration("1.1.0", ops)], @v110)
 
     # the rename that ran before the failing step is undone too
     assert column_type(conn, schema, "nm") == "text"
     assert column_type(conn, schema, "name") == nil
     assert column_type(conn, schema, "qty") == "text"
-    assert ledger_version(conn, schema) == 1
+    assert ledger_version(conn, schema) == @v100
   end
 
   test "fill adds a required column that existing rows get a value for", %{conn: conn, schema: schema} do
     seed_v1(conn, schema)
-    v2 = resource(2, [col("nm", "text"), col("qty", "text"), col("rarity", "text", nullable: false)], "h2")
+    v2 = resource([col("nm", "text"), col("qty", "text"), col("rarity", "text", nullable: false)], "h2")
 
-    assert {:ok, _} = reconcile(conn, schema, v2, [migration(1, [%{op: "fill", column: "rarity", value: "common"}])])
+    assert {:ok, _} = reconcile(conn, schema, v2, [migration("1.1.0", [%{op: "fill", column: "rarity", value: "common"}])], @v110)
 
     assert [%{"rarity" => "common"}, %{"rarity" => "common"}] = rows(conn, schema)
 
@@ -184,85 +216,105 @@ defmodule Exoforge.Std.Lldb.SchemaMigrationTest do
     assert {:error, %Postgrex.Error{}} = Postgrex.query(conn, ~s|INSERT INTO "#{schema}".items (id, nm, qty) VALUES ('z', 'x', '1')|, [])
   end
 
-  test "drop removes a column and set_not_null fills the gaps first", %{conn: conn, schema: schema} do
+  test "set_not_null fills the gaps first", %{conn: conn, schema: schema} do
     seed_v1(conn, schema)
-    Postgrex.query!(conn, ~s|INSERT INTO "#{schema}".items (id, nm) VALUES ('c', 'bow')|, [])
+    Postgrex.query!(conn, ~s|INSERT INTO "#{schema}".items (id, qty) VALUES ('c', '1')|, [])
+    v2 = resource([col("nm", "text", nullable: false), col("qty", "text")], "h2")
 
-    v2 = resource(2, [col("nm", "text", nullable: false)], "h2")
-    ops = [%{op: "drop", column: "qty"}, %{op: "set_not_null", column: "nm", value: "unnamed"}]
-
-    assert {:ok, _} = reconcile(conn, schema, v2, [migration(1, ops)])
-    assert column_type(conn, schema, "qty") == nil
-    assert [%{"nm" => "sword"}, %{"nm" => "shield"}, %{"nm" => "bow"}] = rows(conn, schema)
+    assert {:ok, _} = reconcile(conn, schema, v2, [migration("1.1.0", [%{op: "set_not_null", column: "nm", value: "unnamed"}])], @v110)
+    assert [%{"nm" => "sword"}, %{"nm" => "shield"}, %{"nm" => "unnamed"}] = rows(conn, schema)
   end
 
-  test "a chain across several versions runs in order in one go", %{conn: conn, schema: schema} do
+  test "drop is refused while a row is still stamped below the migration's version", %{conn: conn, schema: schema} do
     seed_v1(conn, schema)
-    v3 = resource(3, [col("name", "text"), col("quantity", "int32")], "h3")
+    v2 = resource([col("nm", "text")], "h2")
+    drop_qty = migration("1.1.0", [%{op: "drop", column: "qty"}])
+
+    # both rows have _v 0: nobody has brought them up to 1.1.0
+    assert {:error, {:rows_below_version, %{table: "items", rows: 2, to: "1.1.0"}}} = reconcile(conn, schema, v2, [drop_qty], @v110)
+    assert column_type(conn, schema, "qty") == "text"
+    assert ledger_version(conn, schema) == @v100
+
+    # once they are current, the column can go
+    Postgrex.query!(conn, ~s|UPDATE "#{schema}".items SET _v = #{@v110}|, [])
+    assert {:ok, _} = reconcile(conn, schema, v2, [drop_qty], @v110)
+    assert column_type(conn, schema, "qty") == nil
+    assert [%{"nm" => "sword"}, %{"nm" => "shield"}] = rows(conn, schema)
+  end
+
+  test "several migrations to versions up to the deploy run in order in one go", %{conn: conn, schema: schema} do
+    seed_v1(conn, schema)
+    v3 = resource([col("name", "text"), col("quantity", "int32")], "h3")
 
     chain = [
-      migration(1, [%{op: "rename", from: "nm", to: "name"}]),
-      migration(2, [%{op: "rename", from: "qty", to: "quantity"}, %{op: "convert", column: "quantity", to: "int32"}])
+      migration("1.2.0", [%{op: "rename", from: "qty", to: "quantity"}, %{op: "convert", column: "quantity", to: "int32"}]),
+      rename_nm()
     ]
 
-    assert {:ok, %{migrated: ["items"]}} = reconcile(conn, schema, v3, chain)
+    assert {:ok, %{migrated: ["items"]}} = reconcile(conn, schema, v3, chain, @v120)
     assert [%{"name" => "sword", "quantity" => 5} | _] = rows(conn, schema)
-    assert ledger_version(conn, schema) == 3
+    assert ledger_version(conn, schema) == @v120
   end
 
-  test "a gap in the chain names the step that is missing", %{conn: conn, schema: schema} do
+  test "a migration to a version past the deploy's is left for the deploy that gets there", %{conn: conn, schema: schema} do
     seed_v1(conn, schema)
-    v3 = resource(3, [col("name", "text"), col("quantity", "int32")], "h3")
+    later = migration("1.2.0", [%{op: "rename", from: "qty", to: "quantity"}])
 
-    assert {:error, {:migration_missing, %{from: 2, to: 3}}} =
-             reconcile(conn, schema, v3, [migration(1, [%{op: "rename", from: "nm", to: "name"}])])
-
-    assert ledger_version(conn, schema) == 1
+    assert {:ok, %{migrated: ["items"]}} = reconcile(conn, schema, v2_renamed(), [rename_nm(), later], @v110)
+    assert column_type(conn, schema, "qty") == "text"
+    assert column_type(conn, schema, "quantity") == nil
+    assert ledger_version(conn, schema) == @v110
   end
 
   test "a migration that does not lead to the declared shape is rolled back", %{conn: conn, schema: schema} do
     seed_v1(conn, schema)
     # the manifest also changes qty to an integer; the migration only renames
-    v2 = resource(2, [col("name", "text"), col("qty", "int32")], "h2")
+    v2 = resource([col("name", "text"), col("qty", "int32")], "h2")
 
-    assert {:error, {:migration_incomplete, %{table: "items", remaining: remaining}}} =
-             reconcile(conn, schema, v2, [migration(1, [%{op: "rename", from: "nm", to: "name"}])])
+    assert {:error, {:migration_incomplete, %{table: "items", remaining: remaining}}} = reconcile(conn, schema, v2, [rename_nm()], @v110)
 
     assert Enum.any?(remaining, &(&1.column == "qty"))
     assert column_type(conn, schema, "nm") == "text"
-    assert ledger_version(conn, schema) == 1
+    assert ledger_version(conn, schema) == @v100
   end
 
-  test "a table newer than the manifest is refused", %{conn: conn, schema: schema} do
+  test "a table newer than the deploy is refused", %{conn: conn, schema: schema} do
     seed_v1(conn, schema)
-    v2 = resource(2, [col("name", "text"), col("qty", "text")], "h2")
-    assert {:ok, _} = reconcile(conn, schema, v2, [migration(1, [%{op: "rename", from: "nm", to: "name"}])])
+    assert {:ok, _} = reconcile(conn, schema, v2_renamed(), [rename_nm()], @v110)
 
-    older = resource(1, [col("nm", "text"), col("qty", "text")], "h1")
-    assert {:error, {:version_downgrade, %{live: 2, manifest: 1, table: "items"}}} = reconcile(conn, schema, older)
+    older = resource([col("nm", "text"), col("qty", "text")], "h1")
+    assert {:error, {:version_downgrade, %{live: @v110, manifest: @v100, table: "items"}}} = reconcile(conn, schema, older, [], @v100)
     assert column_type(conn, schema, "name") == "text"
   end
 
-  test "raising the version over a change that is safe needs no migration", %{conn: conn, schema: schema} do
+  test "a new extension version over a change that is safe needs no migration", %{conn: conn, schema: schema} do
     seed_v1(conn, schema)
-    v2 = resource(2, [col("nm", "text"), col("qty", "text"), col("extra", "text")], "h2")
+    v2 = resource([col("nm", "text"), col("qty", "text"), col("extra", "text")], "h2")
 
-    assert {:ok, _} = reconcile(conn, schema, v2)
+    assert {:ok, _} = reconcile(conn, schema, v2, [], @v110)
     assert column_type(conn, schema, "extra") == "text"
-    assert ledger_version(conn, schema) == 2
+    assert ledger_version(conn, schema) == @v110
   end
 
-  test "a version bump over an identical table is recorded", %{conn: conn, schema: schema} do
+  test "a new extension version over an identical table is recorded", %{conn: conn, schema: schema} do
     seed_v1(conn, schema)
-    same_shape_v2 = resource(2, [col("nm", "text"), col("qty", "text")], "h1")
+    same_shape = resource([col("nm", "text"), col("qty", "text")], "h1")
 
-    assert {:ok, _} = reconcile(conn, schema, same_shape_v2)
-    assert ledger_version(conn, schema) == 2
+    assert {:ok, _} = reconcile(conn, schema, same_shape, [], @v110)
+    assert ledger_version(conn, schema) == @v110
+  end
+
+  test "history is not replayed over a table the ledger never knew", %{conn: conn, schema: schema} do
+    # a table that exists but was never reconciled (no ledger row) is not at "version 0 of a migration history"
+    Postgrex.query!(conn, ~s|CREATE TABLE "#{schema}".items (id text PRIMARY KEY, name text, qty text)|, [])
+    Postgrex.query!(conn, ~s|INSERT INTO "#{schema}".items (id, name) VALUES ('a', 'sword')|, [])
+
+    assert {:ok, _} = reconcile(conn, schema, v2_renamed(), [rename_nm()], @v110)
+    assert [%{"name" => "sword"}] = rows(conn, schema)
   end
 
   test "an ALTER that cannot get its lock fails the deploy instead of waiting behind the other queries", %{conn: conn, schema: schema, cfg: cfg} do
     seed_v1(conn, schema)
-    v2 = resource(2, [col("name", "text"), col("qty", "text")], "h2")
     Application.put_env(:exoforge_std_lldb, :schema_lock_timeout, "200ms")
     on_exit(fn -> Application.delete_env(:exoforge_std_lldb, :schema_lock_timeout) end)
 
@@ -279,8 +331,7 @@ defmodule Exoforge.Std.Lldb.SchemaMigrationTest do
 
     Process.sleep(300)
 
-    {microseconds, result} =
-      :timer.tc(fn -> reconcile(conn, schema, v2, [migration(1, [%{op: "rename", from: "nm", to: "name"}])]) end)
+    {microseconds, result} = :timer.tc(fn -> reconcile(conn, schema, v2_renamed(), [rename_nm()], @v110) end)
 
     assert {:error, {:lock_timeout, %{timeout: "200ms"}}} = result
     assert microseconds < 1_500_000, "waited #{div(microseconds, 1000)} ms for a lock it should have given up on"

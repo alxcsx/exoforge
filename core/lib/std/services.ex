@@ -102,6 +102,7 @@ defmodule Exoforge.Std.Services do
       params(
         resources: [type: :term, optional: true],
         migrations: [type: :term, optional: true],
+        version: [type: :integer, optional: true],
         namespace: [type: :term, optional: true]
       )
 

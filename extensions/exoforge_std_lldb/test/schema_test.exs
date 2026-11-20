@@ -463,12 +463,15 @@ defmodule Exoforge.Std.Lldb.SchemaTest do
 
     assert {:ok, live_drop} = Schema.read_live_state(conn, schema, [res_drop])
     assert {:ok, plan_drop} = Schema.plan([res_drop], live_drop)
-    assert [%{op: :drop_column, table: "items", column: "tier", safety: :unsafe, reason: drop_msg}] =
-             plan_drop.ops
+    # A column the manifest no longer lists is retired, not dropped: old rows keep their data, and the
+    # column stops being required so new writes need not know it. Only an explicit migration drops it.
+    assert [%{op: :retire_column, table: "items", column: "tier", safety: :safe, reason: retire_msg}] =
+             Enum.filter(plan_drop.ops, &(&1.op != :add_version_stamp))
 
-    assert drop_msg =~ "items"
-    assert drop_msg =~ "tier"
-    assert {:error, {:unsafe_schema_change, _}} = Schema.apply(conn, plan_drop)
+    assert retire_msg =~ "items"
+    assert retire_msg =~ "tier"
+    assert plan_drop.safe
+    assert {:ok, _} = Schema.apply(conn, plan_drop)
 
     # Change PK from 'id' to 'price'
     res_pk =
