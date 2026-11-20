@@ -41,6 +41,6 @@ A deploy that would change a table unsafely fails that extension alone and chang
 ## Where to look
 
 1. **The request id.** Every failure carries it (`ExoActionException.RequestId`, the `x-exoforge-rid` header). Paste it into the Studio's timeline to see the calls, events, queries and logs of that one request.
-2. **The extension's Logs tab** in the inspector, for build, startup and runtime messages.
+2. **The extension's Logs tab** in the inspector. For a C# extension it shows what the extension writes with `Exo.Logger`, anything it prints with `Console.WriteLine` (marked `[stdout]`) or `Console.Error` (marked `[stderr]`), and how its process ended. History is kept across a server restart. An extension may write 100 lines a second: past that, info and debug lines are dropped and counted in one "N log lines were dropped" line, while warnings and errors are always kept. The standard extensions that run inside the server log to the server console instead.
 3. **The client's last calls.** `ExoforgeSDK.ExportDiagnostics()` returns the last 50 calls as JSON, with service, action, rid, status and duration.
 4. **Deep capture.** For a problem you cannot reproduce, turn on capture for one player in the timeline and replay the captured request.

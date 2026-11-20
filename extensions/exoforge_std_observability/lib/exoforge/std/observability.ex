@@ -23,7 +23,7 @@ defmodule Exoforge.Std.Observability do
     title: "Observability",
     icon: "🔭",
     category: "System",
-    dashboard_view: nil
+    dashboard_view: %{id: :observability, title: "Observability", icon: "🔭"}
   }
 
   alias Exoforge.ActionDispatcher
