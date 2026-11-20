@@ -7,6 +7,7 @@ defmodule Exoforge.Std.TransportTest do
     use Exoforge.Extension
 
     defaction(resolve(%{version: "blocked"}), do: {:ok, %{status: :blocked}})
+    defaction(resolve(%{version: "boom"}), do: {:error, :database_down})
     defaction(resolve(%{version: version}), do: {:ok, %{status: :live, version: version}})
   end
 
@@ -28,6 +29,22 @@ defmodule Exoforge.Std.TransportTest do
     test "rejects a blocked version" do
       Exoforge.ExtensionCase.register_extension(Versioning, id: :versioning, provides: [:versioning])
       assert {:error, :upgrade_required} = Transport.check("blocked")
+    end
+
+    test "an expired cache entry is asked for again, not returned as the answer" do
+      Exoforge.ExtensionCase.register_extension(Versioning, id: :versioning, provides: [:versioning])
+      assert {:ok, %{status: :live}} = Transport.check("live")
+
+      # age the entry past its expiry
+      :ets.insert(:exoforge_game_version_cache, {"live", System.monotonic_time(:millisecond) - 1, {:ok, :stale}})
+
+      assert {:ok, %{version: "live", status: :live}} = Transport.check("live")
+    end
+
+    test "a failure to ask lets the call through and is not cached" do
+      Exoforge.ExtensionCase.register_extension(Versioning, id: :versioning, provides: [:versioning])
+      assert {:ok, nil} = Transport.check("boom")
+      assert :ets.lookup(:exoforge_game_version_cache, "boom") == []
     end
 
     test "returns the live version and status" do

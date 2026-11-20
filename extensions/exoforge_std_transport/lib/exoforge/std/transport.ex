@@ -56,7 +56,11 @@ defmodule Exoforge.Std.Transport do
 
   def check(version) when is_binary(version) do
     if ExtensionRegistry.fetch_service(:versioning) do
-      resolve_game_version(version)
+      case resolve_game_version(version) do
+        # Failing to ask must not lock players out: the call goes on without a game version.
+        {:error, :versioning_unavailable} -> {:ok, nil}
+        answer -> answer
+      end
     else
       {:ok, nil}
     end
@@ -72,16 +76,25 @@ defmodule Exoforge.Std.Transport do
         result =
           case ActionDispatcher.dispatch_internal(:versioning, :resolve, %{version: version}) do
             {:ok, response} -> version_result(version, response)
-            _ -> {:error, :upgrade_required}
+            # An unknown version is final; anything else is a failure to ask.
+            {:error, :not_found} -> {:error, :upgrade_required}
+            {:error, {:not_found, _}} -> {:error, :upgrade_required}
+            _ -> {:error, :versioning_unavailable}
           end
 
-        cache_put(version, result, now)
+        # A failed lookup (the database was busy) is not an answer about the version: caching it would
+        # lock every client of that version out for the whole TTL.
+        if cacheable?(result), do: cache_put(version, result, now)
         result
 
       result ->
         result
     end
   end
+
+  defp cacheable?({:ok, _}), do: true
+  defp cacheable?({:error, :upgrade_required}), do: true
+  defp cacheable?(_), do: false
 
   defp version_result(version, response) when is_map(response) do
     status = Map.get(response, :status) || Map.get(response, "status")
@@ -98,8 +111,7 @@ defmodule Exoforge.Std.Transport do
 
     case :ets.lookup(@game_version_cache, version) do
       [{^version, expires_at, result}] when expires_at > now -> result
-      [{^version, _, _}] -> :ets.delete(@game_version_cache, version)
-      [] -> nil
+      _ -> nil
     end
   end
 
