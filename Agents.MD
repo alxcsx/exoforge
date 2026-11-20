@@ -28,7 +28,7 @@ that gets there (declarative ALTERs, one transaction, verified). A column the ma
 dropped; an explicit `[ExoDrop]` removes it and is refused while any row is stamped below that version or a served game
 version still locks the extension below it. Data that needs a per-row transform uses `[ExoRowMigration(typeof(T), To = "2.0.0")]`
 (`static T Up(JsonElement oldRow)`): the SDK migrates a row the first time it is read and writes it back guarded by `_if_v`.
-Do not use a declarative and a row migration for the same version. A resource can opt out with
+Do not use a declarative and a row migration for the same version. An extension with row migrations also runs a background sweeper that migrates rows nobody reads (100 every 2 s) until none are below the newest step, so old columns can be dropped without waiting for players to return. A resource can opt out with
 `[ExoResource(..., SchemaVersioningMode = SchemaVersioningMode.Manual)]` (default `Auto`): Exoforge then never alters the table and adds
 no `_v`; at deploy it only checks the table matches the declaration (a drift fails that extension alone, never rebuilt, even in `reset`
 mode). The studio's own migrations are SQL files `migrations/0007_name.sql` applied in order by `exo db migrate <extension>`. The `versioning` extension keeps game versions
