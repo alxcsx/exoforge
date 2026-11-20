@@ -47,10 +47,10 @@ escape hatch; no new data bridge.
 2. DONE: Usage (metering) and Scheduled Tasks (cron) screens. Cron needed no contract change: `list_jobs` already returns id, schedule, last run/result, run count. Still open: declare `returns` fields in the contracts for the catalog, and a stale-build ghost ("Plugin Manager") was a leftover in `_build`, removed locally.
 3. Resource discoverability + metadata (M): link Extensions cards and the nav to `/resources/:name`; `ExoColumn` Format/Readonly/Hidden/
    Choices/Min/Max/Order, `ExoResource` DefaultSort + row actions (generator + manifest + `ResourceLive`). Unlocks wallet and moderation.
-4. IA (M): Extensions page grouped as "Your game" / "Studio features" / collapsed "Platform internals"; Overview v2 (one-line dismissible
+4. PARTLY DONE: Extensions page grouped as "Your game" / "Studio features" / collapsed "Platform internals", readable counts, helpful empty state. STILL OPEN: Overview v2, rid lookup in search/Cmd+K, deploy feedback. Original item: Extensions page grouped as "Your game" / "Studio features" / collapsed "Platform internals"; Overview v2 (one-line dismissible
    guide strip, health + recent failures with rid links + live game version, remove the three duplicate error statements, fix the
    "47 calls / 0 in 30 min" contradiction); rid lookup in search/Cmd+K; deploy feedback (running/failed + reason) in Extension Manager.
-5. Generic panel v2 (M): master/detail, Read/Write/Destructive grouping, auto-run zero-arg reads as tables, red + confirm for destructive.
+5. Observability DONE (screen: health + needs attention, failures, events, request timeline, captures). Generic panel v2 (M), still open: master/detail, Read/Write/Destructive grouping, auto-run zero-arg reads as tables, red + confirm for destructive.
 6. Unity editor (cannot be compiled or run in this environment; do with Unity open):
    a. security: stop persisting `LastLoginPassword`, mask tokens in Settings (S)
    b. show build/deploy errors on the Studio Extensions tab + persist the build log (S)
@@ -63,3 +63,15 @@ escape hatch; no new data bridge.
 ## Not verified (needs eyes)
 Unity rendering in light skin (hard-coded dark cards), setup wizard click counts, whether dotnet WaitForExit runs on a background
 thread, how `ResourceLive` is reached from game-extension tabs, the Settings modal and command palette (screens did not open).
+
+## Logs: what was found and fixed (2026-11-20)
+Validated end to end on a real server with a C# sample action (`sample_plugin.log_demo`). Faults found and fixed:
+- warnings and errors were dropped in a flood (100 lines/s guard); now always kept, drops counted in one summary line
+- after a restart one new line hid the persisted history (memory shadowed the database); now merged
+- plain `Console.WriteLine`/`Console.Error` of a C# extension never reached the Logs tab; now `[stdout]`/`[stderr]`, and how the
+  process exited is logged
+- failure groups, the action trace and the log flood counters lived in whichever request created them and vanished with it
+  (the reason "Needs attention" and Failures looked empty); they now belong to `Exoforge.TableOwner`
+- the per-action `[action]` log line was dead code for Elixir ids and noise for others; removed
+Still true and worth knowing: Elixir standard extensions log to the server console, not to the Logs tab; lines logged before the
+database is ready are in memory only.

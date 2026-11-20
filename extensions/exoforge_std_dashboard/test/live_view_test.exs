@@ -304,6 +304,60 @@ defmodule Exoforge.DashboardLiveViewTest do
     end
   end
 
+  describe "Extensions page grouping" do
+    defp ext(id, opts) do
+      Map.merge(
+        %{id: id, name: id, title: nil, icon: nil, version: "0.1.0", category: "Gameplay", provides: [String.to_atom(id)], system: false,
+          has_dashboard_view: false, dashboard_view: nil, type: :native, actions_count: 2, resources_count: 0, events_count: 0, services: []},
+        Map.new(opts)
+      )
+    end
+
+    defp registry_html(extensions, search \\ "") do
+      render_component(&Exoforge.Std.Dashboard.ExtensionRegistry.registry/1,
+        extensions: extensions, search: search, category: "all", pinned_extensions: []
+      )
+    end
+
+    test "game extensions, Studio features and platform internals are three different places" do
+      html =
+        registry_html([
+          ext("wallet", []),
+          ext("exoforge_std_versioning", system: true, has_dashboard_view: true, title: "Game Versions"),
+          ext("exoforge_std_lldb", system: true, actions_count: 12, resources_count: 1, events_count: 1)
+        ])
+
+      [_, game] = String.split(html, ~s(id="ext-game"), parts: 2)
+      [game, rest] = String.split(game, ~s(id="ext-features"), parts: 2)
+      [features, internals] = String.split(rest, "Platform internals", parts: 2)
+
+      assert game =~ "wallet"
+      refute game =~ "Game Versions"
+      assert features =~ "Game Versions"
+      refute features =~ "wallet"
+      assert internals =~ "exoforge_std_lldb"
+      assert internals =~ "12 actions · 1 resource · 1 event"
+      refute html =~ "Headless Services"
+
+      # a card says "1 action", and leaves out a count that is zero
+      single = registry_html([ext("wallet", actions_count: 1)])
+      assert single =~ "1 action"
+      refute single =~ "1 actions"
+      refute single =~ "0 resources"
+      refute single =~ "0 events"
+    end
+
+    test "with no game extension the page says how to make one, and internals open when searching" do
+      html = registry_html([ext("exoforge_std_lldb", system: true)])
+      assert html =~ "No game extension is running yet"
+      assert html =~ "exo extension new"
+      refute html =~ ~r/<details[^>]*\sopen/
+
+      searched = registry_html([ext("exoforge_std_lldb", system: true)], "lldb")
+      assert searched =~ ~r/<details[^>]*\sopen/
+    end
+  end
+
   describe "Escape" do
     test "closes only the window on top" do
       conn =
@@ -808,7 +862,7 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       # Switch to extensions tab
       html = render_click(view, "switch_tab", %{"tab" => "apps"})
-      assert html =~ "Extension Registry"
+      assert html =~ "Your game"
       assert html =~ "combat_plugin"
       assert html =~ "exoforge_std_ws"
 
@@ -1118,7 +1172,7 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       # Direct load of /extensions
       {:ok, _view, html} = live(conn, "/extensions")
-      assert html =~ "Extension Registry"
+      assert html =~ "Your game"
 
       # Direct deep-link to /tab/player_data
       {:ok, view, html} = live(conn, "/tab/player_data")
@@ -1177,7 +1231,7 @@ defmodule Exoforge.DashboardLiveViewTest do
       # Extensions Registry renders technical badges, table for system extensions, and clickable cards
       ext_html = render_click(view, "switch_tab", %{"tab" => "apps"})
       refute ext_html =~ "Technical Specs"
-      assert ext_html =~ "System Extensions &amp; Headless Services"
+      assert ext_html =~ "Platform internals"
       assert ext_html =~ "<table"
       assert ext_html =~ ~s(phx-click="switch_tab")
 

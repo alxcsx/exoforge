@@ -89,13 +89,13 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
         <!-- Technical Badges -->
         <div class="flex flex-wrap items-center gap-1.5 text-[10px] text-gray-600 font-semibold">
           <span class="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-primary-50 text-primary-700">
-            <.icon name="bolt" class="w-2.5 h-2.5" /> <%= @ext.actions_count %> actions
+            <.icon name="bolt" class="w-2.5 h-2.5" /> <%= plural(@ext.actions_count, "action") %>
           </span>
-          <span class="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700">
-            <.icon name="box" class="w-2.5 h-2.5" /> <%= @ext.resources_count %> resources
+          <span :if={@ext.resources_count > 0} class="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700">
+            <.icon name="box" class="w-2.5 h-2.5" /> <%= plural(@ext.resources_count, "resource") %>
           </span>
-          <span class="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700">
-            <.icon name="radio" class="w-2.5 h-2.5" /> <%= @ext.events_count %> events
+          <span :if={@ext.events_count > 0} class="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700">
+            <.icon name="radio" class="w-2.5 h-2.5" /> <%= plural(@ext.events_count, "event") %>
           </span>
         </div>
       </div>
@@ -164,6 +164,27 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
     """
   end
 
+  # The extensions that ship with the server; everything else is the developer's own.
+  defp std?(ext), do: String.starts_with?(to_string(ext.id), "exoforge_std_")
+
+  defp plural(1, word), do: "1 #{word}"
+  defp plural(n, word), do: "#{n} #{word}s"
+
+  # What an extension offers, in words a reader does not have to decode ("3a 0r 0e" was one letter per kind).
+  defp counts_text(ext) do
+    [
+      {ext.actions_count, "action", "actions"},
+      {ext.resources_count, "resource", "resources"},
+      {ext.events_count, "event", "events"}
+    ]
+    |> Enum.reject(fn {n, _, _} -> n == 0 end)
+    |> Enum.map_join(" · ", fn {n, one, many} -> if n == 1, do: "1 #{one}", else: "#{n} #{many}" end)
+    |> case do
+      "" -> "nothing public"
+      text -> text
+    end
+  end
+
   defp filter_extensions(extensions, query, category) do
     q = String.downcase(String.trim(query || ""))
 
@@ -207,27 +228,16 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
 
     ~H"""
           <% filtered_exts = filter_extensions(@extensions, @search, @category) %>
-          <% ui_exts = filtered_exts |> Enum.reject(& &1.system) |> Enum.sort_by(&ExtensionPresenter.display_name/1) %>
-          <% system_exts =
-               filtered_exts
-               |> Enum.filter(& &1.system)
-               |> Enum.sort_by(fn ext ->
-                 rank =
-                   cond do
-                     custom_ui?(ext) -> 0
-                     ext.has_dashboard_view -> 1
-                     true -> 2
-                   end
-
-                 {rank, ExtensionPresenter.display_name(ext)}
-               end) %>
+          <% game_exts = filtered_exts |> Enum.reject(&std?/1) |> Enum.sort_by(&ExtensionPresenter.display_name/1) %>
+          <% feature_exts = filtered_exts |> Enum.filter(&(std?(&1) and (custom_ui?(&1) or &1.has_dashboard_view))) |> Enum.sort_by(&ExtensionPresenter.display_name/1) %>
+          <% internal_exts = filtered_exts |> Enum.filter(&(std?(&1) and not (custom_ui?(&1) or &1.has_dashboard_view))) |> Enum.sort_by(&ExtensionPresenter.display_name/1) %>
           <div class="space-y-5">
             <!-- Header with Title & Search (Flat on Canvas) -->
             <div class="exo-page-header">
               <div>
                 <h1 class="exo-page-title flex items-center gap-2">
                   <.icon name="box" class="w-4 h-4 text-gray-400" />
-                  <span>Extension Registry</span>
+                  <span>Extensions</span>
                 </h1>
               </div>
 
@@ -287,153 +297,90 @@ defmodule Exoforge.Std.Dashboard.ExtensionRegistry do
                 </button>
               </div>
             <% else %>
-              <!-- SECTION 1: STUDIO EXTENSIONS & VISUAL CONTROLS -->
-              <div class="space-y-3">
+              <%!-- YOUR GAME: what the developer wrote and deployed --%>
+              <section class="space-y-3" aria-labelledby="ext-game">
                 <div class="flex items-center gap-2">
-                  <.icon name="sliders" class="w-4 h-4 text-gray-400" />
-                  <h4 class="text-base font-semibold text-gray-900">Studio Extensions &amp; Visual Controls</h4>
-                  <span class="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 border border-primary-200">
-                    <%= length(ui_exts) %>
-                  </span>
-                  <span class="hidden sm:inline text-xs text-gray-400">— extensions with interactive dashboards and designer consoles</span>
+                  <h4 id="ext-game" class="text-base font-semibold text-gray-900">Your game</h4>
+                  <span class="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 border border-primary-200"><%= length(game_exts) %></span>
+                  <span class="hidden sm:inline text-xs text-gray-400">the extensions you wrote and deployed</span>
                 </div>
 
-                <%= if Enum.empty?(ui_exts) do %>
-                  <p class="p-6 bg-white border border-gray-200 rounded-xl text-xs text-gray-400 italic">No visual control extensions found matching filter.</p>
+                <%= if game_exts == [] do %>
+                  <div class="rounded-xl border border-dashed border-gray-200 bg-white p-6 space-y-2">
+                    <p class="text-sm font-semibold text-gray-900">No game extension is running yet</p>
+                    <p class="text-sm text-gray-600">Create one with <code class="font-mono">exo extension new</code> or from the Unity window, then build and deploy it. It appears here as soon as it runs.</p>
+                    <button type="button" phx-click="switch_tab" phx-value-tab="exoforge_std_docs" class="exo-btn exo-btn-secondary exo-btn-sm">Open the Developer Guide</button>
+                  </div>
                 <% else %>
                   <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 auto-rows-fr">
-                    <%= for ext <- ui_exts do %>
+                    <%= for ext <- game_exts do %>
                       <.extension_card ext={ext} pinned={to_string(ext.id) in @pinned_extensions} />
                     <% end %>
                   </div>
                 <% end %>
-              </div>
+              </section>
 
-              <!-- SECTION 2: SYSTEM EXTENSIONS & HEADLESS SERVICES (Table View) -->
-              <div class="space-y-3 pt-4 border-t border-gray-200/80">
+              <%!-- STUDIO FEATURES: the screens built into the Studio --%>
+              <section :if={feature_exts != []} class="space-y-3 pt-4 border-t border-gray-200/80" aria-labelledby="ext-features">
                 <div class="flex items-center gap-2">
-                  <.icon name="gear" class="w-3.5 h-3.5 text-gray-400" />
-                  <h4 class="text-sm font-semibold text-gray-700">System Extensions &amp; Headless Services</h4>
-                  <span class="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 border border-gray-200">
-                    <%= length(system_exts) %>
-                  </span>
+                  <h4 id="ext-features" class="text-base font-semibold text-gray-900">Studio features</h4>
+                  <span class="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 border border-primary-200"><%= length(feature_exts) %></span>
+                  <span class="hidden sm:inline text-xs text-gray-400">screens that come with the server: users, data, releases, usage, debugging</span>
                 </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 auto-rows-fr">
+                  <%= for ext <- feature_exts do %>
+                    <.extension_card ext={ext} pinned={to_string(ext.id) in @pinned_extensions} />
+                  <% end %>
+                </div>
+              </section>
 
-                <%= if Enum.empty?(system_exts) do %>
-                  <p class="p-6 bg-white border border-gray-200 rounded-xl text-xs text-gray-400 italic">No system extensions found matching filter.</p>
-                <% else %>
-                  <div class="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
-                    <div class="overflow-x-auto">
-                      <table class="w-full text-left border-collapse text-xs">
-                        <thead>
-                          <tr class="border-b border-gray-100 bg-gray-50/75 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-                            <th class="py-3 px-4">Extension</th>
-                            <th class="py-3 px-4">Category</th>
-                            <th class="py-3 px-4">Version</th>
-                            <th class="py-3 px-4">Capabilities</th>
-                            <th class="py-3 px-4 text-right">Actions</th>
+              <%!-- PLATFORM INTERNALS: they run the server; closed unless the reader is searching --%>
+              <details :if={internal_exts != []} class="group pt-4 border-t border-gray-200/80" open={@search != "" or @category != "all"}>
+                <summary class="flex cursor-pointer select-none list-none items-center gap-2 py-1">
+                  <svg class="w-3 h-3 text-gray-400 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" /></svg>
+                  <h4 class="text-sm font-semibold text-gray-700">Platform internals</h4>
+                  <span class="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 border border-gray-200"><%= length(internal_exts) %></span>
+                  <span class="hidden sm:inline text-xs text-gray-400">storage, transports and drivers that run the server; you rarely need them</span>
+                </summary>
+
+                <div class="mt-3 bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
+                  <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr class="border-b border-gray-100 bg-gray-50/75 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                          <th class="py-3 px-4">Extension</th>
+                          <th class="py-3 px-4">Version</th>
+                          <th class="py-3 px-4">Provides</th>
+                          <th class="py-3 px-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-gray-100">
+                        <%= for ext <- internal_exts do %>
+                          <tr class="hover:bg-primary-50/40 transition-colors">
+                            <td class="py-3 px-4">
+                              <div class="flex items-center gap-2.5">
+                                <span class="w-8 h-8 rounded-lg bg-gray-100 text-gray-700 flex items-center justify-center text-sm font-semibold shrink-0"><%= ExtensionPresenter.icon(ext) %></span>
+                                <div class="min-w-0">
+                                  <div class="font-semibold text-gray-900"><%= ExtensionPresenter.display_name(ext) %></div>
+                                  <span class="text-[10px] font-mono text-gray-400 block truncate"><%= ext.id %></span>
+                                </div>
+                              </div>
+                            </td>
+                            <td class="py-3 px-4 text-gray-500 font-mono text-[11px]">v<%= to_string(ext.version) %></td>
+                            <td class="py-3 px-4 text-gray-600"><%= counts_text(ext) %></td>
+                            <td class="py-3 px-4 text-right">
+                              <div class="flex items-center justify-end gap-1.5">
+                                <button type="button" phx-click="inspect_extension" phx-value-id={to_string(ext.id)} class="exo-btn exo-btn-secondary exo-btn-sm" title="Inspect extension contracts"><.icon name={:search} class="w-3 h-3" /> Inspect</button>
+                                <button type="button" phx-click="switch_tab" phx-value-tab={to_string(ext.id)} class="exo-btn exo-btn-secondary exo-btn-sm" title={"Open " <> ExtensionPresenter.display_name(ext)}>Open</button>
+                              </div>
+                            </td>
                           </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-100">
-                          <%= for ext <- system_exts do %>
-                            <% pinned = to_string(ext.id) in @pinned_extensions %>
-                            <tr
-                              phx-click="switch_tab"
-                              phx-value-tab={to_string(ext.id)}
-                              class="hover:bg-primary-50/40 transition-colors cursor-pointer group"
-                              title={"Open #{ExtensionPresenter.display_name(ext)} Control Panel"}
-                            >
-                              <td class="py-3 px-4">
-                                <div class="flex items-center gap-2.5">
-                                  <span class="w-8 h-8 rounded-lg bg-gray-100 text-gray-700 flex items-center justify-center text-sm font-semibold shrink-0 group-hover:bg-primary-100 group-hover:text-primary-700 transition-colors">
-                                    <%= ExtensionPresenter.icon(ext) %>
-                                  </span>
-                                  <div class="min-w-0">
-                                    <div class="font-semibold text-gray-900 group-hover:text-primary-700 transition-colors flex items-center gap-1.5">
-                                      <span><%= ExtensionPresenter.display_name(ext) %></span>
-                                      <%= if custom_ui?(ext) do %>
-                                        <span class="text-[10px] text-primary-600 opacity-80 shrink-0" title="Ships its own UI">✦</span>
-                                      <% end %>
-                                      <span class="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-gray-100 text-gray-600 border border-gray-200">System</span>
-                                    </div>
-                                    <span class="text-[10px] font-mono text-gray-400 block truncate"><%= ext.id %></span>
-                                  </div>
-                                </div>
-                              </td>
-                              <td class="py-3 px-4">
-                                <span class="text-[11px] font-medium text-gray-600 bg-gray-100/80 px-2 py-0.5 rounded-lg">
-                                  <%= ExtensionPresenter.normalize_category(ext[:category]) %>
-                                </span>
-                              </td>
-                              <td class="py-3 px-4 text-gray-500 font-mono text-[11px]">
-                                v<%= to_string(ext.version) %>
-                              </td>
-                              <td class="py-3 px-4">
-                                <div class="flex flex-wrap items-center gap-1 text-[10px] font-semibold">
-                                  <span class="px-1.5 py-0.5 rounded bg-primary-50 text-primary-700 font-mono">
-                                    <%= ext.actions_count %>a
-                                  </span>
-                                  <span class="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-mono">
-                                    <%= ext.resources_count %>r
-                                  </span>
-                                  <span class="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-mono">
-                                    <%= ext.events_count %>e
-                                  </span>
-                                </div>
-                              </td>
-                              <td class="py-3 px-4 text-right">
-                                <div class="flex items-center justify-end gap-1.5">
-                                  <%= if pinned do %>
-                                    <button
-                                      type="button"
-                                      phx-click="unpin_extension"
-                                      phx-value-id={to_string(ext.id)}
-                                      class="px-2 py-1 text-[10px] font-semibold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-lg flex items-center gap-1 transition-colors"
-                                      title="Unpin from top bar"
-                                    >
-                                      <.icon name={:pin} class="w-3 h-3" /> <span>Pinned</span>
-                                    </button>
-                                  <% else %>
-                                    <button
-                                      type="button"
-                                      phx-click="pin_extension"
-                                      phx-value-id={to_string(ext.id)}
-                                      class="px-2 py-1 text-[10px] font-semibold text-gray-600 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg flex items-center gap-1 transition-colors"
-                                      title="Pin to top bar"
-                                    >
-                                      <.icon name={:pin} class="w-3 h-3" /> <span>Pin</span>
-                                    </button>
-                                  <% end %>
-
-                                  <button
-                                    type="button"
-                                    phx-click="inspect_extension"
-                                    phx-value-id={to_string(ext.id)}
-                                    class="px-2 py-1 text-[10px] font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-lg transition-colors flex items-center gap-1"
-                                    title="Inspect extension contracts"
-                                  >
-                                    <.icon name={:search} class="w-3 h-3" /> <span>Inspect</span>
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    phx-click="switch_tab"
-                                    phx-value-tab={to_string(ext.id)}
-                                    class="px-2 py-1 text-[10px] font-semibold text-primary-600 hover:text-white bg-primary-50 hover:bg-primary-600 rounded-lg transition-colors flex items-center gap-1"
-                                    title="Open Control Panel"
-                                  >
-                                    <span>Control Panel &rarr;</span>
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          <% end %>
-                        </tbody>
-                      </table>
-                    </div>
+                        <% end %>
+                      </tbody>
+                    </table>
                   </div>
-                <% end %>
-              </div>
+                </div>
+              </details>
             <% end %>
           </div>
     """
