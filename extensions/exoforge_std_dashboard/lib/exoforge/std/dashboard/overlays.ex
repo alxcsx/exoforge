@@ -1276,8 +1276,11 @@ defmodule Exoforge.Std.Dashboard.Overlays do
         {svc[:name] || svc["name"], contract, module_doc(contract)}
       end
 
+    game_versions = if ext, do: game_versions_locking(ext.id), else: []
+
     assigns =
       assigns
+      |> assign(:game_versions, game_versions)
       |> assign(:services, services)
       |> assign(:actions, actions)
       |> assign(:events, events)
@@ -1346,6 +1349,24 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   </div>
                 </div>
               </div>
+
+              <%= if @game_versions != [] do %>
+                <div class="p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-1">
+                  <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Game versions</span>
+                  <div class="flex flex-wrap gap-1 pt-1">
+                    <%= for {version, status, locked} <- @game_versions do %>
+                      <span class={[
+                        "px-2 py-0.5 rounded font-mono text-[10px] font-semibold",
+                        status == "live" && "bg-emerald-50 text-emerald-700",
+                        status == "outdated" && "bg-amber-50 text-amber-700",
+                        status == "dev" && "bg-blue-50 text-blue-700"
+                      ]}>
+                        <%= version %> &rarr; v<%= locked %> <span class="font-normal">(<%= status %>)</span>
+                      </span>
+                    <% end %>
+                  </div>
+                </div>
+              <% end %>
 
               <%= if provides_service?(@extension, :http) do %>
                 <div class="p-3.5 bg-emerald-50/80 border border-emerald-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -3180,4 +3201,22 @@ defmodule Exoforge.Std.Dashboard.Overlays do
 
   defp is_param_optional?(kw) when is_list(kw), do: Keyword.get(kw, :optional, false)
   defp is_param_optional?(_), do: false
+
+  # The game versions still served that lock this extension, newest first. Empty when the versioning
+  # extension is not installed or nothing is registered.
+  defp game_versions_locking(extension_id) do
+    id = to_string(extension_id)
+
+    case Exoforge.ActionDispatcher.dispatch_internal(:versioning, :list, %{}) do
+      {:ok, %{versions: versions}} ->
+        for game <- versions,
+            status = to_string(game.status),
+            status != "blocked",
+            locked = Map.get(game.locks || %{}, id),
+            do: {game.version, status, locked}
+
+      _ ->
+        []
+    end
+  end
 end
