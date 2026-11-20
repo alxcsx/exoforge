@@ -210,6 +210,14 @@ public class ExoResourceAttribute : Attribute
     /// </summary>
     public bool AllowPlayerRead { get; set; }
 
+    /// <summary>
+    /// Who keeps this table in line with the declaration. <see cref="SchemaVersioningMode.Auto"/> (the default): Exoforge
+    /// does, with the row stamps, migrations and gates of its versioning. <see cref="SchemaVersioningMode.Manual"/>:
+    /// the studio does, with its own SQL migrations; Exoforge never alters the table and only checks, at deploy,
+    /// that it matches what is declared here.
+    /// </summary>
+    public SchemaVersioningMode SchemaVersioningMode { get; set; }
+
     public ExoResourceAttribute()
     {
     }
@@ -551,6 +559,16 @@ public class ExoSeedAttribute : Attribute
 
 
 
+
+/// <summary>Who changes a resource's table when its declaration changes.</summary>
+public enum SchemaVersioningMode
+{
+    /// <summary>Exoforge reconciles the table, migrates rows and gates destructive changes.</summary>
+    Auto = 0,
+
+    /// <summary>The studio owns the table's migrations; Exoforge only verifies the table matches the declaration.</summary>
+    Manual = 1
+}
 
 /// <summary>The column types a migration can convert a column to. They are the manifest's logical storage types.</summary>
 public enum ExoType

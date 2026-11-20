@@ -52,6 +52,27 @@ public class MigrationManifestTests
     }
 
     [Fact]
+    public void A_Resource_The_Studio_Owns_Says_So_And_The_Default_Says_Nothing()
+    {
+        var (manifest, _) = Run(Preamble + """
+
+            [ExoResource("items", SchemaVersioningMode = SchemaVersioningMode.Manual)]
+            public class Item { public string Id { get; set; } = ""; }
+            """);
+
+        var (auto, _) = Run(Preamble + """
+
+            [ExoResource("items")]
+            public class Item { public string Id { get; set; } = ""; }
+            """);
+
+        JsonNode Resource(JsonNode m) => m["services"]!.AsArray()[0]!["resources"]!.AsArray()[0]!;
+
+        Assert.Equal("manual", Resource(manifest)["schema_versioning_mode"]!.GetValue<string>());
+        Assert.Null(Resource(auto)["schema_versioning_mode"]);
+    }
+
+    [Fact]
     public void A_Migration_Class_Lists_Its_Operations_In_Order_With_Where_It_Is_Declared()
     {
         var (manifest, diagnostics) = Run(Preamble + """

@@ -178,6 +178,46 @@ defmodule Exoforge.Std.ResourcesTypedProvisionTest do
     end
   end
 
+  describe "a table the studio owns (SchemaVersioningMode.Manual)" do
+    defp ledger_resource(columns) do
+      %{
+        name: "ledger",
+        source: {:table, "ledger"},
+        primary_key: :id,
+        schema_versioning_mode: "manual",
+        schema_hash: "m1",
+        columns: [%{name: "id", storage: "text", primary_key: true, type: "string"} | columns]
+      }
+    end
+
+    test "a table that matches is accepted and left alone", %{plugin: plugin} do
+      on_exit(fn -> Database.reset!(plugin) end)
+      assert {:ok, _} = Database.execute(plugin, "CREATE TABLE ledger (id text PRIMARY KEY, note text)")
+      declare(plugin, ledger_resource([%{name: "note", storage: "text", nullable: true, type: "string"}]))
+
+      assert {:ok, %{provisioned: 1}} = provision(plugin)
+      assert %{columns: columns} = introspect(plugin, "ledger")
+      refute Enum.any?(columns, &(&1.name == "_v"))
+    end
+
+    test "a table that drifted is refused, and reset mode does not rebuild it", %{plugin: plugin} do
+      on_exit(fn -> Database.reset!(plugin); System.delete_env("EXOFORGE_SCHEMA_CHANGE_MODE") end)
+      assert {:ok, _} = Database.execute(plugin, "CREATE TABLE ledger (id text PRIMARY KEY, note text)")
+      assert {:ok, _} = Database.put(plugin, "ledger", "a", %{"note" => "kept"})
+      declare(plugin, ledger_resource([%{name: "note", storage: "text", nullable: true, type: "string"}, %{name: "owner", storage: "text", nullable: false, type: "string"}]))
+
+      System.put_env("EXOFORGE_SCHEMA_CHANGE_MODE", "reset")
+
+      assert {:error, {:unsafe_schema_change, %{table: "ledger", changes: changes, hint: hint}}} = provision(plugin)
+      assert Enum.any?(changes, &(&1.column == "owner"))
+      assert hint =~ "SchemaVersioningMode.Manual"
+      assert hint =~ "exo db migrate"
+
+      # the studio's rows are still there: reset mode would have dropped the table
+      assert {:ok, %{"note" => "kept"}} = Database.get(plugin, "ledger", "a")
+    end
+  end
+
   describe "extension versions and migrations" do
     defp inventory(columns, hash) do
       %{

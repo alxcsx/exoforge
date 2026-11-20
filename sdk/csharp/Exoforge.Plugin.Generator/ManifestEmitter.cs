@@ -59,7 +59,8 @@ internal sealed record ResourceModel(
     List<ColumnModel> Columns,
     string? TypeName,
     bool Singleton = false,
-    bool AllowPlayerRead = false);
+    bool AllowPlayerRead = false,
+    bool ManualSchema = false);
 
 /// <summary>One step of a migration, ready to write: the operation and its arguments as JSON values.</summary>
 internal sealed record MigrationOp(string Op, string? Column, string? From, string? To, string? ValueJson);
@@ -240,6 +241,11 @@ internal static class ManifestEmitter
                 if (resource.AllowPlayerRead)
                 {
                     sb.Append("\"allow_player_read\": true, ");
+                }
+                // Absent means auto. Only a table the studio owns says so, and the server then only verifies it.
+                if (resource.ManualSchema)
+                {
+                    sb.Append("\"schema_versioning_mode\": \"manual\", ");
                 }
                 // The shape `Exoforge.Std.Resources.normalize_source/1` reads. A bare string would not
                 // match, and a resource with no source is stored as an opaque key-value document.

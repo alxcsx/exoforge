@@ -487,7 +487,8 @@ namespace Exoforge.Plugin.SDK
                 MarkPrimaryKey(columns, resolvedPk),
                 declared.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                 isSingleton,
-                NamedBool(attr, "AllowPlayerRead")));
+                NamedBool(attr, "AllowPlayerRead"),
+                NamedInt(attr, "SchemaVersioningMode", 0) == 1));
         }
 
         foreach (var candidate in AllTypes(compilation.Assembly.GlobalNamespace))
@@ -1042,7 +1043,8 @@ namespace Exoforge.Plugin.SDK
             MarkPrimaryKey(columns, resolvedPk),
             resourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             isSingleton,
-            NamedBool(resAttr, "AllowPlayerRead"));
+            NamedBool(resAttr, "AllowPlayerRead"),
+            NamedInt(resAttr, "SchemaVersioningMode", 0) == 1);
     }
 
     private static List<ColumnModel> MarkPrimaryKey(List<ColumnModel> columns, string primaryKey) =>

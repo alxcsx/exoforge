@@ -28,14 +28,31 @@ defmodule Exoforge.Std.Lldb.SchemaMigration do
   deployed (`Exoforge.VersionStamp`); `migrations` are the manifest's, each `%{resource, to, ops}`.
   """
   def reconcile(conn, schema, resources, migrations, version \\ 0, opts \\ []) do
+    {manual, resources} = Enum.split_with(resources, &Schema.manual_resource?/1)
+
     with {:ok, s} <- Schema.validate_ident(schema),
          :ok <- Schema.ensure_ledgers(conn, s),
+         :ok <- check_manual(conn, s, manual),
          {:ok, plan} <- read_plan(conn, s, resources, version),
          {:ok, work} <- decide(plan, resources, List.wrap(migrations), version),
          :ok <- check_game_versions(work, Keyword.get(opts, :extension)) do
       case work do
         [] -> Schema.apply(conn, plan)
         _ -> run(conn, s, plan, work)
+      end
+    end
+  end
+
+  # A table the studio owns is never altered. It has to match what the extension declares: the migrations that
+  # make it so are the studio's (`exo db migrate`), and a table that does not match fails this extension alone.
+  defp check_manual(_conn, _schema, []), do: :ok
+
+  defp check_manual(conn, schema, manual) do
+    with {:ok, live} <- Schema.read_live_state(conn, schema, manual),
+         {:ok, items} <- Schema.drift(manual, live) do
+      case items do
+        [] -> :ok
+        _ -> {:error, {:schema_drift, %{tables: items |> Enum.map(& &1.table) |> Enum.uniq(), items: items}}}
       end
     end
   end

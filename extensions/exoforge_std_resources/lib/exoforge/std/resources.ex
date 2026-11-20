@@ -171,6 +171,12 @@ defmodule Exoforge.Std.Resources do
       when kind in [:migration_missing, :version_downgrade, :migration_incomplete, :rows_below_version, :game_versions_lock_older] ->
         unsafe_schema_change(pid, res, {kind, detail})
 
+      # A table the studio owns is never rebuilt, whatever the mode: it is theirs, and its rows are theirs.
+      {:error, {:schema_drift, %{items: items}}} ->
+        refuse(pid, res, items,
+          "This table is managed by you (SchemaVersioningMode.Manual). Apply your SQL migrations (`exo db migrate`) so it matches the " <>
+            "declaration, or declare the resource Auto and let Exoforge keep it in line.")
+
       # Not a problem with the change: the table is busy. Rebuilding it would not help.
       {:error, {:lock_timeout, detail}} ->
         refuse(pid, res, [%{column: nil, change: :lock_timeout, reason: "the table is locked by another transaction (waited #{detail.timeout})"}],

@@ -341,6 +341,71 @@ defmodule Exoforge.Std.Lldb.SchemaMigrationTest do
     assert ledger_version(conn, schema) == @v110
   end
 
+  describe "a table the studio owns (schema_versioning_mode: manual)" do
+    defp manual_resource(columns, hash \\ "m1") do
+      %{
+        name: "ledger_rows",
+        source: %{table: "ledger_rows"},
+        schema_versioning_mode: "manual",
+        schema_hash: hash,
+        columns: [col("id", "text", nullable: false, primary_key: true) | columns]
+      }
+    end
+
+    defp make_manual_table(conn, schema, columns \\ "note text"),
+      do: Postgrex.query!(conn, ~s|CREATE TABLE "#{schema}".ledger_rows (id text PRIMARY KEY, #{columns})|, [])
+
+    defp has_ledger_row?(conn, schema, table) do
+      %Postgrex.Result{rows: rows} = Postgrex.query!(conn, ~s|SELECT 1 FROM "#{schema}"."_exo_schema" WHERE table_name = $1|, [table])
+      rows != []
+    end
+
+    test "a table that matches the declaration is left exactly as it is", %{conn: conn, schema: schema} do
+      make_manual_table(conn, schema)
+
+      assert {:ok, _} = Schema.reconcile(conn, schema, [manual_resource([col("note", "text")])], [], @v110)
+
+      # no row stamp, no ledger row: Exoforge did not touch it
+      assert column_type(conn, schema, "_v") == nil
+      refute has_ledger_row?(conn, schema, "ledger_rows")
+    end
+
+    test "a table that does not match fails with what differs, and nothing is changed", %{conn: conn, schema: schema} do
+      make_manual_table(conn, schema)
+
+      declared = manual_resource([col("note", "text"), col("owner", "text", nullable: false)], "m2")
+
+      assert {:error, {:schema_drift, %{tables: ["ledger_rows"], items: items}}} = Schema.reconcile(conn, schema, [declared], [], @v110)
+      assert Enum.any?(items, &(&1.column == "owner" and &1.change == :add_column))
+
+      %Postgrex.Result{rows: cols} =
+        Postgrex.query!(conn, "SELECT column_name FROM information_schema.columns WHERE table_schema = $1 AND table_name = 'ledger_rows' ORDER BY 1", [schema])
+
+      assert cols == [["id"], ["note"]]
+    end
+
+    test "a table that does not exist is not made: the studio's migrations make it", %{conn: conn, schema: schema} do
+      assert {:error, {:schema_drift, %{items: [%{change: :missing_table, table: "ledger_rows"}]}}} =
+               Schema.reconcile(conn, schema, [manual_resource([col("note", "text")])], [], @v110)
+
+      %Postgrex.Result{rows: rows} =
+        Postgrex.query!(conn, "SELECT 1 FROM information_schema.tables WHERE table_schema = $1 AND table_name = 'ledger_rows'", [schema])
+
+      assert rows == []
+    end
+
+    test "an auto resource beside it is still reconciled", %{conn: conn, schema: schema} do
+      make_manual_table(conn, schema)
+
+      assert {:ok, _} =
+               Schema.reconcile(conn, schema, [manual_resource([col("note", "text")]), resource([col("nm", "text")], "h1")], [], @v100)
+
+      assert column_type(conn, schema, "nm") == "text"
+      assert column_type(conn, schema, "_v") == "bigint"
+      assert ledger_version(conn, schema) == @v100
+    end
+  end
+
   test "history is not replayed over a table the ledger never knew", %{conn: conn, schema: schema} do
     # a table that exists but was never reconciled (no ledger row) is not at "version 0 of a migration history"
     Postgrex.query!(conn, ~s|CREATE TABLE "#{schema}".items (id text PRIMARY KEY, name text, qty text)|, [])

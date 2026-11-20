@@ -1176,6 +1176,42 @@ defmodule Exoforge.Std.Lldb.Schema do
     "#{op[:table]}#{col_part} (#{op[:op]}): #{op[:reason]}"
   end
 
+  @doc "True for a resource the studio keeps in line itself (`schema_versioning_mode: \"manual\"`): Exoforge only checks it."
+  def manual_resource?(res) do
+    mode = Map.get(res, :schema_versioning_mode) || Map.get(res, "schema_versioning_mode")
+    mode in ["manual", :manual]
+  end
+
+  @doc """
+  What differs between the live tables and the declaration of resources the studio owns. Nothing is changed.
+  `{:ok, []}` when each matches; otherwise the items, one per difference, naming table and column.
+  """
+  def drift(resources, live_state) when is_list(resources) and is_map(live_state) do
+    schema = Map.get(live_state, :schema) || Map.get(live_state, "schema") || "public"
+
+    with {:ok, valid_schema} <- validate_ident(schema),
+         {:ok, normalized} <- normalize_resources(resources) do
+      live_tables = Map.get(live_state, :tables) || %{}
+
+      items =
+        Enum.flat_map(normalized, fn res ->
+          live_tbl = Map.get(live_tables, res.table)
+
+          if is_nil(live_tbl) or live_tbl[:exists] != true do
+            [%{table: res.table, column: nil, change: :missing_table, reason: "Table '#{res.table}' does not exist"}]
+          else
+            # Row stamps and retired columns are Exoforge's own business; a manual table has neither.
+            valid_schema
+            |> plan_diff_table(res, live_tbl)
+            |> Enum.reject(&(&1.op in [:add_version_stamp, :retire_column]))
+            |> Enum.map(&%{table: &1.table, column: Map.get(&1, :column), change: &1.op, reason: &1.reason})
+          end
+        end)
+
+      {:ok, items}
+    end
+  end
+
   @doc """
   Convenience helper that reads live state, plans, and applies in one call.
   """

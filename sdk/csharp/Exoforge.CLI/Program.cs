@@ -64,6 +64,9 @@ public static class Program
                 case "call":
                     return await HandleCallAsync(cli).ConfigureAwait(false);
 
+                case "db":
+                    return await HandleDbAsync(cli).ConfigureAwait(false);
+
                 case "agents":
                     return HandleAgents(cli);
                 case "cli":
@@ -1194,6 +1197,49 @@ public static class Program
         var deployer = new ExoDeployer(ws);
 
         var result = await deployer.CallActionAsync(service, action, payload, cli.Value("env")).ConfigureAwait(false);
+        Console.WriteLine(PrettyJson(result));
+        return 0;
+    }
+
+    // ---- db ----------------------------------------------------------------------------
+
+    private static async Task<int> HandleDbAsync(CliArgs cli)
+    {
+        if (cli.WantsHelp || cli.Positional.Count < 2 || cli.Positional[0] != "migrate")
+        {
+            Console.WriteLine("""
+            Usage: exo db migrate <extension> [options]
+
+            Applies the SQL migrations of a table you keep in line yourself (SchemaVersioningMode.Manual).
+            They are the files of the extension's migrations/ folder, named 0007_what_it_does.sql: the
+            number is the version, they apply in order, and the ones the server has already applied are
+            skipped, so running it twice does nothing. Each file runs in its own transaction.
+
+            Options:
+              --dir <path>       Workspace directory
+              --env <name>       Target environment
+              --path <folder>    The migrations folder (default: <extensions>/<extension>/migrations)
+            """);
+            return cli.WantsHelp ? 0 : 1;
+        }
+
+        string extension = cli.Positional[1];
+        var ws = ExoWorkspace.Load(cli.Value("dir") ?? Directory.GetCurrentDirectory());
+        string folder = cli.Value("path") ?? Path.Combine(ws.ExtensionsPath, extension, "migrations");
+
+        IReadOnlyList<ExoMigrations.Migration> migrations;
+        try
+        {
+            migrations = ExoMigrations.Load(folder);
+        }
+        catch (Exception ex) when (ex is ArgumentException or DirectoryNotFoundException)
+        {
+            Error(ex.Message);
+            return 1;
+        }
+
+        var deployer = new ExoDeployer(ws);
+        var result = await deployer.CallActionAsync("lldb", "run_migrations", ExoMigrations.ToPayload(extension, migrations), cli.Value("env")).ConfigureAwait(false);
         Console.WriteLine(PrettyJson(result));
         return 0;
     }
