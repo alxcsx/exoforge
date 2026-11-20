@@ -228,7 +228,7 @@ defmodule Exoforge.Std.Docs do
 
   defp load_all_chapters_meta do
     load_all_chapters()
-    |> Enum.map(fn c -> %{id: c.id, title: c.title, order: c.order, filename: c.filename} end)
+    |> Enum.map(&Map.take(&1, [:id, :title, :nav, :order, :filename, :group, :icon, :summary]))
   end
 
   def load_all_chapters do
@@ -241,7 +241,7 @@ defmodule Exoforge.Std.Docs do
       |> Enum.map(fn {path, idx} ->
         filename = Path.basename(path)
         id = Path.rootname(filename)
-        content = File.read!(path)
+        {meta, content} = split_front_matter(File.read!(path))
         title = extract_title(content, id)
 
         %{
@@ -249,6 +249,10 @@ defmodule Exoforge.Std.Docs do
           title: title,
           order: idx,
           filename: filename,
+          nav: Map.get(meta, "nav", title),
+          group: Map.get(meta, "group", "Guide"),
+          icon: Map.get(meta, "icon", "book"),
+          summary: Map.get(meta, "summary", ""),
           content: content
         }
       end)
@@ -262,6 +266,26 @@ defmodule Exoforge.Std.Docs do
   end
 
   defp find_chapter(_), do: nil
+
+  # A chapter may start with a `---` block of `key: value` lines (group, icon, summary) that the guide's
+  # navigation reads. The exports (PDF, markdown) get the chapter without it.
+  defp split_front_matter("---\n" <> rest = whole) do
+    case String.split(rest, "\n---\n", parts: 2) do
+      [block, content] ->
+        meta =
+          for line <- String.split(block, "\n"),
+              [key, value] <- [String.split(line, ":", parts: 2)],
+              into: %{},
+              do: {String.trim(key), String.trim(value)}
+
+        {meta, content}
+
+      _ ->
+        {%{}, whole}
+    end
+  end
+
+  defp split_front_matter(content), do: {%{}, content}
 
   defp extract_title(content, fallback) do
     case Regex.run(~r/^#\s+(.+)$/m, content) do

@@ -5,6 +5,7 @@ defmodule Exoforge.Std.DocsTest do
   alias Exoforge.Std.Docs
   alias Exoforge.Std.Docs.Markdown
   alias Exoforge.Std.Docs.View
+  alias Exoforge.Std.Docs.Pages
 
   describe "Markdown Renderer" do
     test "renders headings, bold, italic, code, and links" do
@@ -23,7 +24,7 @@ defmodule Exoforge.Std.DocsTest do
       assert html =~ "<h2"
       assert html =~ "<strong class=\"font-semibold text-gray-900\">bold</strong>"
       assert html =~ "<em class=\"italic\">italic</em>"
-      assert html =~ "<code class=\"font-mono"
+      assert html =~ "font-mono"
       assert html =~ "inline_code</code>"
       assert html =~ "<a href=\"https://exoforge.dev\""
       assert html =~ "target=\"_blank\""
@@ -93,10 +94,12 @@ defmodule Exoforge.Std.DocsTest do
       {:ok, %{chapters: chapters, count: count}} = Docs.list_chapters()
       assert count >= 4
       assert Enum.any?(chapters, &(&1.id == "01_quickstart"))
-      assert Enum.any?(chapters, &(&1.id == "02_csharp_attributes"))
-      assert Enum.any?(chapters, &(&1.id == "03_architecture"))
-      assert Enum.any?(chapters, &(&1.id == "04_use_cases_and_patterns"))
-      assert Enum.any?(chapters, &(&1.id == "05_versions_and_migrations"))
+      assert Enum.any?(chapters, &(&1.id == "03_csharp_attributes"))
+      assert Enum.any?(chapters, &(&1.id == "08_architecture"))
+      assert Enum.any?(chapters, &(&1.id == "07_patterns"))
+      assert Enum.any?(chapters, &(&1.id == "04_versions_and_migrations"))
+      assert Enum.any?(chapters, &(&1.id == "02_recipes"))
+      assert Enum.any?(chapters, &(&1.id == "05_standard_extensions"))
       assert Enum.any?(chapters, &(&1.id == "06_arcade_walkthrough"))
     end
 
@@ -117,10 +120,28 @@ defmodule Exoforge.Std.DocsTest do
     end
 
     test "get_chapter returns chapter content and rendered html" do
-      {:ok, %{chapter: chapter}} = Docs.get_chapter(%{id: "04_use_cases_and_patterns"})
+      {:ok, %{chapter: chapter}} = Docs.get_chapter(%{id: "07_patterns"})
       assert chapter.title =~ "What You Can Build with Exoforge"
-      assert chapter.content =~ "Paradigm Shift"
+      assert chapter.content =~ "How Exoforge differs"
       assert chapter.html =~ "<table"
+      # front matter belongs to the navigation, not to the chapter text
+      refute chapter.content =~ "group:"
+    end
+
+    test "markdown escapes text, keeps code spans intact and renders guide links and collapsible sections" do
+      html =
+        "## [ExoDependency<T>] & friends\n\nUse `List<int>` with [the guide](guide:04_versions_and_migrations#two-kinds-of-version) or [docs](https://example.com?a=1&b=2).\n\n<details>\n<summary>More **detail**</summary>\n\nHidden.\n\n</details>\n"
+        |> Markdown.to_html()
+        |> Phoenix.HTML.safe_to_string()
+
+      assert html =~ "[ExoDependency&lt;T&gt;] &amp; friends"
+      refute html =~ "<T>"
+      assert html =~ "List&lt;int&gt;"
+      assert html =~ ~s(href="/guide?subpage=04_versions_and_migrations#two-kinds-of-version")
+      assert html =~ ~s(data-phx-link="patch")
+      assert html =~ ~s(href="https://example.com?a=1&amp;b=2")
+      assert html =~ "<details"
+      assert html =~ "More <strong"
     end
 
     test "get_chapter returns error for missing chapter" do
@@ -149,181 +170,76 @@ defmodule Exoforge.Std.DocsTest do
   end
 
   describe "Docs Phoenix Component View" do
-    test "renders quickstart flow by default" do
-      assigns = %{
-        action_catalog: [],
-        extensions: [],
-        project_name: "TestGame",
-        studio_name: "TestStudio",
-        subpage: "flow"
-      }
+    defp render_guide(subpage) do
+      assigns = %{action_catalog: [], extensions: [], project_name: "TestGame", studio_name: "TestStudio", subpage: subpage}
 
-      html =
-        Phoenix.LiveViewTest.rendered_to_string(~H"""
-        <View.view
-          action_catalog={@action_catalog}
-          extensions={@extensions}
-          project_name={@project_name}
-          studio_name={@studio_name}
-          subpage={@subpage}
-        />
-        """)
+      Phoenix.LiveViewTest.rendered_to_string(~H"""
+      <View.view
+        action_catalog={@action_catalog}
+        extensions={@extensions}
+        project_name={@project_name}
+        studio_name={@studio_name}
+        subpage={@subpage}
+      />
+      """)
+    end
 
-      assert html =~ "Creating Your First Online Multiplayer Feature"
+    test "opens on the quickstart with the sidebar, the export link and the print styles" do
+      html = render_guide("flow")
+
+      assert html =~ "Developer Quickstart"
+      assert html =~ "Developer Guide pages"
+      for group <- ["Get started", "Build", "Learn by example", "Understand", "Live reference"], do: assert(html =~ group)
       assert html =~ "Export to PDF"
       assert html =~ "/api/docs/manual.pdf"
       assert html =~ "@media print"
     end
 
-    test "renders how-to subpage with step recipes" do
-      assigns = %{
-        action_catalog: [],
-        extensions: [],
-        project_name: "TestGame",
-        studio_name: "TestStudio",
-        subpage: "how_to"
-      }
+    test "every chapter renders as a page with its heading ids and neighbours" do
+      for %{id: id, title: title} <- Pages.all(), id not in ["architecture", "catalog"] do
+        html = render_guide(id)
+        assert html =~ "guide-#{id}", "#{id} did not render as a chapter page"
+        escaped = title |> Plug.HTML.html_escape() |> IO.iodata_to_binary()
+        assert html =~ escaped, "#{id} lost its title"
+        assert html =~ ~s(<h2 id="), "#{id} has no section headings"
+      end
 
-      html =
-        Phoenix.LiveViewTest.rendered_to_string(~H"""
-        <View.view
-          action_catalog={@action_catalog}
-          extensions={@extensions}
-          project_name={@project_name}
-          studio_name={@studio_name}
-          subpage={@subpage}
-        />
-        """)
-
-      assert html =~ "How-to"
-      assert html =~ "Sign in a player"
-      assert html =~ "Build and deploy an extension"
-      assert html =~ "Regenerate service stubs"
-      assert html =~ "Add persistence and seed on startup"
-      assert html =~ "Subscribe to events"
-      assert html =~ "Diagnose a failure"
+      # a page with a following page links to it, and the first page has no previous one
+      assert render_guide("02_recipes") =~ "Previous</span>"
+      refute render_guide("01_quickstart") =~ "Previous</span>"
     end
 
-    test "renders attributes subpage" do
-      assigns = %{
-        action_catalog: [],
-        extensions: [],
-        project_name: "TestGame",
-        studio_name: "TestStudio",
-        subpage: "attributes"
-      }
+    test "the guide's old page ids still open the right page" do
+      assert render_guide("how_to") =~ "Sign in a player"
+      assert render_guide("attributes") =~ "[ExoAction]"
+      assert render_guide("use_cases") =~ "Auction House"
+    end
 
-      html =
-        Phoenix.LiveViewTest.rendered_to_string(~H"""
-        <View.view
-          action_catalog={@action_catalog}
-          extensions={@extensions}
-          project_name={@project_name}
-          studio_name={@studio_name}
-          subpage={@subpage}
-        />
-        """)
+    test "renders the attributes reference with every core attribute and the lifecycle hook" do
+      html = render_guide("03_csharp_attributes")
 
-      assert html =~ "[ExoExtension]"
-      assert html =~ "[ExoAction]"
-      assert html =~ "[ExoCron]"
-      assert html =~ "[ExoEvent]"
-      assert html =~ "[ExoResource]"
-      assert html =~ "[ExoFileReference]"
-      assert html =~ "[ExoInputType]"
+      for attr <- ~w([ExoExtension] [ExoAction] [ExoCron] [ExoEvent] [ExoResource] [ExoFileReference] [ExoInputType]), do: assert(html =~ attr)
       assert html =~ "OnExtensionStart"
     end
 
-    test "renders use_cases subpage with blueprints and comparison matrix" do
-      assigns = %{
-        action_catalog: [],
-        extensions: [],
-        project_name: "TestGame",
-        studio_name: "TestStudio",
-        subpage: "use_cases"
-      }
+    test "renders the architecture map and the live catalog as pages of the guide" do
+      arch = render_guide("architecture")
+      assert arch =~ "architecture-graph"
+      assert arch =~ "@media print"
+      refute arch =~ "html:not(.light) :not(pre) > code"
+      refute arch =~ "html:not(.light) .prose strong"
 
-      html =
-        Phoenix.LiveViewTest.rendered_to_string(~H"""
-        <View.view
-          action_catalog={@action_catalog}
-          extensions={@extensions}
-          project_name={@project_name}
-          studio_name={@studio_name}
-          subpage={@subpage}
-        />
-        """)
-
-      assert html =~ "What You Can Build with Exoforge"
-      assert html =~ "The Paradigm Shift: Exoforge vs. Legacy BaaS"
-      assert html =~ "Auction House &amp; P2P"
-      assert html =~ "In-Memory Matchmaker"
-      assert html =~ "World Boss LiveOps"
-      assert html =~ "Guilds &amp; Clans"
-      assert html =~ "Automated Season Rollovers"
-      assert html =~ "Web Store Checkout, Stripe Webhooks &amp; Instant Delivery"
-      assert html =~ "Exoforge Architecture Tips &amp; Golden Rules"
-      assert html =~ "Stateless Extensions, Resilient State in DB"
+      catalog = render_guide("catalog")
+      assert catalog =~ "Live Services &amp; Action Catalog"
     end
 
-    test "renders architecture subpage with high-contrast badge styles" do
-      assigns = %{
-        action_catalog: [],
-        extensions: [],
-        project_name: "TestGame",
-        studio_name: "TestStudio",
-        subpage: "architecture"
-      }
+    test "on-page links use the guide scheme and the table of contents follows the headings" do
+      html = render_guide("04_versions_and_migrations")
+      assert html =~ "On this page"
+      assert html =~ ~s(data-phx-link="patch")
 
-      html =
-        Phoenix.LiveViewTest.rendered_to_string(~H"""
-        <View.view
-          action_catalog={@action_catalog}
-          extensions={@extensions}
-          project_name={@project_name}
-          studio_name={@studio_name}
-          subpage={@subpage}
-        />
-        """)
-
-      assert html =~ "Architecture"
-      # The guide keeps its print stylesheet but not a second dark-mode remap: that lives in
-      # exoforge-studio.css and only there, or the docs page disagrees with the rest of the
-      # Studio (it did — text-red-800 was #fecdd3 here and #fca5a5 in the shared sheet).
-      assert html =~ "@media print"
-      refute html =~ "html:not(.light) :not(pre) > code"
-      refute html =~ "html:not(.light) .prose strong"
-    end
-
-    test "subpage flow does not duplicate the action catalog" do
-      assigns = %{
-        action_catalog: [
-          %{
-            name: "test_svc",
-            title: "Test Svc",
-            icon: "🎮",
-            actions: [%{name: "run", mode: "sync", doc: "runs", params: []}]
-          }
-        ],
-        extensions: [],
-        project_name: "TestGame",
-        studio_name: "TestStudio",
-        subpage: "flow"
-      }
-
-      html =
-        Phoenix.LiveViewTest.rendered_to_string(~H"""
-        <View.view
-          action_catalog={@action_catalog}
-          extensions={@extensions}
-          project_name={@project_name}
-          studio_name={@studio_name}
-          subpage={@subpage}
-        />
-        """)
-
-      refute html =~ "<section id=\"catalog\""
-      assert html =~ "Live Action Catalog"
+      toc = Pages.toc("# T\n## One\n```\n## not a heading\n```\n### Two `code`\n")
+      assert [{2, "One", "one"}, {3, "Two code", "two-code"}] = toc
     end
 
     test "deduplicates duplicate services and actions in action_catalog" do

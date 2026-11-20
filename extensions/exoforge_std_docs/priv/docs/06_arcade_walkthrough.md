@@ -1,3 +1,9 @@
+---
+nav: The Arcade
+group: Learn by example
+icon: compass
+summary: One enemy kill followed through real extensions.
+---
 # The Arcade, Piece by Piece
 
 The [Exoforge Arcade](https://github.com/alxcsx/exoforge-arcade) is a set of small Unity games (a hub with a meme-stock market, a dungeon, a level sharer) that all run against **one** Exoforge backend. Its server side is eight native C# extensions; this chapter follows one event through them and shows each pattern in the code that actually runs. Every snippet below is copied unchanged from the repository; the path above each one is where to find it.
@@ -18,7 +24,7 @@ A dungeon game server (the sample mocks one) tells `adventure_world` that a play
 
 ### The action: only a trusted server may call it
 
-`ReportKill` is called by the game server, never by a player's client, so it asks for the `service` scope (see the scopes in the attributes chapter). It stores the new progress and raises an event.
+`ReportKill` is called by the game server, never by a player's client, so it asks for the `service` scope (see the scopes in the [attribute reference](guide:03_csharp_attributes#exoaction)). It stores the new progress and raises an event.
 
 `extensions/adventure_world/src/AdventureWorldExtension.cs:9-17`
 ```csharp
@@ -247,6 +253,7 @@ public record StorefrontConfig(string Id, string Secret);
 
 ## Where to go next
 
-- The attribute reference (chapter 2) lists every property used above.
-- Chapter 5 explains what happens when the data these extensions store has to change shape while players are online.
+- The [attribute reference](guide:03_csharp_attributes) lists every property used above.
+- [Versions & Migrations](guide:04_versions_and_migrations) explains what happens when the data these extensions store has to change shape while players are online.
+- The [standard extensions](guide:05_standard_extensions) list what ships with the server.
 - Run the arcade yourself: clone the repository, build the extensions with `exo extension build`, push them with `exo extension push`, and open a project in Unity.

@@ -1,3 +1,9 @@
+---
+nav: Versions & migrations
+group: Build
+icon: archive
+summary: Change tables and code while players are online.
+---
 # Versions & Migrations
 
 How a game keeps working while its extensions and its data change: what a version means in Exoforge, what Exoforge does for you when you change a table, and what you declare yourself when a change cannot be automatic.
@@ -14,6 +20,8 @@ How a game keeps working while its extensions and its data change: what a versio
 The extension version describes *the data and the code on the server*. The game version describes *which clients are still out there*. The rule that ties them together: the server may change anything for the latest extension, but it must not break a game version that is still being served.
 
 ## What Exoforge does for you
+
+(The attributes used below are listed in the [attribute reference](guide:03_csharp_attributes#exoresource-exocolumn).)
 
 Every table of a typed resource (an `[ExoResource]` whose columns declare their storage) carries a hidden column `_v`: the extension version the row was last written under. Reads return it, writes set it, and you never declare it.
 

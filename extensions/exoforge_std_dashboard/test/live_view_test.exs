@@ -1790,8 +1790,9 @@ defmodule Exoforge.DashboardLiveViewTest do
 
       # Now on Guide screen: verify default Quickstart Flow
       guide_html = render(view)
-      assert guide_html =~ "Creating Your First Online Multiplayer Feature"
+      assert guide_html =~ "Developer Quickstart"
       assert guide_html =~ "Connect &amp; Authenticate"
+      assert guide_html =~ "Developer Guide pages"
 
       # Switch to Architecture subpage
       arch_html = render_click(view, "set_guide_subpage", %{"subpage" => "architecture"})
@@ -1804,19 +1805,16 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert attr_html =~ "[ExoAction]"
       assert attr_html =~ "[ExoEvent]"
       assert attr_html =~ "[ExoResource]"
-      assert attr_html =~ "Extension Manager"
-      assert attr_html =~ "exoforge_std_extension_manager"
-      assert attr_html =~ "exoforge_std_resources"
       assert attr_html =~ "[ExoResource] Parameters"
       assert attr_html =~ "[ExoColumn] Parameters"
 
       # Switch to What You Can Build subpage
       use_cases_html = render_click(view, "set_guide_subpage", %{"subpage" => "use_cases"})
       assert use_cases_html =~ "What You Can Build with Exoforge"
-      assert use_cases_html =~ "The Paradigm Shift: Exoforge vs. Legacy BaaS"
+      assert use_cases_html =~ "How Exoforge differs from PlayFab &amp; UGS"
       assert use_cases_html =~ "Auction House &amp; P2P"
-      assert use_cases_html =~ "In-Memory Matchmaker"
-      assert use_cases_html =~ "Stateless Extensions, Resilient State in DB"
+      assert use_cases_html =~ "Matchmaking"
+      assert use_cases_html =~ "Hot State in RAM, Durable State in"
     end
   end
 

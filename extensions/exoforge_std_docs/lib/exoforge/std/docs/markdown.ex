@@ -116,6 +116,19 @@ defmodule Exoforge.Std.Docs.Markdown do
       String.starts_with?(trimmed, "|") and String.ends_with?(trimmed, "|") ->
         parse_table_lines(rest, [trimmed], acc)
 
+      # Collapsible sections: <details> / <summary>Title</summary> / </details> (progressive disclosure)
+      String.starts_with?(trimmed, "<details") ->
+        d = "<details class=\"my-4 rounded-xl border border-gray-200 bg-white px-4 py-2 print:border-gray-300\">"
+        parse_lines(rest, [d | acc], :normal)
+
+      String.starts_with?(trimmed, "<summary>") ->
+        title = trimmed |> String.replace_prefix("<summary>", "") |> String.replace_suffix("</summary>", "")
+        sm = "<summary class=\"cursor-pointer text-sm font-semibold text-gray-900 py-1\">#{inline_format(title)}</summary>"
+        parse_lines(rest, [sm | acc], :normal)
+
+      trimmed == "</details>" ->
+        parse_lines(rest, ["</details>" | acc], :normal)
+
       # Horizontal rules
       trimmed in ["---", "***", "___"] ->
         hr = "<hr class=\"my-6 border-gray-200 print:border-gray-400\" />"
@@ -127,7 +140,7 @@ defmodule Exoforge.Std.Docs.Markdown do
 
       # Regular paragraph
       true ->
-        p = "<p class=\"text-xs text-gray-700 leading-relaxed my-2\">#{inline_format(trimmed)}</p>"
+        p = "<p class=\"text-sm text-gray-700 leading-7 my-3\">#{inline_format(trimmed)}</p>"
         parse_lines(rest, [p | acc], :normal)
     end
   end
@@ -205,10 +218,10 @@ defmodule Exoforge.Std.Docs.Markdown do
 
     classes =
       case level do
-        1 -> "text-2xl font-semibold text-gray-900 tracking-tight mt-6 mb-3 pb-2 border-b border-gray-100"
-        2 -> "text-lg font-bold text-gray-900 tracking-tight mt-5 mb-2"
-        3 -> "text-sm font-bold text-gray-800 tracking-tight mt-4 mb-1.5"
-        4 -> "text-xs font-bold text-gray-700 uppercase tracking-wider mt-3 mb-1"
+        1 -> "text-3xl font-semibold text-gray-900 tracking-tight mt-2 mb-4"
+        2 -> "text-xl font-semibold text-gray-900 tracking-tight mt-10 mb-3 pb-2 border-b border-gray-100 scroll-mt-4"
+        3 -> "text-base font-semibold text-gray-900 tracking-tight mt-6 mb-2"
+        4 -> "text-xs font-bold text-gray-700 uppercase tracking-wider mt-5 mb-1"
         _ -> "text-xs font-semibold text-gray-600 mt-2 mb-1"
       end
 
@@ -220,8 +233,19 @@ defmodule Exoforge.Std.Docs.Markdown do
   defp count_leading_hashes(<<?#, rest::binary>>, count), do: count_leading_hashes(rest, count + 1)
   defp count_leading_hashes(_, count), do: count
 
+  # A snippet copied from inside a class keeps the class's indentation; show it flush left.
+  defp dedent(lines) do
+    indent =
+      lines
+      |> Enum.reject(&(String.trim(&1) == ""))
+      |> Enum.map(fn line -> byte_size(line) - byte_size(String.trim_leading(line)) end)
+      |> Enum.min(fn -> 0 end)
+
+    Enum.map(lines, fn line -> if String.trim(line) == "", do: "", else: binary_part(line, indent, byte_size(line) - indent) end)
+  end
+
   defp render_code_block(lang, lines) do
-    code = Enum.join(lines, "\n")
+    code = lines |> dedent() |> Enum.join("\n")
     lang_clean = String.downcase(to_string(lang || ""))
 
     highlighted =
@@ -285,7 +309,7 @@ defmodule Exoforge.Std.Docs.Markdown do
     case alert_type do
       :note ->
         """
-        <div class="p-4 my-3 rounded-xl bg-blue-50 border border-blue-200/80 text-blue-900 text-xs space-y-1">
+        <div class="p-4 my-3 rounded-xl bg-blue-50 border border-blue-200/80 text-blue-900 text-sm leading-6 space-y-1">
           <div class="font-bold flex items-center gap-1.5 text-blue-800 text-[11px] uppercase tracking-wider">
             #{icon("book")} <span>Note</span>
           </div>
@@ -295,7 +319,7 @@ defmodule Exoforge.Std.Docs.Markdown do
 
       :tip ->
         """
-        <div class="p-4 my-3 rounded-xl bg-emerald-50 border border-emerald-200/80 text-emerald-900 text-xs space-y-1">
+        <div class="p-4 my-3 rounded-xl bg-emerald-50 border border-emerald-200/80 text-emerald-900 text-sm leading-6 space-y-1">
           <div class="font-bold flex items-center gap-1.5 text-emerald-800 text-[11px] uppercase tracking-wider">
             #{icon("target")} <span>Tip</span>
           </div>
@@ -305,7 +329,7 @@ defmodule Exoforge.Std.Docs.Markdown do
 
       :important ->
         """
-        <div class="p-4 my-3 rounded-xl bg-primary-50 border border-primary-200/80 text-primary-900 text-xs space-y-1">
+        <div class="p-4 my-3 rounded-xl bg-primary-50 border border-primary-200/80 text-primary-900 text-sm leading-6 space-y-1">
           <div class="font-bold flex items-center gap-1.5 text-primary-800 text-[11px] uppercase tracking-wider">
             #{icon("target")} <span>Important</span>
           </div>
@@ -315,7 +339,7 @@ defmodule Exoforge.Std.Docs.Markdown do
 
       :warning ->
         """
-        <div class="p-4 my-3 rounded-xl bg-amber-50 border border-amber-200/80 text-amber-900 text-xs space-y-1">
+        <div class="p-4 my-3 rounded-xl bg-amber-50 border border-amber-200/80 text-amber-900 text-sm leading-6 space-y-1">
           <div class="font-bold flex items-center gap-1.5 text-amber-800 text-[11px] uppercase tracking-wider">
             #{icon("alert")} <span>Warning</span>
           </div>
@@ -325,7 +349,7 @@ defmodule Exoforge.Std.Docs.Markdown do
 
       :caution ->
         """
-        <div class="p-4 my-3 rounded-xl exo-callout-danger text-xs space-y-1">
+        <div class="p-4 my-3 rounded-xl exo-callout-danger text-sm leading-6 space-y-1">
           <div class="font-bold flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
             #{icon("alert")} <span>Caution</span>
           </div>
@@ -335,7 +359,7 @@ defmodule Exoforge.Std.Docs.Markdown do
 
       :quote ->
         """
-        <blockquote class="border-l-4 border-primary-500 bg-gray-50 pl-4 py-2 my-3 text-xs italic text-gray-700 rounded-r-xl">
+        <blockquote class="border-l-4 border-primary-500 bg-gray-50 pl-4 py-2 my-3 text-sm italic text-gray-700 rounded-r-xl">
           #{body}
         </blockquote>
         """
@@ -352,7 +376,7 @@ defmodule Exoforge.Std.Docs.Markdown do
       |> Enum.join("\n")
 
     """
-    <ul class="list-disc list-inside space-y-1.5 text-xs text-gray-700 my-2 pl-1">
+    <ul class="list-disc list-outside space-y-1.5 text-sm leading-7 text-gray-700 my-3 pl-6">
       #{lis}
     </ul>
     """
@@ -368,7 +392,7 @@ defmodule Exoforge.Std.Docs.Markdown do
       |> Enum.join("\n")
 
     """
-    <ol class="list-decimal list-inside space-y-1.5 text-xs text-gray-700 my-2 pl-1">
+    <ol class="list-decimal list-outside space-y-1.5 text-sm leading-7 text-gray-700 my-3 pl-6">
       #{lis}
     </ol>
     """
@@ -424,7 +448,7 @@ defmodule Exoforge.Std.Docs.Markdown do
             <thead class="bg-gray-50 border-b border-gray-200 text-gray-600 uppercase text-[10px]">
               <tr>#{th_html}</tr>
             </thead>
-            <tbody class="divide-y divide-gray-100 font-mono text-[11px]">
+            <tbody class="divide-y divide-gray-100 text-xs leading-5 text-gray-700">
               #{tr_html}
             </tbody>
           </table>
@@ -435,43 +459,79 @@ defmodule Exoforge.Std.Docs.Markdown do
 
   # ---- INLINE FORMATTER ----
 
+  # Code spans are lifted out first (they escape their own content), everything else is escaped, then
+  # links, bold and italic are applied to the escaped text, and the code spans go back in. Without the
+  # escape a heading such as `[ExoDependency<T>]` produced a real `<T>` element.
   defp inline_format(text) do
+    {text, codes} = stash_code(text)
+
     text
-    # 1. Images: ![alt](url)
+    |> Plug.HTML.html_escape()
+    |> IO.iodata_to_binary()
     |> render_images()
-    # 2. Links: [text](url)
     |> render_links()
-    # 3. Inline code: `code`
-    |> render_inline_code()
-    # 4. Bold: **text**
     |> render_bold()
-    # 5. Italic: *text*
     |> render_italic()
+    |> restore_code(codes)
+  end
+
+  defp stash_code(text) do
+    {replaced, codes} =
+      Regex.split(~r/`([^`]+)`/, text, include_captures: true)
+      |> Enum.map_reduce([], fn part, acc ->
+        case Regex.run(~r/^`([^`]+)`$/, part) do
+          [_, code] -> {"\u0000#{length(acc)}\u0000", [code | acc]}
+          _ -> {part, acc}
+        end
+      end)
+
+    {Enum.join(replaced), Enum.reverse(codes)}
+  end
+
+  defp restore_code(text, codes) do
+    codes
+    |> Enum.with_index()
+    |> Enum.reduce(text, fn {code, index}, acc ->
+      String.replace(acc, "\u0000#{index}\u0000", render_code_span(code))
+    end)
+  end
+
+  defp render_code_span(code) do
+    # a short value ("0.1.0", `null`) stays on one line even in a narrow table cell
+    nowrap = if String.length(code) <= 24, do: "whitespace-nowrap ", else: ""
+    "<code class=\"#{nowrap}font-mono text-primary-700 bg-primary-50 px-1.5 py-0.5 rounded text-[11px] border border-primary-200/60 font-semibold\">#{Plug.HTML.html_escape(code)}</code>"
   end
 
   defp render_images(text) do
     Regex.replace(~r/!\[([^\]]*)\]\(([^)]+)\)/, text, fn _match, alt, url ->
-      safe_alt = Plug.HTML.html_escape(alt)
-      safe_url = Plug.HTML.html_escape(url)
-      "<img src=\"#{safe_url}\" alt=\"#{safe_alt}\" class=\"max-w-full rounded-xl shadow-sm border border-gray-200 my-3\" />"
+      "<img src=\"#{url}\" alt=\"#{alt}\" class=\"max-w-full rounded-xl shadow-sm border border-gray-200 my-3\" />"
     end)
   end
 
   defp render_links(text) do
     Regex.replace(~r/\[([^\]]+)\]\(([^)]+)\)/, text, fn _match, label, url ->
-      safe_label = Plug.HTML.html_escape(label)
-      safe_url = Plug.HTML.html_escape(url)
+      {href, target} = link_target(url)
 
-      target = if String.starts_with?(url, "http"), do: " target=\"_blank\" rel=\"noopener\"", else: ""
-
-      "<a href=\"#{safe_url}\"#{target} class=\"text-primary-600 hover:text-primary-800 underline font-medium\">#{safe_label}</a>"
+      "<a href=\"#{href}\"#{target} class=\"text-primary-600 hover:text-primary-800 underline font-medium\">#{label}</a>"
     end)
   end
 
-  defp render_inline_code(text) do
-    Regex.replace(~r/`([^`]+)`/, text, fn _match, code ->
-      "<code class=\"font-mono text-primary-700 bg-primary-50 px-1.5 py-0.5 rounded text-[11px] border border-primary-200/60 font-semibold\">#{Plug.HTML.html_escape(code)}</code>"
-    end)
+  # `guide:<page>#anchor` points at another page of the Developer Guide (a live patch, no reload); a bare
+  # `#anchor` stays on the page; `http...` opens in a new tab. The url arrives already escaped.
+  defp link_target("guide:" <> rest) do
+    {page, anchor} =
+      case String.split(rest, "#", parts: 2) do
+        [page, anchor] -> {page, "#" <> anchor}
+        [page] -> {page, ""}
+      end
+
+    {"/guide?subpage=#{URI.encode_www_form(page)}#{anchor}", " data-phx-link=\"patch\" data-phx-link-state=\"push\""}
+  end
+
+  defp link_target(url) do
+    if String.starts_with?(url, "http"),
+      do: {url, " target=\"_blank\" rel=\"noopener\""},
+      else: {url, ""}
   end
 
   defp render_bold(text) do
@@ -588,7 +648,7 @@ defmodule Exoforge.Std.Docs.Markdown do
     |> IO.iodata_to_binary()
   end
 
-  defp slugify(text) do
+  def slugify(text) do
     text
     |> String.downcase()
     |> String.replace(~r/[^\w\s-]/, "")

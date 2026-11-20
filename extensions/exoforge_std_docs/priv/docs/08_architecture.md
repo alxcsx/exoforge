@@ -1,3 +1,9 @@
+---
+nav: Runtime & protocol
+group: Understand
+icon: database
+summary: The wire protocol and the native runtime.
+---
 # Native Process Runtime & Wire Protocol
 
 Technical reference for .NET OS process isolation, stdio wire frames, and ahead-of-time tree-shaking.

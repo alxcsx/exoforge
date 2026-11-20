@@ -100,5 +100,6 @@ defmodule Exoforge.Std.Docs.Icons do
   end
 
   @doc "The SVG path for a name, or nil. For modules that emit raw HTML."
-  def path(name), do: Map.get(@icons, String.to_atom(name))
+  def path(name) when is_atom(name), do: Map.get(@icons, name)
+  def path(name) when is_binary(name), do: Map.get(@icons, String.to_existing_atom(name))
 end

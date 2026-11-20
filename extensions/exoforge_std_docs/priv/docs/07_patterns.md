@@ -1,3 +1,9 @@
+---
+nav: Patterns
+group: Learn by example
+icon: trending
+summary: Blueprints for economies, rooms, LiveOps, guilds and stores.
+---
 # What You Can Build with Exoforge: Blueprints & Architecture Tips
 
 Real-world architectural patterns, sample code, and design strategies for game backends on Exoforge.
@@ -11,7 +17,7 @@ Exoforge combines **long-running stateful native C# processes**, **isolated rela
 
 ---
 
-## The Paradigm Shift: Exoforge vs. PlayFab & UGS
+## How Exoforge differs from PlayFab & UGS
 
 | Dimension | PlayFab (CloudScript) | Unity Gaming Services (Cloud Code) | Exoforge Native Extensions |
 | :--- | :--- | :--- | :--- |
@@ -27,12 +33,12 @@ Exoforge combines **long-running stateful native C# processes**, **isolated rela
 
 ## 1. Cross-Player Economy: Auction House & P2P Trading
 
-### The BaaS Pain Point
+### 1.1 The BaaS pain point
 In PlayFab and UGS, player inventory is locked in private per-player storage. Building an Auction House or peer-to-peer trading market where any player can browse listings created by other players is notoriously difficult. Developers are forced to either:
 1. Shard global listings into "Shared Group Data" (which has severe concurrency limits and race-condition write locks), or
 2. Spin up and pay for an external PostgreSQL/MongoDB database on AWS/Azure and write a separate microservice just to manage listings.
 
-### The Exoforge Pattern
+### 1.2 The Exoforge pattern
 In Exoforge, an extension's storage is an isolated relational database. Declare an `[ExoResource]` record representing a market listing. Use `Exo.Database.Query<T>` to query items across all players with standard SQL sorting, filtering, and paging. Reach another service through its generated stub (`Exo.<Service>`) or with `Exo.Actions.CallActionAsync<T>`; the store serialises the writes, so a listing and its payment move together. Emit an `[ExoEvent]` so the seller receives a real-time notification over WebSocket when their item sells.
 
 ```csharp
@@ -112,10 +118,10 @@ public record ListingSoldEvent(string SellerPlayerId, string ItemId, int Quantit
 
 ## 2. Stateful In-Memory Matchmaking & Turn-Based Rooms
 
-### The BaaS Pain Point
+### 2.1 The BaaS pain point
 Cloud Code functions are completely stateless; after each request, worker memory may be cleared or routed to a different instance. To match players by rank or keep turn-based game rooms (like chess, cards, or grid tactics), developers must write state back and forth to slow remote databases on every ping, while clients poll every 2–5 seconds hoping a match was found.
 
-### The Exoforge Pattern
+### 2.2 The Exoforge pattern
 Because an Exoforge native extension is a **long-lived singleton OS process**, you can keep high-speed state directly in C# memory (`ConcurrentDictionary`, queues, priority heaps). 
 - Incoming players join an in-memory queue via an `[ExoAction]`.
 - A background tick or `[ExoCron]` matches compatible players in microseconds.
@@ -187,10 +193,10 @@ public record MatchFoundEvent(string MatchId, string Player1Id, string Player2Id
 
 ## 3. Designer-Friendly LiveOps, Gacha Pity & Global Boss Events
 
-### The BaaS Pain Point
+### 3.1 The BaaS pain point
 In PlayFab Title Data, tuning game balance, drop tables, or configuring a server-wide "World Boss" event requires editing unvalidated JSON strings. A single typo or syntax error can break production for all active clients. Furthermore, coordinating a shared entity like a World Boss with 10,000,000 HP means dealing with race conditions on global JSON documents.
 
-### The Exoforge Pattern
+### 3.2 The Exoforge pattern
 Use `[ExoSingletonResource]` to declare live configuration records. Exoforge Studio automatically renders input controls (sliders, color pickers, currency fields) based on `[ExoColumn]` attributes so game designers can safely adjust live values without engineering assistance. Keep the live boss HP in memory, persist checkpoints to `Exo.Database`, and push health bar updates to all online players in real time.
 
 ```csharp
@@ -247,10 +253,10 @@ public record BossDefeatedEvent(string FinalBlowPlayerId, int RewardGold);
 
 ## 4. Guilds, Clans & Real-Time Social Feeds
 
-### The BaaS Pain Point
+### 4.1 The BaaS pain point
 Managing guilds in PlayFab requires stitching together PlayFab Entity Groups, custom JSON files, and third-party chat solutions like Photon or PubNub. Adding member roles, tracking guild level progression, and showing a live activity feed requires multiple API calls, manual permission checks, and client polling.
 
-### The Exoforge Pattern
+### 4.2 The Exoforge pattern
 Model `GuildRecord` and `GuildMemberRecord` as relational resources. Use `ReferencesType = typeof(PlayerDataRecord)` to link guild members directly to player profiles, which enables 1-click navigation in Studio. When a member deposits gold or levels up the clan, emit an event on `Topic = "guild:{guild_id}"` so all active guild members receive an instant push notification on their WebSocket connection.
 
 ```csharp
@@ -309,10 +315,10 @@ public record GuildActivityEvent(string Topic, string ActorPlayerId, string Mess
 
 ## 5. Automated Season Rollovers & Leaderboard Resets
 
-### The BaaS Pain Point
+### 5.1 The BaaS pain point
 Cloud Code has no native cron triggers, and PlayFab Scheduled Tasks frequently encounter 10-second timeout limits when iterating over thousands of player records to distribute rewards. Developers must maintain complex external AWS Lambda or Azure Functions infrastructure with batching loops and pagination logic.
 
-### The Exoforge Pattern
+### 5.2 The Exoforge pattern
 Use `[ExoCron]` to run automated background jobs directly under cluster supervision. Because you have direct relational SQL access, a season reset can compute leaderboard rewards, archive rankings, and reset scores in a single atomic SQL statement without round-tripping data through JSON APIs.
 
 ```csharp
@@ -353,10 +359,10 @@ public record SeasonResetEvent(int NewSeasonNumber, string Announcement);
 
 ## 6. Web Store Checkout, Stripe Webhooks & Instant Delivery
 
-### The BaaS Pain Point
+### 6.1 The BaaS pain point
 Unity Cloud Code endpoints reject any request that does not include a Unity Player Bearer token, making it impossible to receive raw webhooks from Stripe, Shopify, Steam, or PayPal without standing up an intermediate web proxy. In PlayFab, developers must wire Azure API Management or AWS API Gateway to verify webhook signatures before invoking CloudScript.
 
-### The Exoforge Pattern
+### 6.2 The Exoforge pattern
 Use `[ExoWebhook]` to expose an external HTTP POST endpoint directly from your extension. Verify cryptographic signatures (e.g. `Stripe-Signature`), fulfill purchases in `Exo.Database`, and push a real-time `PurchaseFulfilledEvent` over WebSocket to the player's active Unity session. The player sees their gems or battle pass unlock the exact second their credit card transaction completes.
 
 ```csharp

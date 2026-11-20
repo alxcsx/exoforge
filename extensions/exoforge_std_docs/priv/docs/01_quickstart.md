@@ -1,3 +1,9 @@
+---
+nav: Quickstart
+group: Get started
+icon: play
+summary: Sign in, scaffold an extension, deploy it and call it from Unity.
+---
 # Exoforge Developer Quickstart
 
 A hands-on tutorial: create a native C# extension, deploy it with Unity Studio, generate typed Unity client stubs, and call the service from a MonoBehaviour.
@@ -154,3 +160,10 @@ public class GameplayRewardController : MonoBehaviour
 ```
 
 Enter Play Mode and trigger the call. The Unity Console prints the returned score; the same request appears in Studio's extension inspector and its **Logs** tab. If the action is missing, confirm the extension is **running** and click **Sync Client** after the build.
+
+## Next steps
+
+- [Recipes](guide:02_recipes): the everyday tasks in a few lines each.
+- [C# attributes](guide:03_csharp_attributes): everything you can declare on a service, action, event, resource and column.
+- [Versions & Migrations](guide:04_versions_and_migrations): change your tables and code while players are online.
+- [The Arcade, piece by piece](guide:06_arcade_walkthrough): real extensions that use all of the above.

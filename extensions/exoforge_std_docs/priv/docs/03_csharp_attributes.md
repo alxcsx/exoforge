@@ -1,3 +1,9 @@
+---
+nav: C# attributes
+group: Build
+icon: file
+summary: Every attribute and property, and how to access the database.
+---
 # C# Attributes Reference
 
 Comprehensive reference for all core attributes provided by the Exoforge Extension SDK (`Exoforge.Plugin.SDK`). Analyzed and converted into cluster contracts by the Roslyn Source Generator (`Exoforge.Plugin.Generator`) at compile time.
@@ -107,7 +113,7 @@ By default, `Mode` is set to `ActionMode.Auto`, which is recommended for almost 
 | Mode | ActionMode | `ActionMode.Auto` | Execution mode (`Auto`, `Sync`, `Async`, `Cast`). `Auto` infers from return type: `Task`/`Task<T>` becomes `:async`, concrete returns become `:sync`. Set `Cast` for fire-and-forget. |
 | Scope | string | `"player"` | Minimum authorization scope required to invoke (`"guest"`, `"player"`, `"service"`, `"studio"`, `"admin"`; `"service"` is for trusted servers such as a game server or a CI job, and sits below `studio`). The dispatcher enforces it before the action runs; internal calls bypass it. |
 | Service | string | `null` | Owning service name when a single extension provides multiple `[ExoService]` contracts. Defaults to the primary service. |
-| FromVersion | string | `null` | Starts an action *revision* at this extension version (`"2.0.0"`). Several methods may share one action name when each has its own `FromVersion`: a caller whose game version locks the extension below it gets the previous revision, everyone else the newest. See the Versions chapter. |
+| FromVersion | string | `null` | Starts an action *revision* at this extension version (`"2.0.0"`). Several methods may share one action name when each has its own `FromVersion`: a caller whose game version locks the extension below it gets the previous revision, everyone else the newest. See [Versions & Migrations](guide:04_versions_and_migrations). |
 
 ```csharp
 [ExoAction(Scope = "player")]
@@ -204,7 +210,7 @@ ExoServices.PlayerData.OnPlayerCreated += evt => Debug.Log(evt.PlayerId);
 
 **Source / Provider:** Database & Resource Store Extensions (`exoforge_std_database`, `exoforge_std_resources`)
 
-Declares a typed entity record mapped directly to PostgreSQL storage. The Roslyn generator extracts typed columns, indexes, and primary keys to create and evolve the database tables. Safe changes (a new column, a rename) apply on deploy; a change that would destroy data is refused until you declare it with an `[ExoMigration]` (see the Versions chapter).
+Declares a typed entity record mapped directly to PostgreSQL storage. The Roslyn generator extracts typed columns, indexes, and primary keys to create and evolve the database tables. Safe changes (a new column, a rename) apply on deploy; a change that would destroy data is refused until you declare it with an `[ExoMigration]` (see [Versions & Migrations](guide:04_versions_and_migrations)).
 
 ### [ExoResource] Parameters
 
@@ -216,7 +222,7 @@ Declares a typed entity record mapped directly to PostgreSQL storage. The Roslyn
 | Singleton | bool | `false` | Indicates whether this resource stores exactly one record (e.g. server configuration). Creates a default record when empty and renders as a single form in Studio. (Or use `[ExoSingletonResource]`). |
 | DrawerTabs | string[] | `["overview"]` | Tab sections displayed when inspecting a row in the Studio drawer (e.g. `new[] { "overview", "attributes" }`). |
 | ResourceType | Type | `null` | Explicit record type when declared on a service class via `[ExoService(Resources = ...)]`. |
-| SchemaVersioningMode | SchemaVersioningMode | `Auto` | `Auto`: Exoforge keeps the table in line with the declaration (row stamps, migrations, deploy gates). `Manual`: your studio owns the table and its SQL migrations; Exoforge only checks at deploy that it matches. See the Versions chapter. |
+| SchemaVersioningMode | SchemaVersioningMode | `Auto` | `Auto`: Exoforge keeps the table in line with the declaration (row stamps, migrations, deploy gates). `Manual`: your studio owns the table and its SQL migrations; Exoforge only checks at deploy that it matches. See [Versions & Migrations](guide:04_versions_and_migrations). |
 | AllowPlayerRead | bool | `false` | Makes the whole resource readable by player-scoped callers through `resource_store.list`/`get`. Enable only for public data (leaderboards, catalogues, config); it is not row-scoped. |
 
 ### [ExoColumn] Parameters
@@ -225,6 +231,8 @@ Declares a typed entity record mapped directly to PostgreSQL storage. The Roslyn
 |---|---|---|---|
 | name (positional) | string | Property name | Column name in the database table in snake_case. |
 | PrimaryKey | bool | `false` | Marks this column as the primary key of the resource table. (Properties named `Id` are automatically inferred as primary keys). |
+| Unique | bool | `false` | Adds a unique constraint on this column. |
+| Indexed | bool | `false` | Adds a (non-unique) index on this column, for columns you filter or sort on in queries. |
 | ForeignKey | bool | `false` | Marks this column as a foreign key reference. Inferred automatically when `ReferencesType` is specified. |
 | ReferencesType | Type | `null` | Entity record/class type referenced by this column. Automatically infers `ForeignKey = true` and target table/key `References` (e.g. `ReferencesType = typeof(PlayerDataRecord)`). |
 | References | string | `null` | Target referenced table and column (e.g. `"player_data.id"`). Inferred automatically from `ReferencesType` when provided. |
@@ -236,7 +244,6 @@ Declares a typed entity record mapped directly to PostgreSQL storage. The Roslyn
 | Filterable | bool | `false` | Enables quick search & filtering on this column in Studio. |
 | Badge | bool | `false` | Renders the column value as a distinct colored badge chip in Studio. |
 | Bucket | string | `null` | Target storage bucket name when referencing binary/blob assets from `file_bucket`. |
-| FileReference | bool | `false` | Convenience shorthand for `Role = ExoRole.FileReference`. |
 
 ```csharp
 [ExoResource(Name = "player_scores")]
@@ -286,6 +293,27 @@ public class MapExtension
         [ExoColumn(InputType = "map_picker")]
         public string Center { get; set; } = "";
     }
+}
+```
+
+---
+
+## [ExoForeignKey<T>]
+
+Marks a column as a foreign key to another record type: `[ExoForeignKey<AchievementDef>]` on a `string AchievementId` property points at the `id` column of the `achievement_defs` table (pass a column name to point at another one). When the target record belongs to **another** extension, the attribute also grants this extension read access to that table (a `db_read` grant), so the foreign key can be joined without opening up anything else. The same relation can be written with `[ExoColumn(ReferencesType = typeof(T))]`.
+
+---
+
+## [ExoSeed]
+
+Marks a parameterless method (`void` or `Task`) on the extension root that creates the data the extension needs to start with. It runs once after `OnExtensionStart()` on **every** start, so it must be idempotent: check whether the rows exist before inserting. A seed that throws fails the lifecycle handshake and the extension does not come up.
+
+```csharp
+[ExoSeed]
+public void SeedDefaults()
+{
+    if (Exo.Database.All<AchievementDef>().Any()) return;
+    Exo.Database.Put(new AchievementDef("explorer", "Explorer", "Enter 2 rooms.", "zone_entered", 2));
 }
 ```
 
@@ -353,3 +381,77 @@ Extensions access the ambient cluster environment through the static `Exo` holde
 | **Logger** | `Exo.Logger` | `Exo.Logger.Info("Player logged in")`, `Exo.Logger.Error("Operation failed")` |
 | **Inter-Service Actions** | `Exo.Actions` | `var res = await Exo.Actions.CallActionAsync<TReq, TRes>(req)` |
 | **Context** | `Exo.Context` | `Exo.Context.CallerPlayerId`, `Exo.Context.CallerScopes` |
+
+
+## Database Access Paradigms: Table Repository vs. Parameterized SQL
+
+Exoforge provides two complementary database paradigms to eliminate ORM bloat and keep runtime memory minimal.
+
+### Table repository
+
+```csharp
+using System;
+using Exoforge.Plugin.SDK;
+
+// Pattern 1: Type-Safe Table Repository (No raw SQL strings)
+public class EconomyService
+{
+    public void ManageListing(string listingId, string sellerId, int price)
+    {
+        // Strongly typed table repository for MarketListingRecord
+        var table = Exo.Database.Table<MarketListingRecord>();
+
+        // 1. Get by primary key
+        var item = table.Get(listingId);
+
+        // 2. Put / Upsert entity (auto-resolves table name & primary key)
+        table.Put(new MarketListingRecord(listingId, sellerId, "sword_01", 1, price, DateTime.UtcNow));
+
+        // 3. Retrieve all records
+        var all = table.All();
+
+        // 4. Delete by ID
+        table.Delete(listingId);
+
+        // 5. Singleton config resource
+        var config = Exo.Database.First<EconomyConfigRecord>();
+    }
+}
+```
+
+### Parameterized SQL
+
+```csharp
+using System;
+using System.Collections.Generic;
+using Exoforge.Plugin.SDK;
+
+// Pattern 2: Parameterized Raw SQL (Queries, Joins, Aggregates & Atomic In-Place Updates)
+public class EconomyService
+{
+    public List<MarketListingRecord> SearchListings(string itemId, int maxPrice, int limit)
+    {
+        // Positional parameters ($1, $2, ...) prevent SQL injection
+        // Result rows map directly to immutable C# records
+        return Exo.Database.Query<MarketListingRecord>(
+            "SELECT * FROM market_listings WHERE item_id = $1 AND unit_price <= $2 ORDER BY unit_price ASC LIMIT $3",
+            itemId, maxPrice, limit
+        );
+    }
+
+    public void AtomicGoldTransfer(string senderId, string receiverId, int gold)
+    {
+        // Atomic in-place updates eliminate read-modify-write race conditions
+        Exo.Database.Execute("UPDATE players SET gold = gold - $1 WHERE id = $2 AND gold >= $1", gold, senderId);
+        Exo.Database.Execute("UPDATE players SET gold = gold + $1 WHERE id = $2", gold, receiverId);
+    }
+}
+```
+
+> [!TIP]
+> **Architecture Note: Why Exoforge avoids complex Query Builders**
+
+**No runtime query builders — by deliberate design.** Complex query builders (like EF Core or LINQ-to-Entities) introduce runtime expression compilation, large binary size, and high garbage collection pressure. Instead, Exoforge gives you two native, zero-overhead primitives:
+
+- **Type-Safe Table Repository (`Exo.Database.Table<T>()`):** Pure C# CRUD with auto-resolved table names, primary keys, and singleton lookups. Zero SQL strings needed.
+- **Parameterized Raw SQL (`Exo.Database.Query<T>()`):** High-performance SQL queries with positional `$1, $2, ...` arguments, automatic record mapping, and atomic in-place updates.
