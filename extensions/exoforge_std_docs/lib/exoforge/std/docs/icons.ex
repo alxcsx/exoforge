@@ -19,6 +19,8 @@ defmodule Exoforge.Std.Docs.Icons do
     download: "M12 3v12 M7 11l5 5 5-5 M4 20h16",
     upload: "M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4 M17 8l-5-5-5 5 M12 3v12",
     close: "M6 6l12 12 M18 6L6 18",
+    refresh: "M23 4v6h-6 M1 20v-6h6 M3.51 9a9 9 0 0114.85-3.36L23 10 M1 14l4.64 4.36A9 9 0 0020.49 15",
+    plus: "M12 5v14 M5 12h14",
     check: "M4 12l5 5L20 6",
     alert:
       "M12 9v4 M12 17h.01 M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z",

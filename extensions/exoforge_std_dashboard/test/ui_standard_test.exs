@@ -257,4 +257,24 @@ defmodule Exoforge.Std.Dashboard.UiStandardTest do
     end)
     |> MapSet.new()
   end
+
+  test "every icon a template names exists in the icon set, so a missing one never shows its name as text" do
+    root = Path.expand("../..", __DIR__)
+
+    set =
+      Regex.run(~r/@icons %\{(.*?)\n  \}/s, File.read!(Path.join(root, "exoforge_std_dashboard/lib/exoforge/std/dashboard/components.ex")))
+      |> List.last()
+      |> then(&Regex.scan(~r/^\s{4}(\w+):/m, &1))
+      |> Enum.map(&List.last/1)
+      |> MapSet.new()
+
+    used =
+      for dir <- ~w(exoforge_std_dashboard exoforge_std_dashboard_views exoforge_std_docs exoforge_std_file_bucket),
+          file <- Path.wildcard(Path.join(root, dir <> "/lib/**/*.ex")),
+          [_, name] <- Regex.scan(~r/<\.studio_icon icon="(\w+)"/, File.read!(file)),
+          uniq: true,
+          do: name
+
+    assert MapSet.difference(MapSet.new(used), set) |> Enum.sort() == []
+  end
 end
