@@ -207,16 +207,30 @@ defmodule Exoforge.Std.Ws.SocketHandler do
 
   defp handle_auth(token, req, state) do
     rid = Exoforge.RequestContext.sanitize_rid(Map.get(req, @rid_key))
+    game_version = Map.get(req, "game_version")
 
     case ActionDispatcher.dispatch(:auth, :authenticate, %{token: token}, rid: rid) do
       {:ok, %{player_id: player_id, scopes: scopes} = auth_info} ->
-        Logger.info("[WS] Authenticated player: #{player_id} (scopes: #{inspect(scopes)})")
-        new_state = Map.put(state, :auth, auth_info)
+        case Transport.check(game_version) do
+          {:ok, version_info} ->
+            Logger.info("[WS] Authenticated player: #{player_id} (scopes: #{inspect(scopes)})")
 
-        reply(
-          %{type: @frame_auth_result, status: @status_ok, player_id: player_id, scopes: scopes, rid: rid},
-          new_state
-        )
+            auth_info =
+              if version_info,
+                do: Map.put(auth_info, :game_version, game_version),
+                else: auth_info
+
+            new_state = Map.put(state, :auth, auth_info)
+
+            reply(
+              %{type: @frame_auth_result, status: @status_ok, player_id: player_id, scopes: scopes, rid: rid},
+              new_state
+            )
+
+          {:error, :upgrade_required} ->
+            frame = Map.merge(%{type: @frame_auth_result}, Transport.error_body(:upgrade_required, rid))
+            {:stop, :normal, {4001, "upgrade_required"}, [{:text, encode_json(frame)}], state}
+        end
 
       {:error, reason} ->
         error = Transport.action_error(reason)

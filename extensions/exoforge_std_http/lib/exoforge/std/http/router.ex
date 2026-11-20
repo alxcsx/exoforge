@@ -268,9 +268,32 @@ defmodule Exoforge.Std.Http.Router do
 
     public? = public_action?(service, action)
     rid = conn.assigns[:exoforge_rid]
+    game_version = List.first(get_req_header(conn, "x-exoforge-game-version"))
 
     case authenticate_token(token_from_request(conn)) do
       {:ok, auth_info} ->
+        dispatch_versioned_http(conn, service, action, raw_payload, auth_info, rid, game_version)
+
+      # A public action without a token still gets an identity, so the action's own checks
+      # (register scopes, anonymous takeover) see an external caller rather than the dispatcher's
+      # implicit full trust (M33 Fix 1). An expired bearer is the same case for one of these:
+      # `auth.refresh` carries its own credential in the payload.
+      reason when public? and reason in [:error, {:error, :token_expired}] ->
+        dispatch_versioned_http(conn, service, action, raw_payload, %{player_id: nil, scopes: []}, rid, game_version)
+
+      {:error, :token_expired} ->
+        token_expired(conn)
+
+      :error ->
+        unauthenticated(conn)
+    end
+  end
+
+  defp dispatch_versioned_http(conn, service, action, raw_payload, auth_info, rid, game_version) do
+    case Transport.check(game_version) do
+      {:ok, version_info} ->
+        auth_info = if version_info, do: Map.put(auth_info, :game_version, game_version), else: auth_info
+
         dispatch_http(
           conn,
           service,
@@ -281,26 +304,8 @@ defmodule Exoforge.Std.Http.Router do
           rid
         )
 
-      # A public action without a token still gets an identity, so the action's own checks
-      # (register scopes, anonymous takeover) see an external caller rather than the dispatcher's
-      # implicit full trust (M33 Fix 1). An expired bearer is the same case for one of these:
-      # `auth.refresh` carries its own credential in the payload.
-      reason when public? and reason in [:error, {:error, :token_expired}] ->
-        dispatch_http(
-          conn,
-          service,
-          action,
-          with_identity(raw_payload, %{player_id: nil, scopes: []}),
-          [],
-          nil,
-          rid
-        )
-
-      {:error, :token_expired} ->
-        token_expired(conn)
-
-      :error ->
-        unauthenticated(conn)
+      {:error, :upgrade_required} ->
+        send_json(conn, 426, Transport.error_body(:upgrade_required, rid))
     end
   end
 

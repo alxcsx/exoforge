@@ -1,7 +1,40 @@
 defmodule Exoforge.Std.TransportTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias Exoforge.Std.Transport
+
+  defmodule Versioning do
+    use Exoforge.Extension
+
+    defaction(resolve(%{version: "blocked"}), do: {:ok, %{status: :blocked}})
+    defaction(resolve(%{version: version}), do: {:ok, %{status: :live, version: version}})
+  end
+
+  setup do
+    Exoforge.ExtensionCase.start_kernel()
+    if :ets.whereis(:exoforge_game_version_cache) != :undefined, do: :ets.delete_all_objects(:exoforge_game_version_cache)
+    :ok
+  end
+
+  describe "check/1" do
+    test "accepts a missing version" do
+      assert {:ok, nil} = Transport.check(nil)
+    end
+
+    test "skips checking when versioning is not registered" do
+      assert {:ok, nil} = Transport.check("no-service")
+    end
+
+    test "rejects a blocked version" do
+      Exoforge.ExtensionCase.register_extension(Versioning, id: :versioning, provides: [:versioning])
+      assert {:error, :upgrade_required} = Transport.check("blocked")
+    end
+
+    test "returns the live version and status" do
+      Exoforge.ExtensionCase.register_extension(Versioning, id: :versioning, provides: [:versioning])
+      assert {:ok, %{version: "live", status: :live}} = Transport.check("live")
+    end
+  end
 
   describe "normalize_action_request/1" do
     test "normalizes valid string-keyed request" do
