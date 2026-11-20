@@ -44,6 +44,8 @@ defmodule Exoforge.Domain.Manifest do
     dependencies: [],
     provides: [],
     db_read: [],
+    # Changes between versions of a resource's table, as the extension declared them (T6): `[%{resource, from, to, ops}]`.
+    migrations: [],
     services: [],
     events: [],
     dashboard_view: nil,

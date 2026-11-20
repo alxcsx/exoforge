@@ -59,7 +59,14 @@ internal sealed record ResourceModel(
     List<ColumnModel> Columns,
     string? TypeName,
     bool Singleton = false,
-    bool AllowPlayerRead = false);
+    bool AllowPlayerRead = false,
+    int Version = 1);
+
+/// <summary>One step of a migration, ready to write: the operation and its arguments as JSON values.</summary>
+internal sealed record MigrationOp(string Op, string? Column, string? From, string? To, string? ValueJson);
+
+/// <summary>A resource's change from one version to the next, found on a class marked <c>[ExoMigration]</c>.</summary>
+internal sealed record MigrationModel(string Resource, int From, int To, List<MigrationOp> Ops, string? Decl);
 
 internal sealed record CronModel(
     string Name,
@@ -120,7 +127,8 @@ internal static class ManifestEmitter
         string? icon,
         bool system,
         IEnumerable<InputTypeModel>? inputTypes = null,
-        IEnumerable<string>? dbRead = null)
+        IEnumerable<string>? dbRead = null,
+        IEnumerable<MigrationModel>? migrations = null)
     {
         var sb = new StringBuilder();
         sb.Append("{\n");
@@ -132,6 +140,7 @@ internal static class ManifestEmitter
         sb.Append($"  \"dependencies\": {Atoms(dependencies)},\n");
         sb.Append($"  \"provides\": {Atoms(provides)},\n");
         sb.Append($"  \"db_read\": {Atoms(dbRead ?? Array.Empty<string>())},\n");
+        sb.Append($"  \"migrations\": {Migrations(migrations)},\n");
 
         string effectiveCategory = !string.IsNullOrEmpty(category) ? category! : (system ? "System" : "Game");
         string effectiveTitle = !string.IsNullOrEmpty(title) ? title! : FormatTitle(id);
@@ -236,6 +245,7 @@ internal static class ManifestEmitter
                 // The shape `Exoforge.Std.Resources.normalize_source/1` reads. A bare string would not
                 // match, and a resource with no source is stored as an opaque key-value document.
                 sb.Append($"\"source\": {{\"table\": {Str(resource.Source)}}}, ");
+                sb.Append($"\"version\": {resource.Version}, ");
                 sb.Append($"\"schema_hash\": {Str(SchemaHash(resource))}, ");
                 sb.Append($"\"drawer\": {Atoms(resource.Drawer)}, ");
                 sb.Append($"\"actions\": {Atoms(resource.Actions)}, ");
@@ -321,6 +331,33 @@ internal static class ManifestEmitter
         if (!string.IsNullOrEmpty(column.Decl)) baseJson += $", \"decl\": {Str(column.Decl!)}";
 
         return baseJson;
+    }
+
+    private static string Migrations(IEnumerable<MigrationModel>? migrations)
+    {
+        var list = (migrations ?? Array.Empty<MigrationModel>())
+            .OrderBy(m => m.Resource, StringComparer.Ordinal).ThenBy(m => m.From)
+            .ToList();
+
+        if (list.Count == 0) return "[]";
+
+        var items = list.Select(m =>
+        {
+            string decl = string.IsNullOrEmpty(m.Decl) ? "" : $", \"decl\": {Str(m.Decl!)}";
+            string ops = string.Join(", ", m.Ops.Select(Op));
+            return $"{{\"resource\": {Str(m.Resource)}, \"from\": {m.From}, \"to\": {m.To}{decl}, \"ops\": [{ops}]}}";
+        });
+
+        return "[\n    " + string.Join(",\n    ", items) + "\n  ]";
+    }
+
+    private static string Op(MigrationOp op)
+    {
+        string column = op.Column is null ? "" : $", \"column\": {Str(op.Column)}";
+        string from = op.From is null ? "" : $", \"from\": {Str(op.From)}";
+        string to = op.To is null ? "" : $", \"to\": {Str(op.To)}";
+        string value = op.ValueJson is null ? "" : $", \"value\": {op.ValueJson}";
+        return $"{{\"op\": {Str(op.Op)}{column}{from}{to}{value}}}";
     }
 
     internal static string SchemaHash(ResourceModel resource)

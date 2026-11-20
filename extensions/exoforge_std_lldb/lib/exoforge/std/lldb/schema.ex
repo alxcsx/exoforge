@@ -226,6 +226,8 @@ defmodule Exoforge.Std.Lldb.Schema do
           "plan" jsonb NOT NULL DEFAULT '[]'::jsonb
         )
         """,
+        # The version of the resource shape each table was last brought to (T6). Older ledgers gain it here.
+        ~s|ALTER TABLE #{qs}."_exo_schema" ADD COLUMN IF NOT EXISTS "version" integer NOT NULL DEFAULT 1|,
         """
         CREATE TABLE IF NOT EXISTS #{qs}."_exo_migrations" (
           "id" text PRIMARY KEY,
@@ -269,6 +271,7 @@ defmodule Exoforge.Std.Lldb.Schema do
     with {:ok, s} <- validate_ident(schema),
          {:ok, normalized_resources} <- normalize_resources(resources) do
       ledger_hashes = read_ledger_hashes(conn, s)
+      ledger_versions = read_ledger_versions(conn, s)
       existing_tables = read_existing_tables(conn, s)
 
       tables =
@@ -287,8 +290,24 @@ defmodule Exoforge.Std.Lldb.Schema do
        %{
          schema: s,
          ledger_hashes: ledger_hashes,
+         ledger_versions: ledger_versions,
          tables: tables
        }}
+    end
+  end
+
+  # The resource version each table was last brought to. A table with no ledger row, or a ledger from before
+  # versions existed, is at version 1.
+  defp read_ledger_versions(conn, schema) do
+    qs = quote_ident!(schema)
+
+    case Postgrex.query(
+           conn,
+           ~s|SELECT DISTINCT ON ("table_name") "table_name", "version" FROM #{qs}."_exo_schema" ORDER BY "table_name", "applied_at" DESC|,
+           []
+         ) do
+      {:ok, %Postgrex.Result{rows: rows}} -> Map.new(rows, fn [t, v] -> {t, v} end)
+      _ -> %{}
     end
   end
 
@@ -322,6 +341,9 @@ defmodule Exoforge.Std.Lldb.Schema do
         %{}
     end
   end
+
+  @doc false
+  def existing_tables(conn, schema), do: read_existing_tables(conn, schema)
 
   defp read_existing_tables(conn, schema) do
     sql = """
@@ -542,6 +564,7 @@ defmodule Exoforge.Std.Lldb.Schema do
     with {:ok, valid_schema} <- validate_ident(schema),
          {:ok, normalized_resources} <- normalize_resources(resources) do
       ledger_hashes = Map.get(live_state, :ledger_hashes) || %{}
+      ledger_versions = Map.get(live_state, :ledger_versions) || %{}
       live_tables = Map.get(live_state, :tables) || %{}
 
       {ops, skipped, table_hashes} =
@@ -553,7 +576,7 @@ defmodule Exoforge.Std.Lldb.Schema do
           cond do
             not is_nil(live_tbl) and live_tbl[:exists] == true and
               is_binary(res.schema_hash) and res.schema_hash != "" and
-                recorded_hash == res.schema_hash ->
+              recorded_hash == res.schema_hash and Map.get(ledger_versions, tbl, 1) == res.version ->
               {ops_acc, [tbl | skip_acc], hash_acc}
 
             is_nil(live_tbl) or live_tbl[:exists] != true ->
@@ -587,7 +610,12 @@ defmodule Exoforge.Std.Lldb.Schema do
          ops: ops,
          safe: all_safe?,
          skipped_tables: Enum.reverse(skipped),
-         table_hashes: Enum.reverse(table_hashes)
+         table_hashes: Enum.reverse(table_hashes),
+         # per table: the version the manifest declares, the one the table is at, and the resource's name
+         versions:
+           Map.new(normalized_resources, fn res ->
+             {res.table, %{manifest: res.version, live: Map.get(ledger_versions, res.table, 1), resource: res.name}}
+           end)
        }}
     end
   end
@@ -1050,6 +1078,8 @@ defmodule Exoforge.Std.Lldb.Schema do
           {:ok, %{applied: 0, ops: []}}
         else
           case Postgrex.transaction(conn, fn tx ->
+                 # A DDL that cannot get its lock fails the deploy; it does not queue every query behind it.
+                 run_tx!(tx, "SET LOCAL lock_timeout = '#{Exoforge.Std.Lldb.SchemaMigration.lock_timeout()}'", [])
                  run_tx!(tx, "SELECT pg_advisory_xact_lock(hashtext($1))", [valid_schema])
 
                  case ensure_ledgers(tx, valid_schema) do
@@ -1079,12 +1109,7 @@ defmodule Exoforge.Std.Lldb.Schema do
                        end)
                        |> Jason.encode!()
 
-                     insert_sql = """
-                     INSERT INTO #{qs}."_exo_schema" ("table_name", "schema_hash", "plan")
-                     VALUES ($1, $2, $3::jsonb)
-                     """
-
-                     run_tx!(tx, insert_sql, [tbl, schema_hash, plan_json])
+                     record_ledger(tx, qs, tbl, schema_hash, plan_json, get_in(plan, [:versions, tbl, :manifest]) || 1)
                    end
                  end)
 
@@ -1098,12 +1123,30 @@ defmodule Exoforge.Std.Lldb.Schema do
     end
   end
 
-  defp run_tx!(tx, sql, params) do
+  @doc false
+  def run_tx!(tx, sql, params) do
     case Postgrex.query(tx, sql, params) do
       {:ok, res} -> res
       {:error, reason} -> Postgrex.rollback(tx, reason)
     end
   end
+
+  @doc false
+  def record_ledger(tx, qs, table, schema_hash, plan_json, version) do
+    run_tx!(
+      tx,
+      ~s|INSERT INTO #{qs}."_exo_schema" ("table_name", "schema_hash", "plan", "version") VALUES ($1, $2, $3::jsonb, $4)|,
+      [table, schema_hash, plan_json, version]
+    )
+  end
+
+  @doc false
+  def unsafe_error(ops) do
+    {:unsafe_schema_change, Enum.map(ops, &Map.put_new(&1, :message, format_op_message(&1)))}
+  end
+
+  @doc false
+  def normalized_resources(resources), do: normalize_resources(resources)
 
   defp format_op_message(op) do
     col_part = if op[:column], do: ".#{op[:column]}", else: ""
@@ -1113,13 +1156,8 @@ defmodule Exoforge.Std.Lldb.Schema do
   @doc """
   Convenience helper that reads live state, plans, and applies in one call.
   """
-  def reconcile(conn, schema, resources) do
-    with {:ok, valid_schema} <- validate_ident(schema),
-         :ok <- ensure_ledgers(conn, valid_schema),
-         {:ok, live} <- read_live_state(conn, valid_schema, resources),
-         {:ok, plan_res} <- plan(resources, live) do
-      apply(conn, plan_res)
-    end
+  def reconcile(conn, schema, resources, migrations \\ []) do
+    Exoforge.Std.Lldb.SchemaMigration.reconcile(conn, schema, resources, migrations)
   end
 
   ## ---- MANIFEST RESOURCE NORMALIZATION & VALIDATION ----
@@ -1156,10 +1194,19 @@ defmodule Exoforge.Std.Lldb.Schema do
         {:ok,
          %{
            table: table,
+           name: to_string(Map.get(res, :name) || Map.get(res, "name") || table),
+           version: resource_version(res),
            schema_hash: schema_hash,
            columns: cols
          }}
       end
+    end
+  end
+
+  defp resource_version(res) do
+    case Map.get(res, :version) || Map.get(res, "version") do
+      v when is_integer(v) and v >= 1 -> v
+      _ -> 1
     end
   end
 

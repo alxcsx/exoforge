@@ -120,7 +120,7 @@ defmodule Exoforge.Std.Lldb do
 
   @impl true
   defaction apply_schema(payload) do
-    Manager.apply_schema(extract_namespace(payload), fetch_any(payload, [:resources], nil))
+    Manager.apply_schema(extract_namespace(payload), fetch_any(payload, [:resources], nil), fetch_any(payload, [:migrations], nil))
   end
 
   @impl true
