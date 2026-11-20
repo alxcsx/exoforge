@@ -4,7 +4,7 @@ summary: The realtime transport on port 4000: it carries actions and event subsc
 ---
 # WebSocket transport
 
-The realtime transport on port 4000: it carries actions and event subscriptions over a WebSocket, using the shared gateway in `transport`.
+{{about}}
 
 ## Actions
 

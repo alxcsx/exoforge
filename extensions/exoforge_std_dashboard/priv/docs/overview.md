@@ -4,7 +4,7 @@ summary: The Producer Studio web app (port 4005), hosting the Overview, the exte
 ---
 # Studio
 
-The Producer Studio web app (port 4005), hosting the Overview, the extension inspector and the views other extensions contribute.
+{{about}}
 
 ## Actions
 

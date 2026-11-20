@@ -4,7 +4,7 @@ summary: Game versions (`dev`, `live`, `outdated`, `blocked`, at most three not 
 ---
 # Versioning
 
-Game versions (`dev`, `live`, `outdated`, `blocked`, at most three not blocked) and the extension version each one locks.
+{{about}}
 
 ## Actions
 

@@ -4,7 +4,7 @@ summary: Accounts, sessions (an access token plus a single-use refresh token), r
 ---
 # Auth
 
-Accounts, sessions (an access token plus a single-use refresh token), roles and scopes. It also reconciles the `admin` account at every boot.
+{{about}}
 
 ## Actions
 

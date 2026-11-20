@@ -4,7 +4,7 @@ summary: The helper every extension uses for `Get`, `Put`, `All`, `Delete`, `Que
 ---
 # Database
 
-The helper every extension uses for `Get`, `Put`, `All`, `Delete`, `Query` and `Execute` on its own isolated schema. It sits on top of `lldb`.
+{{about}}
 
 ## Actions
 

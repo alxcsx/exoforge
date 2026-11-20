@@ -4,7 +4,7 @@ summary: Usage per extension and action (invocations, errors, latency, bytes), p
 ---
 # Metering
 
-Usage per extension and action (invocations, errors, latency, bytes), persisted on the instance.
+{{about}}
 
 ## Actions
 

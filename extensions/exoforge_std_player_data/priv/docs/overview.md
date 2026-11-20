@@ -4,7 +4,7 @@ summary: The canonical player profile and key-value store, with lifecycle events
 ---
 # Player data
 
-The canonical player profile and key-value store, with lifecycle events for creation and deletion.
+{{about}}
 
 ## Actions
 

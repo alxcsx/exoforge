@@ -4,7 +4,7 @@ summary: The gateway behind `ws` and `http`: framing, dispatch to the kernel, an
 ---
 # Transport gateway
 
-The gateway behind `ws` and `http`: framing, dispatch to the kernel, and the game-version check at sign-in.
+{{about}}
 
 ## Actions
 

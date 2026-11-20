@@ -4,7 +4,7 @@ summary: Binary assets with metadata.
 ---
 # File bucket
 
-Binary assets with metadata. A bucket is `public` or `private`; private buckets need staff access or a signed URL.
+{{about}}
 
 ## Actions
 

@@ -4,7 +4,7 @@ summary: Turns `[ExoResource]` declarations into tables, reconciles them on depl
 ---
 # Resource store
 
-Turns `[ExoResource]` declarations into tables, reconciles them on deploy, and serves the resource browser in the Studio.
+{{about}}
 
 ## Actions
 

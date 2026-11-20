@@ -4,7 +4,7 @@ summary: Upload, reload and removal of extensions, and the export of their manif
 ---
 # Extension manager
 
-Upload, reload and removal of extensions, and the export of their manifests. A failed redeploy is rolled back to the previous version.
+{{about}}
 
 ## Actions
 

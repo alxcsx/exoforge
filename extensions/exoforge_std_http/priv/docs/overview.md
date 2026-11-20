@@ -4,7 +4,7 @@ summary: The REST transport on port 4001, with OpenAPI routes derived from the s
 ---
 # HTTP transport
 
-The REST transport on port 4001, with OpenAPI routes derived from the service contracts and the CORS settings.
+{{about}}
 
 ## Actions
 

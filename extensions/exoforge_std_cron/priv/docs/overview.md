@@ -4,7 +4,7 @@ summary: Runs the schedules declared with `[ExoCron]` and lets the Studio list a
 ---
 # Cron
 
-Runs the schedules declared with `[ExoCron]` and lets the Studio list and trigger them.
+{{about}}
 
 ## Actions
 

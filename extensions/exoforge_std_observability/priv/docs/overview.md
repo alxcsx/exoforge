@@ -4,7 +4,7 @@ summary: Event history, request timelines, failure groups and the live tail, wit
 ---
 # Observability
 
-Event history, request timelines, failure groups and the live tail, with an archive and retention.
+{{about}}
 
 ## Actions
 

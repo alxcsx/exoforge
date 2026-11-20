@@ -4,7 +4,7 @@ summary: The storage driver layer: connections, pools, schemas, roles, DDL and t
 ---
 # Storage driver layer
 
-The storage driver layer: connections, pools, schemas, roles, DDL and the migration runner. It is engine specific; Postgres is the supported engine. Other std extensions reach storage through it and through `database`.
+{{about}}
 
 ## Actions
 
