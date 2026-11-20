@@ -88,6 +88,15 @@ public class ExoActionAttribute : Attribute
     /// </summary>
     public string? Service { get; set; }
 
+    /// <summary>
+    /// The extension version this revision of the action starts at ("2.0.0"). Several methods may share an
+    /// action name when each has its own <c>FromVersion</c>: a caller whose game version locks this extension
+    /// below it is served by the previous revision, anyone else (including a client with no game version)
+    /// by the newest. The manifest and the contract describe the newest one. Remove an old revision once no
+    /// served game version locks the extension below the next one.
+    /// </summary>
+    public string? FromVersion { get; set; }
+
     public ExoActionAttribute(string? name = null)
     {
         Name = name;

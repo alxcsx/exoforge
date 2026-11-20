@@ -224,4 +224,24 @@ public class MigrationManifestTests
 
         Assert.Empty(manifest["migrations"]!.AsArray());
     }
+
+    [Fact]
+    public void Revisions_Of_An_Action_Show_As_One_Action_The_Newest()
+    {
+        var (manifest, diagnostics) = Run("""
+            using Exoforge.Plugin.SDK;
+            namespace P;
+            [ExoService("svc")]
+            public partial class Svc
+            {
+                [ExoAction("score")] public int ScoreV1(int a) => a;
+                [ExoAction("score", FromVersion = "2.0.0")] public string ScoreV2(int a, int b) => "";
+            }
+            """);
+
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+        var actions = manifest["services"]!.AsArray()[0]!["actions"]!.AsArray();
+        var score = Assert.Single(actions.Where(a => a!["name"]!.GetValue<string>() == "score"))!;
+        Assert.Equal(2, score["arity"]!.GetValue<int>());
+    }
 }

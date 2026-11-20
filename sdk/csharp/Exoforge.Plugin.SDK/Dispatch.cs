@@ -32,6 +32,55 @@ public interface IExoforgeDispatch
 /// </summary>
 public static class ExoDispatch
 {
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (long? Locked, long At)> LockCache = new();
+    private const long LockCacheMillis = 30_000;
+
+    /// <summary>
+    /// True when the caller is served by an action revision that starts at <paramref name="from"/> (an encoded
+    /// extension version): its game version locks this extension at or above it. A caller with no game version,
+    /// an extension the game version does not lock, or an unreachable versioning service gets the newest revision.
+    /// </summary>
+    public static bool CallerAtLeast(long from)
+    {
+        var context = PluginHost.CurrentContext;
+        string? gameVersion = context.CallerGameVersion;
+        if (string.IsNullOrEmpty(gameVersion) || context is not HostPluginContext host) return true;
+
+        return LockedVersion(host.PluginId, gameVersion!) is not long locked || locked >= from;
+    }
+
+    private static long? LockedVersion(string pluginId, string gameVersion)
+    {
+        long now = System.Diagnostics.Stopwatch.GetTimestamp() / (System.Diagnostics.Stopwatch.Frequency / 1000);
+        string key = pluginId + "|" + gameVersion;
+        if (LockCache.TryGetValue(key, out var hit) && now - hit.At < LockCacheMillis) return hit.Locked;
+
+        long? locked = null;
+        try
+        {
+            string? raw = HostBridge.CallActionRaw("versioning", "resolve", new System.Text.Json.Nodes.JsonObject { ["version"] = gameVersion });
+            if (raw is not null)
+            {
+                using var doc = JsonDocument.Parse(raw);
+                if (doc.RootElement.TryGetProperty("locks", out var locks) && locks.ValueKind == JsonValueKind.Object &&
+                    locks.TryGetProperty(pluginId, out var lockElement) && lockElement.ValueKind == JsonValueKind.String)
+                {
+                    locked = ExoVersion.Encode(lockElement.GetString());
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // An unreachable versioning service must not break the action: serve the newest revision.
+        }
+
+        LockCache[key] = (locked, now);
+        return locked;
+    }
+
+    /// <summary>Forgets resolved locks (tests).</summary>
+    internal static void ResetLockCache() => LockCache.Clear();
+
     /// <summary>
     /// Reads a payload argument by name, ignoring case and underscores so JSON <c>snake_length</c>
     /// binds to the C# <c>snakeLength</c> parameter. Missing, null or unreadable values fall back.

@@ -406,9 +406,15 @@ namespace Exoforge.Plugin.SDK
             var targetAttr = webhookAttr ?? actionAttr!;
 
             string actionName = PositionalString(targetAttr, 0) ?? ToSnakeCase(method.Name);
-            dispatches.Add(new ActionDispatch(actionName, method));
+            long fromStamp = ManifestEmitter.EncodeVersion(NamedString(targetAttr, "FromVersion"));
+            dispatches.Add(new ActionDispatch(actionName, method, fromStamp));
 
-            ServiceFor(NamedString(targetAttr, "Service")).Actions.Add(new ActionModel(
+            // Revisions share one wire name; the manifest and the contract describe the newest.
+            if (dispatches.Any(d => d.Name == actionName && d.From > fromStamp)) continue;
+            var owningService = ServiceFor(NamedString(targetAttr, "Service"));
+            owningService.Actions.RemoveAll(a => a.Name == actionName);
+
+            owningService.Actions.Add(new ActionModel(
                 actionName,
                 isWebhook ? "sync" : ResolveActionMode(targetAttr, method.ReturnType),
                 NamedString(targetAttr, "Scope") ?? (isWebhook ? "webhook" : "player"),
@@ -725,7 +731,7 @@ namespace Exoforge.Plugin.SDK
                 string interfaceName = DispatchEmitter.InterfaceName(model.Name);
 
                 var methods = dispatches
-                    .Where(d => model.Actions.Any(a => a.Name == d.Name))
+                    .Where(d => model.Actions.Any(a => a.Name == d.Name) && !dispatches.Any(o => o.Name == d.Name && o.From > d.From))
                     .Select(d => d.Method)
                     .ToList();
 

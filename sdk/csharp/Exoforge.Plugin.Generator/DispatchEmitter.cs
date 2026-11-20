@@ -9,7 +9,7 @@ using Microsoft.CodeAnalysis.CSharp;
 namespace Exoforge.Plugin.Generator;
 
 /// <summary>One action's dispatch entry: the wire name and the method that serves it.</summary>
-internal sealed record ActionDispatch(string Name, IMethodSymbol Method);
+internal sealed record ActionDispatch(string Name, IMethodSymbol Method, long From = 0);
 
 /// <summary>
 /// Emits the compile-time action/event table and the contract interface for a service. The host calls
@@ -22,28 +22,46 @@ internal static class DispatchEmitter
     {
         var sb = new StringBuilder();
 
-        foreach (var action in actions)
+        // One case per wire name. Revisions of an action (FromVersion) share it: the newest that the caller's
+        // locked extension version reaches wins, and the oldest answers everyone below.
+        foreach (var group in actions.GroupBy(a => a.Name))
         {
-            sb.AppendLine($"                case \"{action.Name}\":");
+            var revisions = group.OrderByDescending(a => a.From).ToList();
+            sb.AppendLine($"                case \"{group.Key}\":");
 
-            string target = action.Method.IsStatic ? rootClassFq : "plugin";
-            sb.AppendLine($"                    result = {target}.{action.Method.Name}(");
-
-            var parameters = action.Method.Parameters;
-
-            for (int i = 0; i < parameters.Length; i++)
+            for (int r = 0; r < revisions.Count; r++)
             {
-                var parameter = parameters[i];
-                string type = parameter.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                string wireName = ExoforgePluginGenerator.ToSnakeCase(parameter.Name);
-                string fallback = FormatDefault(parameter);
-                string comma = i < parameters.Length - 1 ? "," : "";
+                var action = revisions[r];
+                string indent = "                    ";
+                bool conditional = r < revisions.Count - 1;
 
-                sb.AppendLine($"                        global::Exoforge.Plugin.SDK.ExoDispatch.Get<{type}>(payload, \"{wireName}\", {fallback}){comma}");
+                if (conditional)
+                {
+                    sb.AppendLine($"{indent}if (global::Exoforge.Plugin.SDK.ExoDispatch.CallerAtLeast({action.From}L))");
+                    sb.AppendLine($"{indent}{{");
+                }
+
+                string pad = conditional ? indent + "    " : indent;
+                string target = action.Method.IsStatic ? rootClassFq : "plugin";
+                sb.AppendLine($"{pad}result = {target}.{action.Method.Name}(");
+
+                var parameters = action.Method.Parameters;
+                for (int i = 0; i < parameters.Length; i++)
+                {
+                    var parameter = parameters[i];
+                    string type = parameter.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    string wireName = ExoforgePluginGenerator.ToSnakeCase(parameter.Name);
+                    string fallback = FormatDefault(parameter);
+                    string comma = i < parameters.Length - 1 ? "," : "";
+
+                    sb.AppendLine($"{pad}    global::Exoforge.Plugin.SDK.ExoDispatch.Get<{type}>(payload, \"{wireName}\", {fallback}){comma}");
+                }
+
+                sb.AppendLine($"{pad});");
+                sb.AppendLine($"{pad}return true;");
+                if (conditional) sb.AppendLine($"{indent}}}");
             }
 
-            sb.AppendLine("                    );");
-            sb.AppendLine("                    return true;");
             sb.AppendLine();
         }
 

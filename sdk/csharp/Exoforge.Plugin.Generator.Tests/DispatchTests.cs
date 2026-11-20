@@ -73,6 +73,13 @@ public partial class DispatchSamplePlugin : IContractPing, ISharedContract
         return left + right;
     }
 
+    // Two revisions of one action: a caller with no game version gets the newest.
+    [ExoAction("revised")]
+    public string RevisedV1() => "v1";
+
+    [ExoAction("revised", FromVersion = "2.0.0")]
+    public string RevisedV2() => "v2";
+
     [ExoAction("echo")]
     public string Echo(string value)
     {
