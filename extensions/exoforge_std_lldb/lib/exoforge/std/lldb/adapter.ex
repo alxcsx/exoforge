@@ -40,6 +40,9 @@ defmodule Exoforge.Std.Lldb.Adapter do
   @callback apply_schema(plugin_id, resources :: list() | nil, migrations :: list() | nil, config) ::
               {:ok, map()} | {:error, term()}
 
+  @doc "Applies hand-written SQL migrations in version order, recording each in the namespace ledger."
+  @callback run_migrations(plugin_id, migrations :: list(), config) :: {:ok, map()} | {:error, term()}
+
   @doc "Drops a table of the namespace and its schema history."
   @callback reset_table(plugin_id, table_name, config) :: {:ok, map()} | {:error, term()}
 

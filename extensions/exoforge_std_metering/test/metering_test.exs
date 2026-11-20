@@ -58,6 +58,8 @@ defmodule Exoforge.Std.MeteringTest do
     defdelegate health_check(c), to: Postgres
     @impl true
     defdelegate reset(id, c), to: Postgres
+    @impl true
+    defdelegate run_migrations(id, migrations, config), to: Postgres
   end
 
   test "a flush batches the delta rows (M33 Fix 11)", %{plugin: id} do
@@ -83,8 +85,8 @@ defmodule Exoforge.Std.MeteringTest do
     for n <- 1..120, do: Exoforge.Metering.record_invocation(id, "action_#{n}", 1, :ok, 1, 1)
     Flusher.flush()
 
-    # 2 schema creates + 3 batched action statements + 1 plugin row: six statements, not 121 calls.
-    assert CountingPostgres.queries() == 6
+    # Migration 1 is already recorded; only three batched action statements and one plugin row remain.
+    assert CountingPostgres.queries() == 4
 
     DbManager.set_adapter(Exoforge.Std.Lldb.Adapters.Postgres)
   end

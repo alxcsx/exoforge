@@ -124,6 +124,11 @@ defmodule Exoforge.Std.Lldb do
   end
 
   @impl true
+  defaction run_migrations(payload) do
+    Manager.run_migrations(extract_namespace(payload), fetch_any(payload, [:migrations], []))
+  end
+
+  @impl true
   defaction reset_table(payload) do
     Manager.reset_table(extract_namespace(payload), fetch_any(payload, [:table, "table"], ""))
   end
