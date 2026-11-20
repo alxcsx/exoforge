@@ -1006,6 +1006,63 @@ defmodule Exoforge.DashboardLiveViewTest do
       assert html =~ "Extension Dependency Architecture"
     end
 
+    test "the extensions list marks a failed or blocked extension and says why" do
+      broken = %Exoforge.Domain.Manifest{
+        id: :broken_ext,
+        name: "Broken Ext",
+        version: "1.0.0",
+        type: :native,
+        entry_point: BrokenExt,
+        provides: [:broken_svc],
+        dependencies: []
+      }
+
+      waiting = %Exoforge.Domain.Manifest{
+        id: :waiting_ext,
+        name: "Waiting Ext",
+        version: "1.0.0",
+        type: :native,
+        entry_point: WaitingExt,
+        provides: [],
+        dependencies: [:broken_svc]
+      }
+
+      ExtensionRegistry.record_failure(broken, %{
+        kind: :boot_failed,
+        stage: :storage,
+        message: "unsafe schema change in items: items.price [Item.cs:12] (alter_type): text is not a widening of int32",
+        detail: nil,
+        at: 1_700_000_000
+      })
+
+      ExtensionRegistry.record_failure(waiting, %{
+        kind: :blocked,
+        stage: :dependencies,
+        message: "dependency broken_ext failed",
+        detail: nil,
+        at: 1_700_000_000
+      })
+
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{"admin_player_id" => "admin", "admin_scopes" => ["admin"]})
+
+      {:ok, view, _html} = live(conn, "/")
+      render_click(view, "pin_extension", %{"id" => "exoforge_std_extension_manager"})
+      html = render_click(view, "switch_tab", %{"tab" => "exoforge_std_extension_manager"})
+
+      assert has_element?(view, "#failure-broken_ext", "items.price [Item.cs:12]")
+      assert has_element?(view, "#failure-waiting_ext", "dependency broken_ext failed")
+      assert html =~ "Failed"
+      assert html =~ "Blocked"
+
+      # the inspector does not claim a failed extension is supervised
+      html = render_click(view, "open_focus", %{"kind" => "plugin", "id" => "broken_ext"})
+      assert html =~ "Failed to start"
+      refute html =~ "Active &amp; Supervised"
+      assert has_element?(view, "#inspector-failure", "boot_failed")
+    end
+
     test "direct URL navigation and deep-linking routes correctly" do
       conn =
         build_conn()

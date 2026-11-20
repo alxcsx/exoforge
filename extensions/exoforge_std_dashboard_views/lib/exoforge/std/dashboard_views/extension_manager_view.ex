@@ -561,8 +561,21 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
                         <div>
                           <div class="font-semibold text-gray-900 flex items-center gap-1.5">
                             <span><%= plugin["name"] %></span>
+                            <%= if plugin["status"] == "failed" do %>
+                              <span class="exo-badge bg-red-50 text-red-700">Failed</span>
+                            <% end %>
+                            <%= if plugin["status"] == "blocked" do %>
+                              <span class="exo-badge bg-amber-50 text-amber-700">Blocked</span>
+                            <% end %>
                           </div>
                           <span class="font-mono text-[11px] text-gray-400"><%= plugin["id"] %></span>
+                          <%= if plugin["failure"] do %>
+                            <p
+                              id={"failure-#{plugin["id"]}"}
+                              class={"mt-0.5 max-w-md truncate text-[11px] #{if plugin["status"] == "blocked", do: "text-amber-700", else: "text-red-700"}"}
+                              title={plugin["failure"]["message"]}
+                            ><%= plugin["failure"]["message"] %></p>
+                          <% end %>
                         </div>
                       </div>
                     </td>
@@ -662,11 +675,31 @@ defmodule Exoforge.Std.DashboardViews.ExtensionManagerView do
                       </div>
                       <div class="bg-gray-50 p-3.5 rounded-xl border border-gray-200">
                         <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block">Supervision Status</span>
-                        <span class="text-sm font-semibold text-emerald-600 mt-1 block flex items-center gap-1.5">
-                          <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Active &amp; Supervised
-                        </span>
+                        <%= case @selected_plugin["status"] do %>
+                          <% "failed" -> %>
+                            <span class="text-sm font-semibold text-red-700 mt-1 block flex items-center gap-1.5">
+                              <span class="w-2 h-2 rounded-full bg-red-500"></span> Failed to start
+                            </span>
+                          <% "blocked" -> %>
+                            <span class="text-sm font-semibold text-amber-700 mt-1 block flex items-center gap-1.5">
+                              <span class="w-2 h-2 rounded-full bg-amber-500"></span> Blocked by a dependency
+                            </span>
+                          <% _ -> %>
+                            <span class="text-sm font-semibold text-emerald-600 mt-1 block flex items-center gap-1.5">
+                              <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Active &amp; Supervised
+                            </span>
+                        <% end %>
                       </div>
                     </div>
+
+                    <%= if @selected_plugin["failure"] do %>
+                      <div id="inspector-failure" class={"p-3.5 rounded-xl border #{if @selected_plugin["status"] == "blocked", do: "bg-amber-50 border-amber-200", else: "bg-red-50 border-red-200"}"}>
+                        <span class="text-[10px] font-semibold uppercase tracking-wider block text-gray-600">
+                          <%= @selected_plugin["failure"]["kind"] %> · <%= @selected_plugin["failure"]["stage"] %>
+                        </span>
+                        <p class="text-xs mt-1 text-gray-900 break-words"><%= @selected_plugin["failure"]["message"] %></p>
+                      </div>
+                    <% end %>
 
                     <div>
                       <span class="text-xs font-semibold text-gray-700 uppercase tracking-wider block mb-1">Entry Point</span>
