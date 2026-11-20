@@ -235,7 +235,7 @@ defmodule Exoforge.ExtensionBootIsolationTest do
       assert [%Manifest{id: :healthy}] = ExtensionBootstrapper.run(Driver, [stores, healthy])
 
       assert %{kind: :boot_failed, stage: :storage, message: message} = ExtensionRegistry.get_failure(:stores)
-      assert message =~ "unsafe schema change in inventory"
+      assert message =~ "cannot bring inventory to its declared shape"
       assert message =~ "inventory.qty [Inventory.cs:14] (alter_type): text is not a widening of int32"
       assert message =~ "EXOFORGE_SCHEMA_CHANGE_MODE=reset"
       assert ExtensionRegistry.get_failure(:healthy) == nil

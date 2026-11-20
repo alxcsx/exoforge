@@ -73,8 +73,8 @@ defmodule Exoforge.Std.Lldb.Manager do
   end
 
   @doc "Applies the safe changes that bring an extension's tables in line with its declared resources."
-  def apply_schema(plugin_id, resources \\ nil) do
-    run(plugin_id, fn adapter, clean, config -> adapter.apply_schema(clean, resources, config) end)
+  def apply_schema(plugin_id, resources \\ nil, migrations \\ nil) do
+    run(plugin_id, fn adapter, clean, config -> adapter.apply_schema(clean, resources, migrations, config) end)
   end
 
   @doc "Drops one table of the plugin's namespace, and its schema history."

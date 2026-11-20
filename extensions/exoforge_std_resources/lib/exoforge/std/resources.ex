@@ -160,62 +160,107 @@ defmodule Exoforge.Std.Resources do
   end
 
   defp apply_typed_schema(pid, res) do
-    case lldb(:apply_schema, %{namespace: pid, resources: [res]}) do
+    case lldb(:apply_schema, %{namespace: pid, resources: [res], migrations: migrations_for(pid, res)}) do
       {:ok, _} ->
         :ok
 
       {:error, {:unsafe_schema_change, ops}} ->
-        unsafe_schema_change(pid, res, ops)
+        unsafe_schema_change(pid, res, {:unsafe, ops})
 
-      {:error, _} = error ->
+      {:error, {kind, %{} = detail}} when kind in [:migration_missing, :version_downgrade, :migration_incomplete] ->
+        unsafe_schema_change(pid, res, {kind, detail})
+
+      # Not a problem with the change: the table is busy. Rebuilding it would not help.
+      {:error, {:lock_timeout, detail}} ->
+        refuse(pid, res, [%{column: nil, change: :lock_timeout, reason: "the table is locked by another transaction (waited #{detail.timeout})"}],
+          "Retry the deploy when traffic is lower, or raise `config :exoforge_std_lldb, :schema_lock_timeout`.")
+
+      error ->
         error
     end
   end
 
-  # The deploy decides what an unsafe change means. `reset` is for development: the table is dropped and
-  # made again, so its rows are gone. `refuse` (the default) fails the extension and says where.
-  defp unsafe_schema_change(pid, res, ops) do
+  # The migrations an extension declared for one resource, from its manifest.
+  defp migrations_for(pid, res) do
+    name = to_string(Map.get(res, :name) || Map.get(res, "name"))
+
+    case ExtensionRegistry.fetch_manifest(pid) do
+      %{migrations: [_ | _] = all} -> Enum.filter(all, &(to_string(&1[:resource] || &1["resource"]) == name))
+      _ -> []
+    end
+  end
+
+  # The deploy decides what a change the table cannot take on its own means. `reset` is for development: the
+  # table is dropped and made again, so its rows are gone. `refuse` (the default) fails the extension and says
+  # what to write.
+  defp unsafe_schema_change(pid, res, problem) do
     case schema_change_mode() do
       :reset ->
-        ops
-        |> Enum.map(& &1.table)
-        |> Enum.uniq()
-        |> Enum.each(fn table ->
-          reasons = ops |> Enum.filter(&(&1.table == table)) |> Enum.map_join("; ", & &1.message)
+        table = table_for(res)
+        Logger.warning("[ResourceStore] EXOFORGE_SCHEMA_CHANGE_MODE=reset: dropping table #{table} of #{pid} (rows are lost): #{describe(problem)}")
+        lldb(:reset_table, %{namespace: pid, table: table})
 
-          Logger.warning(
-            "[ResourceStore] EXOFORGE_SCHEMA_CHANGE_MODE=reset: dropping table #{table} of #{pid} (rows are lost): #{reasons}"
-          )
-
-          lldb(:reset_table, %{namespace: pid, table: table})
-        end)
-
-        case lldb(:apply_schema, %{namespace: pid, resources: [res]}) do
+        case lldb(:apply_schema, %{namespace: pid, resources: [res], migrations: migrations_for(pid, res)}) do
           {:ok, _} -> :ok
           error -> error
         end
 
       :refuse ->
-        {:error,
-         {:unsafe_schema_change,
-          %{
-            extension: to_string(pid),
-            table: table_for(res),
-            changes:
-              Enum.map(ops, fn op ->
-                %{
-                  table: op.table,
-                  column: Map.get(op, :column),
-                  change: op.op,
-                  reason: op.reason,
-                  decl: declaration(res, Map.get(op, :column))
-                }
-              end),
-            hint:
-              "Add a migration for this change, or set EXOFORGE_SCHEMA_CHANGE_MODE=reset to rebuild the table (its rows are lost)."
-          }}}
+        {changes, hint} = changes_and_hint(res, problem)
+        refuse(pid, res, changes, hint)
     end
   end
+
+  defp refuse(pid, res, changes, hint) do
+    {:error,
+     {:unsafe_schema_change,
+      %{
+        extension: to_string(pid),
+        table: table_for(res),
+        changes: Enum.map(changes, &Map.put(&1, :decl, declaration(res, Map.get(&1, :column)))),
+        hint: hint
+      }}}
+  end
+
+  @reset_hint "or set EXOFORGE_SCHEMA_CHANGE_MODE=reset to rebuild the table (its rows are lost)."
+
+  defp changes_and_hint(res, {:unsafe, ops}) do
+    version = ops |> List.first() |> then(&(&1[:manifest_version] || 1))
+
+    {Enum.map(ops, &%{table: &1.table, column: Map.get(&1, :column), change: &1.op, reason: &1.reason}),
+     "This change cannot be applied on its own. Raise the resource's Version to #{version + 1} (it is #{version}) and add a migration " <>
+       "from #{version} to #{version + 1}: #{migration_how(res, version)}, #{@reset_hint}"}
+  end
+
+  defp changes_and_hint(res, {:migration_missing, %{from: from, to: to, changes: changes}}) do
+    {Enum.map(changes, &%{column: &1[:column], change: &1.change, reason: &1.reason}),
+     "No migration from version #{from} to #{to}. #{upcase_first(migration_how(res, from))}, #{@reset_hint}"}
+  end
+
+  defp changes_and_hint(_res, {:version_downgrade, %{live: live, manifest: manifest}}) do
+    {[%{column: nil, change: :version, reason: "the table is at version #{live} and this build declares version #{manifest}"}],
+     "An older build is running over a newer table. Deploy the build that declares version #{live} or later, or set EXOFORGE_SCHEMA_CHANGE_MODE=reset in development."}
+  end
+
+  defp changes_and_hint(_res, {:migration_incomplete, %{remaining: remaining}}) do
+    {Enum.map(remaining, &%{column: &1[:column], change: &1.change, reason: &1.reason}),
+     "The migration ran but the table would still differ from the declared shape, so it was rolled back. Add the operations that are missing."}
+  end
+
+  # What to write, naming the file and the attribute.
+  defp migration_how(res, from) do
+    name = to_string(Map.get(res, :name) || Map.get(res, "name"))
+
+    "add a class in its own file (for example Migrations/#{Macro.camelize(name)}/V#{from}To#{from + 1}.cs) marked " <>
+      "[ExoMigration(typeof(<your #{name} type>), From = #{from}, To = #{from + 1})] with the operations that make the change " <>
+      "([ExoRename], [ExoConvert], [ExoFill], [ExoDrop], [ExoSetNotNull])"
+  end
+
+  defp upcase_first(<<first::utf8, rest::binary>>), do: String.upcase(<<first::utf8>>) <> rest
+  defp upcase_first(other), do: other
+
+  defp describe({:unsafe, ops}), do: Enum.map_join(ops, "; ", & &1.message)
+  defp describe({kind, detail}), do: "#{kind}: #{inspect(detail)}"
 
   # Where the column is declared in the extension's source (`Item.cs:42`), when the manifest says.
   defp declaration(res, column) when is_binary(column) do

@@ -56,7 +56,7 @@ defmodule Exoforge.ExtensionBootstrapper do
           "#{change.table}#{column}#{decl} (#{change.change}): #{change.reason}"
         end)
 
-      "extension #{id} has an unsafe schema change in #{table}: #{where}. #{hint}"
+      "extension #{id} cannot bring #{table} to its declared shape: #{where}. #{hint}"
     end
 
     def message(%{id: id, reason: reason}), do: "extension #{id} could not provision its storage: #{inspect(reason)}"
