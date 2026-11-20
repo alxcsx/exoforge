@@ -6,6 +6,7 @@ defmodule Exoforge.Std.Docs.View do
   API catalog.
   """
   use Phoenix.Component
+  alias Phoenix.LiveView.JS
   import Exoforge.Std.Docs.Icons, only: [studio_icon: 1]
 
   alias Exoforge.Std.Docs.Markdown
@@ -100,7 +101,7 @@ defmodule Exoforge.Std.Docs.View do
       |> assign(:toc, if(page.kind == :chapter, do: Pages.toc(page.content), else: []))
 
     ~H"""
-    <div id="developer-guide-container" phx-hook="GuideNavigator" class="max-w-7xl mx-auto pb-16 print:p-0 print:max-w-none print:pb-0">
+    <div id="developer-guide-container" phx-hook="GuideNavigator" data-page={@page.id} class="max-w-screen-2xl mx-auto pb-16 print:p-0 print:max-w-none print:pb-0">
       <style>
         @media print {
           body { background: white !important; color: black !important; font-size: 11pt !important; }
@@ -120,6 +121,16 @@ defmodule Exoforge.Std.Docs.View do
           <span class="exo-page-subtitle">Build, version and run your game's extensions</span>
         </div>
         <div class="exo-page-actions">
+          <button
+            type="button"
+            phx-click={toggle_index()}
+            title="Show or hide the page index and the contents list, to give the page the full width"
+            class="exo-btn exo-btn-secondary exo-btn-sm"
+          >
+            <.studio_icon icon="book" class="w-3.5 h-3.5" />
+            <span id="guide-index-hide">Hide index</span>
+            <span id="guide-index-show" class="!hidden">Show index</span>
+          </button>
           <a
             href="/api/docs/manual.pdf"
             download="exoforge-developer-manual.pdf"
@@ -132,43 +143,28 @@ defmodule Exoforge.Std.Docs.View do
         </div>
       </div>
 
-      <div class="mt-6 grid gap-8 lg:grid-cols-[14rem_minmax(0,1fr)] xl:grid-cols-[14rem_minmax(0,1fr)_13rem]">
-        <nav aria-label="Developer Guide pages" class="print:hidden lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto space-y-5 pr-1">
-          <%= for {group, group_pages} <- @pages do %>
-            <div>
-              <p class="px-2 mb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400"><%= group %></p>
-              <ul class="space-y-0.5">
-                <%= for {p, index} <- Enum.with_index(group_pages) do %>
-                  <li :if={p[:extension_title] && (index == 0 || Enum.at(group_pages, index - 1)[:extension_title] != p[:extension_title])} class="pt-2 pb-0.5 px-2 text-[11px] font-semibold text-gray-500 truncate">
-                    <%= p.extension_title %>
-                  </li>
-                  <li>
-                    <button
-                      type="button"
-                      phx-click="set_guide_subpage"
-                      phx-target={@myself}
-                      phx-value-subpage={p.id}
-                      onclick="window.exoScrollTop && window.exoScrollTop()"
-                      aria-current={if p.id == @page.id, do: "page"}
-                      class={[
-                        "w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors",
-                        if(p.id == @page.id,
-                          do: "bg-primary-50 text-primary-700 font-semibold",
-                          else: "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                        )
-                      ]}
-                    >
-                      <.studio_icon icon={p.icon} class="w-3.5 h-3.5 shrink-0" />
-                      <span class="truncate"><%= p.nav %></span>
-                    </button>
-                  </li>
-                <% end %>
-              </ul>
-            </div>
-          <% end %>
-        </nav>
+      <%!-- The index and the contents list are hidden with the important utility so the responsive
+           `hidden xl:block` of the list cannot bring it back; the span makes sure that class exists. --%>
+      <span class="!hidden"></span>
+      <div class="mt-6 flex flex-col gap-8 lg:flex-row">
+        <div id="guide-index" class="print:hidden lg:w-56 lg:shrink-0">
+          <nav aria-label="Developer Guide pages" class="lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto space-y-5 pr-1">
+            <%= for {group, group_pages} <- @pages do %>
+              <%= if group == "Extensions" do %>
+                <.extension_group pages={group_pages} page={@page} myself={@myself} />
+              <% else %>
+                <div>
+                  <p class="px-2 mb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400"><%= group %></p>
+                  <ul class="space-y-0.5">
+                    <li :for={p <- group_pages}><.nav_link page={p} current={@page} myself={@myself} /></li>
+                  </ul>
+                </div>
+              <% end %>
+            <% end %>
+          </nav>
+        </div>
 
-        <main class="min-w-0">
+        <main class="min-w-0 flex-1">
           <%= case @page.kind do %>
             <% :architecture -> %>
               <.subpage_architecture />
@@ -210,7 +206,8 @@ defmodule Exoforge.Std.Docs.View do
           </nav>
         </main>
 
-        <aside :if={@toc != []} class="hidden xl:block print:hidden">
+        <div id="guide-toc" class="print:hidden xl:w-52 xl:shrink-0">
+        <aside :if={@toc != []} class="hidden xl:block">
           <div class="sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
             <p class="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">On this page</p>
             <ul class="space-y-1 border-l border-gray-200">
@@ -228,6 +225,7 @@ defmodule Exoforge.Std.Docs.View do
             </ul>
           </div>
         </aside>
+        </div>
       </div>
 
       <button
@@ -241,6 +239,109 @@ defmodule Exoforge.Std.Docs.View do
         </svg>
       </button>
     </div>
+    """
+  end
+
+  # ===========================================================================
+  # SIDEBAR PIECES
+  # ===========================================================================
+  defp toggle_index do
+    JS.toggle_class("!hidden", to: "#guide-index")
+    |> JS.toggle_class("!hidden", to: "#guide-toc")
+    |> JS.toggle_class("!hidden", to: "#guide-index-hide")
+    |> JS.toggle_class("!hidden", to: "#guide-index-show")
+  end
+
+  # Opens or closes a fold. The classes are toggled in the browser, so a patch (moving to another page)
+  # keeps what the reader opened; the server only decides the starting state.
+  defp toggle_fold(id) do
+    JS.toggle_class("hidden", to: "#" <> id) |> JS.toggle_class("rotate-90", to: "#" <> id <> "-chevron")
+  end
+
+  attr(:page, :map, required: true)
+  attr(:current, :map, required: true)
+  attr(:myself, :any, default: nil)
+
+  defp nav_link(assigns) do
+    ~H"""
+    <button
+      type="button"
+      phx-click="set_guide_subpage"
+      phx-target={@myself}
+      phx-value-subpage={@page.id}
+      onclick="window.exoScrollTop && window.exoScrollTop()"
+      aria-current={if @page.id == @current.id, do: "page"}
+      class={[
+        "w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors",
+        if(@page.id == @current.id,
+          do: "bg-primary-50 text-primary-700 font-semibold",
+          else: "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+        )
+      ]}
+    >
+      <.studio_icon icon={@page.icon} class="w-3.5 h-3.5 shrink-0" />
+      <span class="truncate"><%= @page.nav %></span>
+    </button>
+    """
+  end
+
+  attr(:id, :string, required: true)
+  attr(:label, :string, required: true)
+  attr(:count, :integer, default: nil)
+  attr(:open, :boolean, default: false)
+  attr(:class, :string, default: "")
+  slot(:inner_block, required: true)
+
+  defp fold(assigns) do
+    ~H"""
+    <div>
+      <button
+        type="button"
+        phx-click={toggle_fold(@id)}
+        aria-controls={@id}
+        class={["w-full flex items-center gap-1.5 rounded-lg px-2 py-1 text-left hover:bg-gray-100", @class]}
+      >
+        <svg id={@id <> "-chevron"} class={["w-3 h-3 shrink-0 text-gray-400 transition-transform", @open && "rotate-90"]} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+        <span class="flex-1 truncate"><%= @label %></span>
+        <span :if={@count} class="text-[10px] font-normal text-gray-400"><%= @count %></span>
+      </button>
+      <div id={@id} class={[!@open && "hidden"]}>
+        <%= render_slot(@inner_block) %>
+      </div>
+    </div>
+    """
+  end
+
+  attr(:pages, :list, required: true)
+  attr(:page, :map, required: true)
+  attr(:myself, :any, default: nil)
+
+  # The extensions' own pages. There is no limit to how many extensions a cluster runs, so the whole group is a
+  # fold, and inside it each extension is one too; both start open only around the page being read.
+  defp extension_group(assigns) do
+    assigns =
+      assigns
+      |> assign(:extensions, Enum.chunk_by(assigns.pages, & &1.extension))
+      |> assign(:reading_extension, assigns.page[:extension])
+
+    ~H"""
+    <.fold id="guide-ext-group" label="Extensions" count={length(@extensions)} open={@reading_extension != nil} class="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+      <div class="mt-0.5 space-y-0.5 pl-2">
+        <.fold
+          :for={[first | _] = group <- @extensions}
+          id={"guide-ext-" <> String.replace(first.extension, ~r/[^a-zA-Z0-9_-]/, "-")}
+          label={first.extension_title}
+          open={@reading_extension == first.extension}
+          class="text-xs font-semibold text-gray-600"
+        >
+          <ul class="space-y-0.5 pl-3">
+            <li :for={p <- group}><.nav_link page={p} current={@page} myself={@myself} /></li>
+          </ul>
+        </.fold>
+      </div>
+    </.fold>
     """
   end
 

@@ -204,6 +204,26 @@ defmodule Exoforge.Std.DocsTest do
       assert {:ok, %{chapter: %{title: "Wallet"}}} = Docs.get_chapter(%{id: "ext-wallet-ext-overview"})
     end
 
+    test "the extensions sit in a fold that is closed unless one of their pages is being read, and the index can be hidden", %{root: root} do
+      File.write!(Path.join(root, "docs/overview.md"), "# Wallet\n\nCoins.\n")
+      Exoforge.ExtensionCase.register_extension(Stub, id: :wallet_ext, title: "Wallet", physical_path: root)
+
+      elsewhere = render_guide("01_quickstart")
+      assert elsewhere =~ ~s(id="guide-ext-group")
+      assert elsewhere =~ ~r/<div id="guide-ext-group" class="hidden"/
+      assert elsewhere =~ ~s(data-page="01_quickstart")
+
+      reading = render_guide("ext-wallet-ext-overview")
+      refute reading =~ ~r/<div id="guide-ext-group" class="hidden"/
+      refute reading =~ ~r/<div id="guide-ext-wallet-ext" class="hidden"/
+      assert reading =~ ~s(data-page="ext-wallet-ext-overview")
+
+      # one button hides and shows the index and the contents list
+      assert reading =~ "Hide index"
+      assert reading =~ ~s(id="guide-index")
+      assert reading =~ ~s(id="guide-toc")
+    end
+
     test "an Elixir extension's priv/docs is the same folder, and an extension without docs adds nothing", %{root: root} do
       File.rm_rf!(Path.join(root, "docs"))
       File.write!(Path.join(root, "priv/docs/overview.md"), "# Elixir extension\n\nBody.\n")

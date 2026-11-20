@@ -745,6 +745,13 @@ defmodule Exoforge.Std.Dashboard.Layouts do
                     this.initNavigator();
                   },
                   initNavigator() {
+                    // A link inside a page patches to another page without a reload, so the browser keeps the
+                    // scroll position of the page it left: bring the reader to the top of the new one, or to
+                    // its heading when the link has an anchor.
+                    const page = this.el.dataset.page;
+                    const pageChanged = this._page !== undefined && this._page !== page;
+                    this._page = page;
+
                     const hash = window.location.hash;
                     if (hash && hash.length > 1) {
                       try {
@@ -753,8 +760,12 @@ defmodule Exoforge.Std.Dashboard.Layouts do
                           setTimeout(() => {
                             window.exoScrollIntoView(target, 'start');
                           }, 90);
+                        } else if (pageChanged && window.exoScrollTop) {
+                          window.exoScrollTop();
                         }
                       } catch(_) {}
+                    } else if (pageChanged && window.exoScrollTop) {
+                      window.exoScrollTop();
                     }
 
                     if (this._observer) {
