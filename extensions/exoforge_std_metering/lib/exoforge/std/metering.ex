@@ -38,29 +38,32 @@ defmodule Exoforge.Std.Metering do
   @doc "Creates the append-only usage tables in this plugin's isolated database."
   def init_schema do
     _ =
-      ActionDispatcher.dispatch_internal(:database, :execute, %{
-        plugin: :metering,
-        operation: """
-        CREATE TABLE IF NOT EXISTS usage_actions (
-          title_id text, studio_id text, plugin_id text, action text,
-          period_start integer, period_end integer,
-          invocations integer, errors integer, wall_us integer,
-          bytes_in integer, bytes_out integer
-        )
-        """
-      })
-
-    _ =
-      ActionDispatcher.dispatch_internal(:database, :execute, %{
-        plugin: :metering,
-        operation: """
-        CREATE TABLE IF NOT EXISTS usage_plugins (
-          title_id text, studio_id text, plugin_id text,
-          period_start integer, period_end integer,
-          events integer, host_calls integer, starts integer,
-          cpu_ms integer, peak_rss_kb integer, uptime_ms integer
-        )
-        """
+      ActionDispatcher.dispatch_internal(:lldb, :run_migrations, %{
+        namespace: :metering,
+        migrations: [
+          %{
+            version: 1,
+            name: "create usage tables",
+            sql: [
+              """
+              CREATE TABLE IF NOT EXISTS usage_actions (
+                title_id text, studio_id text, plugin_id text, action text,
+                period_start integer, period_end integer,
+                invocations integer, errors integer, wall_us integer,
+                bytes_in integer, bytes_out integer
+              )
+              """,
+              """
+              CREATE TABLE IF NOT EXISTS usage_plugins (
+                title_id text, studio_id text, plugin_id text,
+                period_start integer, period_end integer,
+                events integer, host_calls integer, starts integer,
+                cpu_ms integer, peak_rss_kb integer, uptime_ms integer
+              )
+              """
+            ]
+          }
+        ]
       })
 
     :ok

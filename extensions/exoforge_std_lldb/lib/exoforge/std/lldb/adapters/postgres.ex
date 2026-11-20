@@ -445,6 +445,20 @@ defmodule Exoforge.Std.Lldb.Adapters.Postgres do
   end
 
   @impl true
+  def run_migrations(plugin_id, migrations, config) do
+    clean_self = valid_plugin_id!(plugin_id)
+    schema_name = valid_ident!(schema_name(clean_self, config))
+
+    with {:ok, {mode, conn}} <- pooled_connection(clean_self, schema_name, config) do
+      try do
+        Exoforge.Std.Lldb.MigrationRunner.run(conn, schema_name, migrations)
+      after
+        if mode == :unmanaged, do: GenServer.stop(conn)
+      end
+    end
+  end
+
+  @impl true
   def reset_table(plugin_id, table, config) do
     clean_self = valid_plugin_id!(plugin_id)
     schema_name = valid_ident!(schema_name(clean_self, config))

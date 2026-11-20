@@ -108,6 +108,18 @@ defmodule Exoforge.Std.Services do
       returns(result: :term)
     end
 
+    @doc "Applies an extension's hand-written SQL migrations in version order."
+    action :run_migrations do
+      scope(:server)
+
+      params(
+        namespace: [type: :term, optional: true],
+        migrations: [type: :term, optional: true]
+      )
+
+      returns(result: :term)
+    end
+
     @doc "Drops a table of a namespace, and its schema history."
     action :reset_table do
       scope(:server)

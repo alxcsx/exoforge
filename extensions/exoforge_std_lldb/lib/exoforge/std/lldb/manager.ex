@@ -77,6 +77,11 @@ defmodule Exoforge.Std.Lldb.Manager do
     run(plugin_id, fn adapter, clean, config -> adapter.apply_schema(clean, resources, migrations, config) end)
   end
 
+  @doc "Applies an extension's hand-written SQL migrations in version order."
+  def run_migrations(plugin_id, migrations) do
+    run(plugin_id, fn adapter, clean, config -> adapter.run_migrations(clean, migrations, config) end)
+  end
+
   @doc "Drops one table of the plugin's namespace, and its schema history."
   def reset_table(plugin_id, table) do
     run(plugin_id, fn adapter, clean, config -> adapter.reset_table(clean, table, config) end)
