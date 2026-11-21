@@ -1034,25 +1034,40 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
     }
 
-    public void ShowStatus(string message, MessageType type = MessageType.Info)
+    public void ShowStatus(string message, MessageType type = MessageType.Info) =>
+        ShowStatus(message, ExoforgeExtensionOps.ClassifyStatus(message, type));
+
+    /// <summary>
+    /// Shows the message in the window (icon and colour from its severity) and logs it at the matching level.
+    /// A success clears itself after a few seconds; anything else stays until dismissed or replaced.
+    /// </summary>
+    public void ShowStatus(string message, StatusSeverity severity)
     {
-        switch (type)
+        string clean = ExoforgeExtensionOps.StripStatusIcon(message);
+        _statusMessage = clean;
+        _statusSeverity = severity;
+        _statusMessageType = ExoforgeExtensionOps.ToMessageType(severity);
+        int token = ++_statusToken;
+        ExoforgeExtensionOps.LogStatus(clean, severity);
+
+        if (severity == StatusSeverity.Success)
         {
-            case MessageType.Error:
-                UnityEngine.Debug.LogError($"[Exoforge] {message}");
-                _statusMessage = message;
-                _statusMessageType = type;
-                break;
-            case MessageType.Warning:
-                UnityEngine.Debug.LogWarning($"[Exoforge] {message}");
-                _statusMessage = message;
-                _statusMessageType = type;
-                break;
-            default:
-                UnityEngine.Debug.Log($"[Exoforge] {message}");
-                _statusMessage = "";
-                break;
+            EditorApplication.delayCall += () => ScheduleStatusClear(token);
         }
+
+        Repaint();
+    }
+
+    private void ScheduleStatusClear(int token)
+    {
+        if (this == null) return;
+        rootVisualElement.schedule.Execute(() =>
+        {
+            if (token != _statusToken) return;
+            _statusMessage = "";
+            if (_currentTab == Tab.Extensions) RefreshTabContent();
+            Repaint();
+        }).StartingIn((long)(ExoforgeExtensionOps.SuccessAutoClearSeconds * 1000));
     }
 }
 }

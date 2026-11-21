@@ -75,6 +75,9 @@ public static class Program
                 case "extension":
                     return await HandleExtensionAsync(cli).ConfigureAwait(false);
 
+                case "instance":
+                    return await HandleInstanceAsync(cli).ConfigureAwait(false);
+
                 case "unity":
                     return HandleUnity(cli, args);
 
@@ -129,6 +132,7 @@ public static class Program
           connect                    Verify connection to cluster or authenticate session
           env <subcommand>           Manage cluster environments in exoforge.json (list, add, use)
           extension <subcommand>     Create, build, deploy and inspect extensions
+          instance reset             Wipe the server's extensions (or everything with --everything)
           resource <subcommand>      Manage resource tables and entities (list, get, create, etc.)
           user <subcommand>          Manage user and service accounts (list, create, role, token, delete)
           contracts                  Inspect available service contracts, actions and schemas
@@ -159,6 +163,9 @@ public static class Program
           new <name>       Scaffold a C# extension project
           build <name>     Compile the extension (framework-dependent .NET)
           push <name>      Build, deploy, and verify the extension on the live cluster
+          push --all       Build and deploy every included extension, providers first
+          exclude <name>   Leave an extension out of --all (exoforge.json excluded_extensions)
+          include <name>   Put an excluded extension back
           dev <name>       Watch sources and re-deploy on every change
           reload <name>    Re-boot an installed extension without re-uploading it
           logs <name>      Show recent log lines the extension emitted
@@ -1722,6 +1729,12 @@ public static class Program
             case "list":
                 return await HandleExtensionListAsync(rest).ConfigureAwait(false);
 
+            case "exclude":
+                return HandleExtensionExclude(rest, exclude: true);
+
+            case "include":
+                return HandleExtensionExclude(rest, exclude: false);
+
             case "remove":
                 return await HandleExtensionRemoveAsync(rest).ConfigureAwait(false);
 
@@ -1783,9 +1796,23 @@ public static class Program
         {
             Console.WriteLine("""
             Usage: exo extension build <name> [--rid <rid>] [--dir <path>]
+                   exo extension build --all [--rid <rid>] [--dir <path>]
 
               --rid <rid>   Target runtime, e.g. linux-x64 (default: this machine)
+              --all         Build every extension except those in exoforge.json "excluded_extensions", providers first
             """);
+            return 0;
+        }
+
+        if (cli.Has("all"))
+        {
+            var allWs = ExoWorkspace.Load(cli.Value("dir") ?? Directory.GetCurrentDirectory());
+            var plan = PlanIncluded(allWs);
+            if (plan is null) return 1;
+            foreach (string name in plan.Order)
+            {
+                if (Build(allWs, name, cli.Value("rid")) != 0) return 1;
+            }
             return 0;
         }
 
@@ -1804,10 +1831,29 @@ public static class Program
         {
             Console.WriteLine("""
             Usage: exo extension push <name> [--rid <rid>] [--env <name>] [--dir <path>] [--no-verify]
+                   exo extension push --all [--rid <rid>] [--env <name>] [--dir <path>] [--no-verify]
+
+            --all builds and pushes every extension except those in exoforge.json "excluded_extensions",
+            providers first. It refuses when an included extension needs an excluded one.
 
             Builds, uploads, and then confirms the cluster is actually running the new build.
             --rid defaults to the connected cluster's runtime, not this machine's.
             """);
+            return 0;
+        }
+
+        if (cli.Has("all"))
+        {
+            var allWs = ExoWorkspace.Load(cli.Value("dir") ?? Directory.GetCurrentDirectory());
+            var plan = PlanIncluded(allWs);
+            if (plan is null) return 1;
+            var allDeployer = new ExoDeployer(allWs);
+            foreach (string step in plan.Order)
+            {
+                int code = await BuildThenPushAsync(allDeployer, allWs, step, cli.Value("rid"), cli.Value("env"), verify: !cli.Has("no-verify"))
+                    .ConfigureAwait(false);
+                if (code != 0) return code;
+            }
             return 0;
         }
 
@@ -2187,6 +2233,13 @@ public static class Program
 
         var result = await deployer.ListExtensionsAsync(cli.Value("env")).ConfigureAwait(false);
         Console.WriteLine(PrettyJson(result));
+
+        var excluded = ws.AllExtensions().Where(ws.IsExcluded).ToList();
+        if (excluded.Count > 0 && !cli.Json)
+        {
+            Console.WriteLine($"Excluded in exoforge.json (skipped by push --all): {string.Join(", ", excluded)}");
+        }
+
         return 0;
     }
 
@@ -2237,6 +2290,121 @@ public static class Program
             .ConfigureAwait(false);
 
         Success($"[Exoforge] Removed extension '{id}' from the server.");
+        return 0;
+    }
+
+    // ---- instance ----------------------------------------------------------------------
+
+    private static async Task<int> HandleInstanceAsync(CliArgs cli)
+    {
+        if (cli.Positional.Count == 0 || !string.Equals(cli.Positional[0], "reset", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.WriteLine("""
+            Usage: exo instance reset [--everything] [--yes] [--env <name>] [--dir <path>]
+
+              (default)      Remove every extension you deployed, with its tables, files and data
+              --everything   Also delete players, game versions, Studio-edited config and file buckets
+              --yes          Skip typing the project name (required when not interactive)
+
+            Standard extensions and the Studio admin account stay. This cannot be undone.
+            """);
+            return cli.WantsHelp ? 0 : 1;
+        }
+
+        var ws = ExoWorkspace.Load(cli.Value("dir") ?? Directory.GetCurrentDirectory());
+        bool everything = cli.Has("everything");
+
+        if (!cli.Has("yes"))
+        {
+            if (Console.IsInputRedirected)
+            {
+                Error("Refusing to reset the instance without confirmation. Pass --yes.");
+                return 1;
+            }
+
+            string project = ws.Config.ProjectName;
+            Console.Write($"[Exoforge] This {(everything ? "deletes everything" : "removes every deployed extension and its data")} on the server. Type the project name '{project}' to continue: ");
+            if (!string.Equals(Console.ReadLine()?.Trim(), project, StringComparison.Ordinal))
+            {
+                Console.WriteLine("Cancelled.");
+                return 0;
+            }
+        }
+
+        string result = await new ExoDeployer(ws).ResetInstanceAsync(everything, cli.Value("env")).ConfigureAwait(false);
+        Success($"[Exoforge] Instance reset ({(everything ? "everything" : "extensions")}).");
+        Console.WriteLine(result);
+        return 0;
+    }
+
+    /// <summary>The order for <c>--all</c>, or null (after saying why) when an included extension needs an excluded one or the order does not resolve.</summary>
+    private static DeployPlan? PlanIncluded(ExoWorkspace ws)
+    {
+        var included = ws.IncludedExtensions();
+        if (included.Count == 0)
+        {
+            Error($"[Exoforge] No extensions to build in {ws.ExtensionsPath} (after excluded_extensions).");
+            return null;
+        }
+
+        var problems = ws.ValidateIncluded();
+        if (problems.Count > 0)
+        {
+            foreach (string problem in problems) Error($"[Exoforge] {problem}. Include it again (exo extension include <name>) or exclude this one too.");
+            return null;
+        }
+
+        var nodes = ExoDeployOrder.ReadNodes(ws.ExtensionsPath, included)
+            .Select(n => new DeployNode(n.Name, n.Provides.Append(n.Name).ToList(), n.Dependencies));
+        var plan = ExoDeployOrder.Plan(nodes);
+        if (!plan.IsClean)
+        {
+            foreach (string problem in plan.Problems) Error($"[Exoforge] {problem}");
+            return null;
+        }
+
+        var skipped = ws.AllExtensions().Except(included).ToList();
+        Console.WriteLine($"[Exoforge] Extensions, providers first: {string.Join(", ", plan.Order)}");
+        if (skipped.Count > 0) Console.WriteLine($"[Exoforge] Excluded: {string.Join(", ", skipped)}");
+        return plan;
+    }
+
+    /// <summary><c>exo extension exclude|include &lt;name&gt;...</c>: edits exoforge.json, then says what the change breaks.</summary>
+    private static int HandleExtensionExclude(CliArgs cli, bool exclude)
+    {
+        string verb = exclude ? "exclude" : "include";
+        if (cli.WantsHelp)
+        {
+            Console.WriteLine($"Usage: exo extension {verb} <name>... [--dir <path>]");
+            Console.WriteLine(exclude
+                ? "Adds the extensions to exoforge.json excluded_extensions: push/build --all and the Unity window skip them."
+                : "Removes the extensions from exoforge.json excluded_extensions.");
+            return 0;
+        }
+
+        if (cli.Positional.Count == 0)
+        {
+            return Missing("extension name", $"exo extension {verb} <name>...");
+        }
+
+        var ws = ExoWorkspace.Load(cli.Value("dir") ?? Directory.GetCurrentDirectory());
+        var known = ws.AllExtensions();
+        var names = cli.Positional.Select(ExoScaffolder.NormalizeExtensionName).Distinct(StringComparer.Ordinal).ToList();
+        var unknown = names.Where(n => !known.Contains(n, StringComparer.Ordinal)).ToList();
+        if (unknown.Count > 0 && exclude)
+        {
+            Error($"[Exoforge] Not in {ws.ExtensionsPath}: {string.Join(", ", unknown)}");
+            return 1;
+        }
+
+        ws.SetExcluded(names, exclude);
+        Success($"[Exoforge] {(exclude ? "Excluded" : "Included")}: {string.Join(", ", names)}.");
+
+        foreach (string problem in ws.ValidateIncluded())
+        {
+            Console.Error.WriteLine($"[Exoforge] Warning: {problem}.");
+        }
+
         return 0;
     }
 

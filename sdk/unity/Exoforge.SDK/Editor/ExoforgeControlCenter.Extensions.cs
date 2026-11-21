@@ -31,6 +31,18 @@ public partial class ExoforgeControlCenter : EditorWindow
         container.style.flexDirection = FlexDirection.Column;
         container.style.flexGrow = 1;
 
+        // 0. The last status (this tab is UI Toolkit, so the IMGUI banner never reaches it).
+        if (!string.IsNullOrEmpty(_statusMessage))
+        {
+            var statusBanner = ExoforgeExtensionOps.BuildStatusBanner(_statusMessage, _statusSeverity, () =>
+            {
+                _statusMessage = "";
+                RefreshTabContent();
+            });
+            statusBanner.style.marginBottom = 10;
+            container.Add(statusBanner);
+        }
+
         // 1. BaaS Offline Warning Banner
         if (!CanReachCluster)
         {
@@ -151,6 +163,14 @@ public partial class ExoforgeControlCenter : EditorWindow
             container.Add(outOfSyncCard);
         }
 
+        // 1b. An included extension that needs an excluded one blocks deploys; say which, and offer to include it.
+        var exclusionBanner = ExoforgeExtensionOps.BuildExclusionBanner(Workspace, () =>
+        {
+            RefreshLocalPlugins();
+            RefreshTabContent();
+        });
+        if (exclusionBanner != null) container.Add(exclusionBanner);
+
         // 2. Action Strip (New Extension + Unity Client Sync)
         var actionStrip = new VisualElement();
         actionStrip.style.flexDirection = FlexDirection.Row;
@@ -211,7 +231,8 @@ public partial class ExoforgeControlCenter : EditorWindow
             await BuildAndDeployAllAsync();
             RefreshTabContent();
         }, height: 26);
-        buildAllBtn.SetEnabled(CanReachCluster && _localPlugins.Count > 0 && !_isBuilding);
+        buildAllBtn.SetEnabled(CanReachCluster && _localPlugins.Any(p => !ExoforgeExtensionOps.IsExcluded(Workspace, p.Name)) && !_isBuilding
+            && ExoforgeExtensionOps.ExclusionProblems(Workspace).Count == 0);
         buildAllBtn.style.marginRight = 6;
         rightActions.Add(buildAllBtn);
 
@@ -505,6 +526,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         bool failed = buildError.Length > 0;
         bool deployFailed = !failed && deployError != null;
         string? deployedVersion = RemotePluginVersion(plugin.Name);
+        bool excluded = ExoforgeExtensionOps.IsExcluded(Workspace, plugin.Name);
         bool notDeployed = _isConnected && plugin.IsBuilt && !plugin.Modified && deployedVersion != plugin.Version;
 
         var card = new VisualElement();
@@ -565,7 +587,12 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         // Status Pill on the right
         VisualElement statusPill;
-        if (failed)
+        if (excluded)
+        {
+            statusPill = ExoforgeUIStyle.CreatePill("Excluded", ExoforgeUIStyle.TextMuted, ExoforgeUIStyle.AccentGrayBg, 10);
+            statusPill.tooltip = "Left out of Build & Deploy All, stub generation and bulk actions (exoforge.json excluded_extensions).";
+        }
+        else if (failed)
         {
             statusPill = ExoforgeUIStyle.CreatePill("✗ Build Failed", Color.white, ExoforgeUIStyle.AccentRed, 10);
             statusPill.tooltip = buildError;
@@ -596,6 +623,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             statusPill = ExoforgeUIStyle.CreatePill("✓ Deployed", Color.white, ExoforgeUIStyle.AccentGreen, 10);
         }
         row1.Add(statusPill);
+        if (excluded) row1.style.opacity = 0.5f;
         card.Add(row1);
 
         // The reason, on the card: a tooltip on a pill is where an error goes to be missed.
@@ -679,11 +707,22 @@ public partial class ExoforgeControlCenter : EditorWindow
         folderBtn.style.marginRight = 6;
         leftButtons.Add(folderBtn);
 
+        if (excluded) leftButtons.SetEnabled(false);
         row2.Add(leftButtons);
 
         var rightButtons = new VisualElement();
         rightButtons.style.flexDirection = FlexDirection.Row;
         rightButtons.style.alignItems = Align.Center;
+
+        var includeToggle = new Toggle("Include") { value = !excluded };
+        includeToggle.tooltip = "Excluded extensions are skipped by Build & Deploy All, stub generation and bulk actions. Saved in exoforge.json.";
+        includeToggle.style.marginRight = 8;
+        includeToggle.RegisterValueChangedCallback(evt =>
+        {
+            ExoforgeExtensionOps.SetExcluded(Workspace, plugin.Name, excluded: !evt.newValue);
+            RefreshTabContent();
+        });
+        rightButtons.Add(includeToggle);
 
         var inspectBtn = ExoforgeUIStyle.CreateModernButton("Inspect ↗", () =>
         {
@@ -754,6 +793,7 @@ public partial class ExoforgeControlCenter : EditorWindow
     /// </summary>
     private List<LocalPluginInfo> InDeployOrder(List<LocalPluginInfo> plugins)
     {
+        plugins = plugins.Where(p => !ExoforgeExtensionOps.IsExcluded(Workspace, p.Name)).ToList();
         var plan = ExoDeployOrder.Plan(ExoDeployOrder.ReadNodes(Workspace.ExtensionsPath, plugins.Select(p => p.Name)));
         if (!plan.IsClean)
         {
@@ -761,6 +801,16 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
 
         return plan.Order.Select(name => plugins.First(p => p.Name == name)).ToList();
+    }
+
+    /// <summary>Deploys are blocked while an included extension needs an excluded one; says which and returns true.</summary>
+    private bool BlockedByExclusions()
+    {
+        var problems = ExoforgeExtensionOps.ExclusionProblems(Workspace);
+        if (problems.Count == 0) return false;
+
+        ShowStatus($"Cannot deploy: {string.Join("; ", problems.Select(p => p.Message))}. Include the missing extension or exclude this one too.", MessageType.Warning);
+        return true;
     }
 
     private async Task BuildAndDeployAllAsync()
@@ -771,6 +821,8 @@ public partial class ExoforgeControlCenter : EditorWindow
             ShowStatus("Cannot deploy: not connected to server.", MessageType.Warning);
             return;
         }
+
+        if (BlockedByExclusions()) return;
 
         var targets = InDeployOrder(_localPlugins.Where(p => p.CanBuild).ToList());
         if (targets.Count == 0)
@@ -796,6 +848,8 @@ public partial class ExoforgeControlCenter : EditorWindow
             ShowStatus("Cannot deploy: not connected to server.", MessageType.Warning);
             return;
         }
+
+        if (BlockedByExclusions()) return;
 
         var unbuilt = InDeployOrder(_localPlugins.Where(p => p.CanBuild && (!p.IsBuilt || p.Modified)).ToList());
         if (unbuilt.Count > 0)
@@ -897,7 +951,7 @@ public partial class ExoforgeControlCenter : EditorWindow
             ShowStatus($"✓ Built '{plugin.Name}' ({build.ExtensionType}).", MessageType.Info);
             RefreshLocalPlugins();
 
-            if (ExoforgeEditorConfig.AutoGenerateStubsOnBuild)
+            if (ExoforgeEditorConfig.AutoGenerateStubsOnBuild && !ExoforgeExtensionOps.IsExcluded(Workspace, plugin.Name))
             {
                 try
                 {
@@ -989,6 +1043,8 @@ public partial class ExoforgeControlCenter : EditorWindow
 
     private async Task DeployPluginAsync(LocalPluginInfo plugin)
     {
+        if (BlockedByExclusions()) return;
+
         if (!ExoforgeExtensionOps.ConfirmDeploy(ActiveEnvironment?.Name ?? "default", ActiveWsUrl, 1))
         {
             ShowStatus("Deploy cancelled.", MessageType.Info);

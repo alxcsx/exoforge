@@ -83,3 +83,76 @@ public class DeployOrderTests
         finally { System.IO.Directory.Delete(dir, true); }
     }
 }
+
+public class SampleExtensionsTests
+{
+    private static string Ext(string root, string name, string provides, params string[] deps)
+    {
+        string dir = System.IO.Path.Combine(root, name);
+        System.IO.Directory.CreateDirectory(dir);
+        System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "manifest.json"),
+            System.Text.Json.JsonSerializer.Serialize(new { provides = new[] { provides }, dependencies = deps }));
+        return dir;
+    }
+
+    [Fact]
+    public void Included_extensions_are_the_directory_minus_the_excluded_ones()
+    {
+        string root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "exo-incl-" + System.Guid.NewGuid().ToString("N"));
+        try
+        {
+            Ext(System.IO.Path.Combine(root, "extensions"), "wallet", "wallet");
+            Ext(System.IO.Path.Combine(root, "extensions"), "shop", "shop", "wallet");
+            var ws = new ExoWorkspace(root, new ExoProjectConfig { ExcludedExtensions = new() { "shop" } });
+
+            Assert.Equal(new[] { "wallet" }, ws.IncludedExtensions());
+            Assert.True(ws.SetExcluded(new[] { "shop" }, false));
+            Assert.Equal(new[] { "shop", "wallet" }, ws.IncludedExtensions());
+            Assert.Null(ws.Config.ExcludedExtensions);
+            Assert.DoesNotContain("excluded_extensions", System.IO.File.ReadAllText(ws.ConfigPath));
+        }
+        finally { System.IO.Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public void Validation_reports_an_included_extension_that_needs_an_excluded_provider()
+    {
+        string root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "exo-sample-" + System.Guid.NewGuid().ToString("N"));
+        try
+        {
+            Ext(root, "wallet", "wallet", "database");
+            Ext(root, "daily_rewards", "daily_rewards", "wallet", "auth");
+            Ext(root, "unrelated", "unrelated");
+            var all = new[] { "wallet", "daily_rewards", "unrelated" };
+
+            var problems = ExoDeployOrder.ValidateIncluded(root, all, new[] { "wallet" });
+            Assert.Equal(new[] { "daily_rewards needs wallet, which is excluded" }, problems);
+
+            Assert.Empty(ExoDeployOrder.ValidateIncluded(root, all, new[] { "wallet", "daily_rewards" }));
+            Assert.Empty(ExoDeployOrder.ValidateIncluded(root, all, System.Array.Empty<string>()));
+        }
+        finally { System.IO.Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public void Validation_falls_back_to_the_name_for_an_extension_not_built_yet()
+    {
+        string root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "exo-sample-" + System.Guid.NewGuid().ToString("N"));
+        try
+        {
+            System.IO.Directory.CreateDirectory(System.IO.Path.Combine(root, "wallet"));
+            Ext(root, "shop", "shop", "wallet");
+
+            Assert.Single(ExoDeployOrder.ValidateIncluded(root, new[] { "wallet", "shop" }, new[] { "wallet" }));
+        }
+        finally { System.IO.Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public void Config_round_trips_the_excluded_list_and_omits_it_when_empty()
+    {
+        var config = System.Text.Json.JsonSerializer.Deserialize<ExoProjectConfig>("{\"excluded_extensions\":[\"a\",\"b\"]}")!;
+        Assert.Equal(new[] { "a", "b" }, config.ExcludedExtensions);
+        Assert.DoesNotContain("excluded_extensions", System.Text.Json.JsonSerializer.Serialize(new ExoProjectConfig()));
+    }
+}

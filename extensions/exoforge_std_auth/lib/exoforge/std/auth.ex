@@ -1143,6 +1143,45 @@ defmodule Exoforge.Std.Auth do
       else: do_register_player(payload)
   end
 
+  @doc """
+  Instance reset: deletes every account and player that is not the administrator or another
+  admin/studio account, and every service token and token of a deleted account. Returns
+  `%{removed: n, kept: [player_id]}`.
+  """
+  def wipe_accounts do
+    init_schema()
+    keep_scopes = [to_string(Roles.admin()), to_string(Roles.studio())]
+
+    keep_sql =
+      Enum.map_join(keep_scopes, " OR ", fn s -> "scopes LIKE '%#{String.replace(s, "'", "")}%'" end)
+
+    kept =
+      case execute("SELECT player_id FROM #{@accounts_table} WHERE player_id = $1 OR #{keep_sql}", [@admin_id]) do
+        {:ok, %{rows: rows}} -> rows |> Enum.map(&(&1["player_id"])) |> Enum.reject(&is_nil/1) |> Enum.uniq()
+        _ -> []
+      end
+
+    kept = Enum.uniq([@admin_id | kept])
+
+    all_ids =
+      case execute("SELECT player_id FROM #{@players_table} UNION SELECT player_id FROM #{@accounts_table}") do
+        {:ok, %{rows: rows}} -> rows |> Enum.map(&(&1["player_id"])) |> Enum.reject(&is_nil/1)
+        _ -> []
+      end
+
+    doomed = all_ids -- kept
+
+    Enum.each(doomed, fn id ->
+      _ = execute("DELETE FROM #{@players_table} WHERE player_id = $1", [id])
+      _ = execute("DELETE FROM #{@accounts_table} WHERE player_id = $1", [id])
+      _ = execute("DELETE FROM #{@tokens_table} WHERE user_id = $1", [id])
+    end)
+
+    _ = execute("DELETE FROM #{@tokens_table} WHERE kind = 'svc'")
+    _ = Exoforge.Std.Auth.Cache.flush()
+    %{removed: length(doomed), kept: kept}
+  end
+
   @doc "True when the account has a password, so `anonymous` may not reissue its token."
   def password_protected?(player_id) do
     case ActionDispatcher.dispatch_internal(:database, :execute, %{

@@ -1143,6 +1143,13 @@ defmodule Exoforge.Std.Resources do
     end
   end
 
+  @doc "Forgets which tables of an extension were migrated, after its namespace was dropped, so a redeploy creates them again."
+  def forget_migrated(plugin) do
+    ensure_cache()
+    for p <- Enum.uniq([plugin, to_string(plugin)]), do: :ets.match_delete(@cache, {{p, :_}, :_})
+    :ok
+  end
+
   defp ensure_cache do
     if :ets.whereis(@cache) == :undefined do
       :ets.new(@cache, [:set, :public, :named_table, read_concurrency: true])

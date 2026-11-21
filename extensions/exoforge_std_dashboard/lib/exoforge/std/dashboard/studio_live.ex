@@ -726,6 +726,33 @@ defmodule Exoforge.Std.Dashboard.StudioLive do
      |> show_toast(:info, "Added #{slot_title(slot_id)} to overview grid.")}
   end
 
+  def handle_event("reset_instance", %{"mode" => mode, "confirm" => typed}, socket) when mode in ["extensions", "everything"] do
+    if String.trim(typed) != to_string(socket.assigns.project_name) do
+      {:noreply, show_toast(socket, :error, "Type the project name exactly to confirm. Nothing was removed.")}
+    else
+      case ActionDispatcher.dispatch(:extension_manager, :reset_instance, %{mode: mode},
+             caller_scopes: socket.assigns.current_scopes
+           ) do
+        {:ok, r} ->
+          n = length(r[:extensions_removed] || [])
+
+          msg =
+            if mode == "everything",
+              do: "Everything deleted: #{n} extensions, #{r[:accounts_removed]} accounts, #{r[:game_versions_removed]} game versions, #{(r[:files_removed] || 0) + (r[:bucket_files_removed] || 0)} files.",
+              else: "Extensions reset: #{n} removed, #{r[:files_removed] || 0} files deleted."
+
+          {:noreply, show_toast(socket, :info, msg)}
+
+        {:error, reason} ->
+          {:noreply, show_toast(socket, :error, "Reset failed: #{inspect(reason)}")}
+      end
+    end
+  end
+
+  def handle_event("reset_instance", _params, socket) do
+    {:noreply, show_toast(socket, :error, "Type the project name to confirm. Nothing was removed.")}
+  end
+
   def handle_event("close_settings", _params, socket) do
     {:noreply,
      socket

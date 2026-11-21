@@ -47,8 +47,8 @@ public partial class ExoforgeControlCenter : EditorWindow
             bool ok = await Task.Run(() => ExoforgeDotnetValidator.PrewarmRuntimePacks(rids, dotnet, msg => UnityEngine.Debug.Log($"[Exoforge] {msg}")));
             ShowStatus(
                 ok
-                    ? "✓ Runtime packs (linux-musl-x64, linux-x64 & host) successfully restored and cached."
-                    : "⚠️ Some runtime packs could not be restored; check internet connection to nuget.org.",
+                    ? "Runtime packs (linux-musl-x64, linux-x64 & host) successfully restored and cached."
+                    : "Some runtime packs could not be restored; check internet connection to nuget.org.",
                 ok ? MessageType.Info : MessageType.Warning);
         }
         finally
@@ -227,8 +227,8 @@ public partial class ExoforgeControlCenter : EditorWindow
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             EditorGUILayout.HelpBox(
                 !dotnetRes.IsInstalled
-                    ? $"⚠️ .NET SDK not detected at '{dotnetRes.ResolvedPath}'. Native C# extension builds and deployments will fail without the .NET SDK (v9.0+)."
-                    : $"⚠️ Detected .NET SDK v{dotnetRes.Version}, but Exoforge requires .NET 9.0 or newer.",
+                    ? $".NET SDK not detected at '{dotnetRes.ResolvedPath}'. Native C# extension builds and deployments will fail without the .NET SDK (v9.0+)."
+                    : $"Detected .NET SDK v{dotnetRes.Version}, but Exoforge requires .NET 9.0 or newer.",
                 MessageType.Warning);
 
             EditorGUILayout.BeginHorizontal();

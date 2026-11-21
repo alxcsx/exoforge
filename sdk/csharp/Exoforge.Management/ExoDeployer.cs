@@ -441,6 +441,32 @@ public class ExoDeployer
         }
     }
 
+    /// <summary>Wipes the instance: mode "extensions" removes user-deployed extensions, "everything" also players, versions and config.</summary>
+    public async Task<string> ResetInstanceAsync(
+        bool everything,
+        string? environmentName = null,
+        ExoClient? existingClient = null,
+        CancellationToken cancellationToken = default)
+    {
+        var client = existingClient ?? await CreateConnectedClientAsync(environmentName, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var result = await client.SendActionAsync<JsonElement>(
+                "extension_manager",
+                "reset_instance",
+                new { mode = everything ? "everything" : "extensions" },
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+            return result.ToString();
+        }
+        finally
+        {
+            if (existingClient == null)
+            {
+                client.Dispose();
+            }
+        }
+    }
+
     /// <summary>Fetches the raw contract export (what <c>extension_manager.export_extension_info</c> returns).</summary>
     public async Task<string> GetContractsExportJsonAsync(
         string? environmentName = null,

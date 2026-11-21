@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -47,6 +48,14 @@ public class ExoProjectConfig
 
     [JsonPropertyName("extensions_dir")]
     public string ExtensionsDir { get; set; } = "extensions";
+
+    /// <summary>
+    /// Extensions in <see cref="ExtensionsDir"/> this project leaves out (an arcade sample that does not need them).
+    /// Everything else in the directory is included. Omitted from the file when empty.
+    /// </summary>
+    [JsonPropertyName("excluded_extensions")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? ExcludedExtensions { get; set; }
 }
 
 public class ExoEnvironmentConfig
@@ -240,6 +249,45 @@ public class ExoWorkspace
 
         return ws;
     }
+
+    public bool IsExcluded(string name) =>
+        Config.ExcludedExtensions is { Count: > 0 } excluded &&
+        excluded.Contains(ExoScaffolder.NormalizeExtensionName(name), StringComparer.Ordinal);
+
+    /// <summary>Every extension folder in the extensions directory, included or not, in name order.</summary>
+    public List<string> AllExtensions() =>
+        Directory.Exists(ExtensionsPath)
+            ? Directory.GetDirectories(ExtensionsPath).Select(Path.GetFileName).Where(n => !string.IsNullOrEmpty(n) && !n!.StartsWith('.') && !n.Contains('.')).Select(n => n!).OrderBy(n => n, StringComparer.Ordinal).ToList()
+            : new List<string>();
+
+    /// <summary>The extensions to build and deploy: the extensions directory minus <c>excluded_extensions</c>.</summary>
+    public List<string> IncludedExtensions() => AllExtensions().Where(n => !IsExcluded(n)).ToList();
+
+    /// <summary>Marks extensions excluded or included again (names are normalized) and saves exoforge.json. Returns whether anything changed.</summary>
+    public bool SetExcluded(IEnumerable<string> names, bool excluded)
+    {
+        var list = (Config.ExcludedExtensions ?? new List<string>()).ToList();
+        bool changed = false;
+        foreach (string raw in names)
+        {
+            string name = ExoScaffolder.NormalizeExtensionName(raw);
+            if (excluded && !list.Contains(name, StringComparer.Ordinal)) { list.Add(name); changed = true; }
+            else if (!excluded && list.RemoveAll(n => string.Equals(n, name, StringComparison.Ordinal)) > 0) changed = true;
+        }
+
+        if (!changed) return false;
+        list.Sort(StringComparer.Ordinal);
+        Config.ExcludedExtensions = list.Count == 0 ? null : list;
+        Save();
+        return true;
+    }
+
+    /// <summary>The problems with the included set: an included extension that needs a provider that is excluded.</summary>
+    public IReadOnlyList<string> ValidateIncluded() =>
+        ExoDeployOrder.ValidateIncluded(ExtensionsPath, AllExtensions(), Config.ExcludedExtensions ?? new List<string>());
+
+    public IReadOnlyList<ExclusionProblem> FindExclusionProblems() =>
+        ExoDeployOrder.FindExclusionProblems(ExtensionsPath, AllExtensions(), Config.ExcludedExtensions ?? new List<string>());
 
     public void Save()
     {

@@ -117,6 +117,13 @@ defmodule Exoforge.ExtensionRegistry do
     :ok
   end
 
+  @doc "Forgets the failure recorded for an extension (it was removed)."
+  def clear_failure(manifest_id) do
+    safe(:delete, [:exo_extension_failures_mem, to_string(manifest_id)])
+    clear_crash_status(manifest_id)
+    :ok
+  end
+
   @doc "The failure recorded for an extension, or nil."
   def get_failure(manifest_id) do
     case safe(:lookup, [:exo_extension_failures_mem, to_string(manifest_id)]) do

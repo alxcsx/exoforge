@@ -40,6 +40,24 @@ public sealed class DeployPlan
     public bool IsClean => Problems.Count == 0;
 }
 
+/// <summary>An included extension (<see cref="Extension"/>) that needs an excluded one (<see cref="Needs"/>).</summary>
+public sealed class ExclusionProblem : IEquatable<ExclusionProblem>
+{
+    public ExclusionProblem(string extension, string needs)
+    {
+        Extension = extension;
+        Needs = needs;
+    }
+
+    public string Extension { get; }
+    public string Needs { get; }
+    public string Message => $"{Extension} needs {Needs}, which is excluded";
+
+    public bool Equals(ExclusionProblem? other) => other != null && Extension == other.Extension && Needs == other.Needs;
+    public override bool Equals(object? obj) => Equals(obj as ExclusionProblem);
+    public override int GetHashCode() => (Extension, Needs).GetHashCode();
+}
+
 public static class ExoDeployOrder
 {
     /// <param name="serverServices">The services the server already runs; null when unknown (nothing is reported missing).</param>
@@ -141,6 +159,40 @@ public static class ExoDeployOrder
         }
 
         return nodes;
+    }
+
+    /// <summary>
+    /// The problems with leaving <paramref name="excluded"/> out of <paramref name="all"/>: an included extension that
+    /// calls a service only an excluded extension provides ("daily_rewards needs wallet, which is excluded"). A service
+    /// nobody here provides is the server's own and is not an error. Providers are found as in <see cref="Plan"/>:
+    /// the manifest's <c>provides</c>, and the extension's own name when it has not been built yet.
+    /// </summary>
+    public static IReadOnlyList<string> ValidateIncluded(string extensionsPath, IEnumerable<string> all, IEnumerable<string> excluded) =>
+        FindExclusionProblems(extensionsPath, all, excluded).Select(p => p.Message).ToList();
+
+    /// <summary>The same check as <see cref="ValidateIncluded"/>, with the two extension names kept apart (for a button that includes the missing one).</summary>
+    public static IReadOnlyList<ExclusionProblem> FindExclusionProblems(string extensionsPath, IEnumerable<string> all, IEnumerable<string> excluded)
+    {
+        var skip = new HashSet<string>(excluded, StringComparer.Ordinal);
+        var nodes = ReadNodes(extensionsPath, all)
+            .Select(n => new DeployNode(n.Name, n.Provides.Append(n.Name).ToList(), n.Dependencies))
+            .ToList();
+
+        var problems = new List<ExclusionProblem>();
+        foreach (var node in nodes.Where(n => !skip.Contains(n.Name)))
+        {
+            foreach (string dependency in node.Dependencies.Distinct(StringComparer.Ordinal))
+            {
+                if (nodes.Any(n => !skip.Contains(n.Name) && n.Provides.Contains(dependency))) continue;
+                var excludedProvider = nodes.FirstOrDefault(n => skip.Contains(n.Name) && n.Provides.Contains(dependency));
+                if (excludedProvider != null)
+                {
+                    problems.Add(new ExclusionProblem(node.Name, excludedProvider.Name));
+                }
+            }
+        }
+
+        return problems.Distinct().ToList();
     }
 
     private static IEnumerable<string> Strings(JsonNode? node) =>

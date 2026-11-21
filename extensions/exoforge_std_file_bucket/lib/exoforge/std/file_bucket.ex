@@ -369,6 +369,41 @@ defmodule Exoforge.Std.FileBucket do
     end
   end
 
+  @doc """
+  Deletes stored files: `:all` clears every bucket except the SDK packages and resets bucket
+  visibility; `:files` does the same without touching visibility; a list of bucket names clears just those. Returns the number of files removed.
+  """
+  def wipe(scope) do
+    ensure_meta_table()
+
+    files =
+      Enum.filter(list_all_files(), fn f ->
+        f["bucket"] != "sdk" and (scope in [:all, :files] or f["bucket"] in scope)
+      end)
+
+    Enum.each(files, fn f ->
+      disk_path = f["disk_path"] || f[:disk_path]
+
+      if is_binary(disk_path) do
+        _ = File.rm(disk_path)
+        _ = File.rm(disk_path <> ".meta.json")
+      end
+
+      delete_meta(f["bucket"], f["id"])
+    end)
+
+    base = storage_base_dir()
+
+    for bucket <- files |> Enum.map(& &1["bucket"]) |> Enum.uniq(), do: File.rmdir(Path.join(base, to_string(bucket)))
+
+    if scope == :all do
+      _ = database_execute("DELETE FROM #{@visibility_table}")
+      seed_bucket_visibility()
+    end
+
+    length(files)
+  end
+
   # ---- SIGNED DOWNLOADS ----
 
   defp valid_signature?(bucket, id, exp, sig) when is_binary(bucket) and is_binary(id) and is_binary(sig) do

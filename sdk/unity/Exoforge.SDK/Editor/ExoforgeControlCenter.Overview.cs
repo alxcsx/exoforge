@@ -178,11 +178,11 @@ public partial class ExoforgeControlCenter : EditorWindow
             switch (SdkStatus)
             {
                 case SdkCompatibilityStatus.UpToDate:
-                    EditorGUILayout.HelpBox($"✓ Unity SDK is up to date and matches the connected server.", MessageType.Info);
+                    ExoforgeExtensionOps.DrawStatusBox("Unity SDK is up to date and matches the connected server.", StatusSeverity.Success);
                     break;
 
                 case SdkCompatibilityStatus.UpdateAvailable:
-                    EditorGUILayout.HelpBox($"⚠️ An SDK update is available on the server (Server: v{RemoteSdkVersion ?? RemoteVersion}, Installed: v{ExoforgePackageVersion.SdkVersion}).", MessageType.Warning);
+                    EditorGUILayout.HelpBox($"An SDK update is available on the server (Server: v{RemoteSdkVersion ?? RemoteVersion}, Installed: v{ExoforgePackageVersion.SdkVersion}).", MessageType.Warning);
                     if (GUILayout.Button("⬇️ Download / Update SDK from Server", GUILayout.Height(24)))
                     {
                         _ = DownloadOrUpdateSdkAsync();
@@ -190,7 +190,7 @@ public partial class ExoforgeControlCenter : EditorWindow
                     break;
 
                 case SdkCompatibilityStatus.Ahead:
-                    EditorGUILayout.HelpBox($"ℹ️ Installed SDK (v{ExoforgePackageVersion.SdkVersion}) is newer than the connected server (v{RemoteVersion}).", MessageType.Info);
+                    EditorGUILayout.HelpBox($"Installed SDK (v{ExoforgePackageVersion.SdkVersion}) is newer than the connected server (v{RemoteVersion}).", MessageType.Info);
                     break;
 
                 default:

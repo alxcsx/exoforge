@@ -258,4 +258,4 @@ public record StorefrontConfig(string Id, string Secret);
 - The [attribute reference](guide:03_csharp_attributes) lists every property used above.
 - [Versions & Migrations](guide:04_versions_and_migrations) explains what happens when the data these extensions store has to change shape while players are online.
 - The [standard extensions](guide:05_standard_extensions) list what ships with the server.
-- Run the arcade yourself: clone the repository, build the extensions with `exo extension build`, push them with `exo extension push`, and open a project in Unity.
+- Run the arcade yourself: clone the repository, build the extensions with `exo extension build`, push them with `exo extension push` (or `exo extension push --all` for everything in `extensions/` except what the sample's `exoforge.json` lists under `excluded_extensions`), and open a project in Unity. To try another sample, wipe the server first with `exo instance reset` (add `--everything` to also delete players and game versions); it asks you to type the project name.

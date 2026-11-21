@@ -209,6 +209,16 @@ defmodule Exoforge.Std.ExtensionManager do
     Serializer.run(fn -> remove_extension_internal(payload) end)
   end
 
+  @doc """
+  Wipes the instance. `mode` is "extensions" (remove every non-standard extension with its tables,
+  data and file buckets; accounts, tokens and Studio settings stay) or "everything" (also players,
+  accounts except admin/studio ones, service tokens, game versions, Studio preferences, file buckets).
+  """
+  @impl true
+  defaction reset_instance(payload), scope: Exoforge.Auth.Roles.admin() do
+    Serializer.run(fn -> reset_instance_internal(payload) end)
+  end
+
   @impl true
   defaction restart_system, scope: Exoforge.Auth.Roles.admin() do
     ExtensionBootstrapper.reload_all()
@@ -339,6 +349,76 @@ defmodule Exoforge.Std.ExtensionManager do
   defp has_elixir_code?(elixir_code, files_map) do
     (is_binary(elixir_code) and String.trim(elixir_code) != "") or
       (is_map(files_map) and map_size(files_map) > 0)
+  end
+
+  defp reset_instance_internal(payload) do
+    mode = to_string(Map.get(payload, :mode) || Map.get(payload, "mode") || "")
+
+    if mode in ["extensions", "everything"] do
+      failed = Enum.map(ExtensionRegistry.failed_extensions(), fn {manifest, _} -> manifest end)
+
+      user_manifests =
+        (ExtensionRegistry.all_manifests() ++ failed)
+        |> Enum.filter(&user_deployed?/1)
+        |> Enum.uniq_by(&to_string(&1.id))
+
+      ids = Enum.map(user_manifests, &to_string(&1.id))
+      removed = Enum.filter(ids, &match?({:ok, _}, remove_extension_internal(%{"id" => &1, "delete_files" => true})))
+
+      Enum.each(ids, fn id ->
+        ExtensionRegistry.clear_failure(id)
+        optional(Exoforge.Std.Database, :reset!, [Exoforge.Atoms.existing(id, id)])
+        optional(Exoforge.Std.Database, :reset!, [id])
+        optional(Exoforge.Std.Resources, :forget_migrated, [Exoforge.Atoms.existing(id, id)])
+      end)
+
+      # Extension files live in buckets the extension names itself (level_share: "doodle_levels"), so a
+      # reset empties every bucket except the SDK package bucket.
+      files = optional(Exoforge.Std.FileBucket, :wipe, [:files]) || 0
+
+      summary = %{mode: mode, extensions_removed: removed, extensions_skipped: ids -- removed, files_removed: files}
+      {:ok, if(mode == "everything", do: Map.merge(summary, reset_everything_else()), else: summary)}
+    else
+      {:error, :invalid_mode}
+    end
+  end
+
+  # An extension the user deployed: a native (C#) one, or any extension that sits in the uploads folder.
+  # Standard extensions are Elixir and live under builtin_extensions/ (or extensions/ in a checkout).
+  defp user_deployed?(%{type: :native}), do: true
+
+  defp user_deployed?(%{physical_path: path}) when is_binary(path) do
+    norm = Path.expand(path)
+    uploads = [Path.expand(upload_base_dir()), Path.expand(Path.join(System.tmp_dir!(), "exoforge_uploaded_extensions"))]
+    not String.starts_with?(norm, Path.expand("builtin_extensions")) and Enum.any?(uploads, &String.starts_with?(norm, &1))
+  end
+
+  defp user_deployed?(_), do: false
+
+  # The wipe helpers live in other standard extensions, which a stripped-down server may not have.
+  defp optional(module, fun, args) do
+    if Code.ensure_loaded?(module) and function_exported?(module, fun, length(args)), do: apply(module, fun, args)
+  end
+
+  defp reset_everything_else do
+    %{removed: accounts_removed, kept: kept} = optional(Exoforge.Std.Auth, :wipe_accounts, []) || %{removed: 0, kept: []}
+
+    kept = Enum.uniq(["admin" | kept])
+    placeholders = kept |> Enum.with_index(1) |> Enum.map_join(", ", fn {_, i} -> "$#{i}" end)
+
+    for table <- ["players", "player_kv"] do
+      Exoforge.ActionDispatcher.dispatch_internal(:database, :execute, %{
+        plugin: :player_data,
+        operation: "DELETE FROM #{table} WHERE player_id NOT IN (#{placeholders})",
+        arguments: kept
+      })
+    end
+
+    versions = optional(Exoforge.Std.Versioning, :wipe, []) || 0
+    all_files = optional(Exoforge.Std.FileBucket, :wipe, [:all]) || 0
+    optional(Exoforge.Std.Dashboard.ProjectMetadata, :reset, [])
+
+    %{accounts_removed: accounts_removed, accounts_kept: kept, game_versions_removed: versions, bucket_files_removed: all_files, studio_config: "reset"}
   end
 
   defp remove_extension_internal(payload) do

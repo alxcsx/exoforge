@@ -42,6 +42,14 @@ defmodule Exoforge.Std.Versioning do
     :ok
   end
 
+  @doc "Deletes every registered game version (instance reset). Returns how many there were."
+  def wipe do
+    init_schema()
+    count = length(rows())
+    _ = execute("DELETE FROM game_versions")
+    count
+  end
+
   @doc "Creates the game-version table in this extension's isolated database."
   def init_schema do
     _ =

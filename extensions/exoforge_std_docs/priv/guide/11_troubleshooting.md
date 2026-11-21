@@ -52,6 +52,17 @@ The Unity window tells a refused session apart from a server that is down:
 
 When one extension calls a service another one provides, deploy the provider first. **Build & Deploy All** in the Unity window does this for you: it reads each extension's `manifest.json`, puts providers before the extensions that call them, and shows a warning if two extensions depend on each other in a circle. A service that nothing in your project provides is expected to be one of the server's own.
 
+A project can leave extensions out with `"excluded_extensions": ["name", ...]` in `exoforge.json` (`exo extension exclude <name>` and `include <name>` edit it, and the Unity window has an Include toggle per extension). `exo extension push --all` and Build & Deploy All skip them, and refuse to run, naming the pair, when an included extension needs an excluded one (for example `daily_rewards needs wallet, which is excluded`).
+
+## Starting over: Danger zone
+
+Studio ▸ Settings ▸ **Danger zone** wipes the server so you can try a different sample. Each button asks you to type the project name first, and both need an admin account. A message at the bottom says what was removed. There is no undo.
+
+- **Reset extensions** removes every extension you deployed, with its tables, stored data and files. The standard extensions, players, accounts, service tokens and game versions stay.
+- **Delete everything** does that and also removes players, accounts (the admin and Studio accounts stay), service tokens, game versions, file buckets and Studio settings. Game servers that use a service token must be given a new one afterwards.
+
+After a reset, deploy the extensions of the sample you want to try.
+
 ## Where to look
 
 1. **The request id.** Every failure carries it (`ExoActionException.RequestId`, the `x-exoforge-rid` header). Paste it into the Studio's timeline to see the calls, events, queries and logs of that one request.

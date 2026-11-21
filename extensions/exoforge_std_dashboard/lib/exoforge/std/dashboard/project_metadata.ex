@@ -75,6 +75,14 @@ defmodule Exoforge.Std.Dashboard.ProjectMetadata do
 
   def put(_), do: {:error, :invalid_attributes}
 
+  @doc "Instance reset: drops every stored Studio preference, project metadata included, and returns to the defaults."
+  def reset do
+    _ = ActionDispatcher.dispatch_internal(:resource_store, :clear, %{resource: @resource})
+    metadata = get()
+    EventDispatcher.broadcast(:"project.metadata_updated", %{metadata: metadata}, topic: "system")
+    :ok
+  end
+
   # --- Helpers ---
 
   defp default_metadata do

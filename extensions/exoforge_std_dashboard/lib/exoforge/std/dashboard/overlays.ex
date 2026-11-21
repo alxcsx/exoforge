@@ -615,6 +615,15 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   <.icon name="monitor" class="w-3.5 h-3.5" />
                   <span>Live Console</span>
                 </button>
+                <button
+                  type="button"
+                  phx-click="set_settings_tab"
+                  phx-value-tab="danger"
+                  class={"w-full text-left px-2.5 py-2 rounded-xl font-semibold flex items-center gap-2 transition-colors #{if @settings_tab == "danger", do: "bg-red-600 text-white shadow-sm border border-red-600", else: "text-red-600 hover:text-red-700 hover:bg-red-50"}"}
+                >
+                  <span>⚠</span>
+                  <span>Danger zone</span>
+                </button>
               </div>
             </div>
 
@@ -971,6 +980,35 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   </div>
                 </div>
               </div>
+            </div>
+          <% end %>
+
+          <%= if @settings_tab == "danger" do %>
+            <div class="space-y-4">
+              <div>
+                <h4 class="text-sm font-semibold text-red-700">Danger zone</h4>
+                <p class="text-xs text-gray-500 mt-0.5">These cannot be undone. Type the project name (<span class="font-mono font-semibold text-gray-700"><%= @project_name %></span>) to run one.</p>
+              </div>
+              <%= for {mode, title, text, button} <- [
+                    {"extensions", "Reset extensions", "Removes every extension you deployed, with its tables, data and files. Built-in extensions, players, accounts and game versions stay.", "Reset extensions"},
+                    {"everything", "Delete everything", "Removes your extensions and also players, accounts (the admin and Studio accounts stay), service tokens, game versions, file buckets and Studio settings.", "Delete everything"}
+                  ] do %>
+                <form id={"reset_instance_#{mode}"} phx-submit="reset_instance" class="exo-callout-danger p-4 rounded-xl space-y-2">
+                  <input type="hidden" name="mode" value={mode} />
+                  <div class="font-semibold text-gray-900"><%= title %></div>
+                  <p class="text-xs text-gray-600"><%= text %></p>
+                  <div class="flex items-center gap-2">
+                    <input
+                      type="text"
+                      name="confirm"
+                      autocomplete="off"
+                      placeholder={@project_name}
+                      class="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-semibold"
+                    />
+                    <button type="submit" class="exo-btn exo-btn-danger-solid"><%= button %></button>
+                  </div>
+                </form>
+              <% end %>
             </div>
           <% end %>
 

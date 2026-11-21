@@ -39,6 +39,8 @@ namespace Exoforge.Unity.Editor
         private string? _pluginLogsFor;
         private bool _showPluginLogs;
         private string _statusMessage = "";
+        private StatusSeverity _statusSeverity = StatusSeverity.Info;
+        private int _statusToken;
         private bool _lastConnected;
 
         // Data Models
@@ -92,6 +94,8 @@ namespace Exoforge.Unity.Editor
             public bool IsBuilt { get; set; }
             public bool Modified { get; set; }
             public bool HasBuildError { get; set; }
+            /// <summary>Listed in exoforge.json excluded_extensions: skipped by Build & Deploy All, stubs and bulk actions.</summary>
+            public bool IsExcluded { get; set; }
             public string? DeployError { get; set; }
             public string LocalDirectory { get; set; } = "";
             public long BinarySizeBytes { get; set; }
@@ -224,32 +228,16 @@ namespace Exoforge.Unity.Editor
             // 2. Status Banner (if any)
             if (!string.IsNullOrEmpty(_statusMessage))
             {
-                var banner = new VisualElement();
-                banner.style.backgroundColor = ExoforgeUIStyle.AccentBlueBg;
-                banner.style.paddingLeft = 12;
-                banner.style.paddingRight = 12;
-                banner.style.paddingTop = 6;
-                banner.style.paddingBottom = 6;
-                banner.style.flexDirection = FlexDirection.Row;
-                banner.style.alignItems = Align.Center;
-
-                var bannerText = new Label(_statusMessage);
-                bannerText.style.color = ExoforgeUIStyle.TextPrimary;
-                bannerText.style.fontSize = 11;
-                bannerText.style.flexGrow = 1;
-                banner.Add(bannerText);
-
-                var dismissBtn = new Button(() => { _statusMessage = ""; RebuildUI(); }) { text = "✕" };
-                dismissBtn.style.borderTopWidth = 0;
-                dismissBtn.style.borderBottomWidth = 0;
-                dismissBtn.style.borderLeftWidth = 0;
-                dismissBtn.style.borderRightWidth = 0;
-                dismissBtn.style.backgroundColor = Color.clear;
-                dismissBtn.style.color = ExoforgeUIStyle.TextSecondary;
-                banner.Add(dismissBtn);
+                var banner = ExoforgeExtensionOps.BuildStatusBanner(_statusMessage, _statusSeverity, () => { _statusMessage = ""; RebuildUI(); });
 
                 _root.Add(banner);
             }
+
+            // 2b. An included extension that needs an excluded one blocks deploys.
+            var exclusionBanner = ExoforgeExtensionOps.BuildExclusionBanner(
+                ExoWorkspace.Load(ExoforgeEditorConfig.GetAbsoluteWorkspacePath()),
+                () => { _ = RefreshPluginsDataAsync(); });
+            if (exclusionBanner != null) _root.Add(exclusionBanner);
 
             // 3. Two-Pane Split Layout (Left: Catalog, Right: Detail & Management)
             var split = new TwoPaneSplitView(0, 280, TwoPaneSplitViewOrientation.Horizontal);
@@ -944,6 +932,11 @@ namespace Exoforge.Unity.Editor
                 if (p.IsLocal)
                 {
                     bottomRow.Add(ExoforgeUIStyle.CreatePill("Workspace", ExoforgeUIStyle.AccentBlue, ExoforgeUIStyle.AccentBlueBg, 9));
+                    if (p.IsExcluded)
+                    {
+                        bottomRow.Add(ExoforgeUIStyle.CreatePill("Excluded", ExoforgeUIStyle.TextMuted, ExoforgeUIStyle.AccentGrayBg, 9));
+                        card.style.opacity = 0.55f;
+                    }
                 }
                 else
                 {
@@ -1265,6 +1258,7 @@ namespace Exoforge.Unity.Editor
                     await GenerateStubsAsync(plugin);
                 }, height: 22);
                 stubsBtn.tooltip = "Generate typed C# stubs and client capabilities for this extension";
+                stubsBtn.SetEnabled(!plugin.IsExcluded);
                 stubsBtn.style.marginRight = 6;
                 toolbar.Add(stubsBtn);
 
@@ -1282,6 +1276,16 @@ namespace Exoforge.Unity.Editor
                 }, height: 22);
                 folderBtn.style.marginRight = 6;
                 toolbar.Add(folderBtn);
+
+                var includeToggle = new Toggle("Include") { value = !plugin.IsExcluded };
+                includeToggle.tooltip = "Excluded extensions are skipped by Build & Deploy All, stub generation and bulk actions. Saved in exoforge.json.";
+                includeToggle.style.marginRight = 6;
+                includeToggle.RegisterValueChangedCallback(evt =>
+                {
+                    ExoforgeExtensionOps.SetExcluded(ExoWorkspace.Load(ExoforgeEditorConfig.GetAbsoluteWorkspacePath()), plugin.Name, excluded: !evt.newValue);
+                    _ = RefreshPluginsDataAsync();
+                });
+                toolbar.Add(includeToggle);
             }
 
             if (IsConnected)
@@ -2558,18 +2562,31 @@ namespace Exoforge.Unity.Editor
         private static bool IsConnected => ExoforgeControlCenter.IsClusterConnected;
         private static string GetHttpUrl() => ExoforgeControlCenter.ActiveHttpEndpoint;
 
-        private void ShowStatus(string msg, bool isWarningOrError = false)
+        private void ShowStatus(string msg, bool isWarningOrError = false) =>
+            ShowStatus(msg, ExoforgeExtensionOps.ClassifyStatus(msg, isWarningOrError ? MessageType.Warning : MessageType.Info));
+
+        /// <summary>
+        /// Shows the message in the banner (icon and colour from its severity) and logs it at the matching level.
+        /// A success clears itself after a few seconds; anything else stays until dismissed or replaced.
+        /// </summary>
+        private void ShowStatus(string msg, StatusSeverity severity)
         {
-            if (isWarningOrError)
+            string clean = ExoforgeExtensionOps.StripStatusIcon(msg);
+            _statusMessage = clean;
+            _statusSeverity = severity;
+            int token = ++_statusToken;
+            ExoforgeExtensionOps.LogStatus(clean, severity);
+
+            if (severity == StatusSeverity.Success && rootVisualElement != null)
             {
-                _statusMessage = msg;
-                UnityEngine.Debug.LogWarning($"[Exoforge] {msg}");
+                rootVisualElement.schedule.Execute(() =>
+                {
+                    if (token != _statusToken) return;
+                    _statusMessage = "";
+                    RebuildUI();
+                }).StartingIn((long)(ExoforgeExtensionOps.SuccessAutoClearSeconds * 1000));
             }
-            else
-            {
-                _statusMessage = "";
-                UnityEngine.Debug.Log($"[Exoforge] {msg}");
-            }
+
             RebuildUI();
         }
 
@@ -2656,6 +2673,7 @@ namespace Exoforge.Unity.Editor
                         IsBuilt = isBuilt,
                         Modified = modified,
                         HasBuildError = hasBuildError,
+                        IsExcluded = ws.IsExcluded(name),
                         DeployError = deployFailure,
                         LocalDirectory = dir
                     });
@@ -3040,7 +3058,7 @@ namespace Exoforge.Unity.Editor
                 ExoforgeExtensionOps.ClearBuildFailure(targetName);
                 ShowStatus($"✓ Successfully built '{targetName}'.");
 
-                if (ExoforgeEditorConfig.AutoGenerateStubsOnBuild)
+                if (ExoforgeEditorConfig.AutoGenerateStubsOnBuild && !plugin.IsExcluded)
                 {
                     try
                     {
@@ -3080,7 +3098,14 @@ namespace Exoforge.Unity.Editor
                 return;
             }
 
-            var wsPlugins = _plugins.Where(p => p.IsLocal && p.Type == "native").ToList();
+            var exclusionProblems = ExoforgeExtensionOps.ExclusionProblems(ExoWorkspace.Load(ExoforgeEditorConfig.GetAbsoluteWorkspacePath()));
+            if (exclusionProblems.Count > 0)
+            {
+                ShowStatus($"Cannot deploy: {string.Join("; ", exclusionProblems.Select(x => x.Message))}. Include the missing extension or exclude this one too.");
+                return;
+            }
+
+            var wsPlugins = _plugins.Where(p => p.IsLocal && p.Type == "native" && !p.IsExcluded).ToList();
             if (wsPlugins.Count == 0)
             {
                 ShowStatus("No buildable workspace extensions found.");
@@ -3141,6 +3166,13 @@ namespace Exoforge.Unity.Editor
             if (!IsConnected)
             {
                 ShowStatus("Cannot deploy: not connected to server.");
+                return;
+            }
+
+            var blockers = ExoforgeExtensionOps.ExclusionProblems(ExoWorkspace.Load(ExoforgeEditorConfig.GetAbsoluteWorkspacePath()));
+            if (blockers.Count > 0)
+            {
+                ShowStatus($"Cannot deploy: {string.Join("; ", blockers.Select(x => x.Message))}. Include the missing extension or exclude this one too.");
                 return;
             }
 

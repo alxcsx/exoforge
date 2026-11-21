@@ -807,6 +807,26 @@ defmodule Exoforge.Std.Services do
       errors([:not_found])
     end
 
+    @doc "Wipes the instance: mode `extensions` removes every non-standard extension with its data and files; mode `everything` also removes players, accounts (not admin/studio), service tokens, game versions, Studio settings and file buckets."
+    action :reset_instance do
+      scope("admin")
+      params(mode: :string)
+
+      returns(
+        mode: :string,
+        extensions_removed: [:string],
+        extensions_skipped: [:string],
+        files_removed: :integer,
+        accounts_removed: [type: :integer, optional: true],
+        accounts_kept: [type: [:string], optional: true],
+        game_versions_removed: [type: :integer, optional: true],
+        bucket_files_removed: [type: :integer, optional: true],
+        studio_config: [type: :string, optional: true]
+      )
+
+      errors([:invalid_mode])
+    end
+
     @doc "Triggers a system re-index and reload of all extensions."
     action :restart_system do
       scope("admin")

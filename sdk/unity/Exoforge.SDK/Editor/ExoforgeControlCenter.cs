@@ -227,6 +227,8 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
     // Status Banner
     private string _statusMessage = "";
     private MessageType _statusMessageType = MessageType.Info;
+    private StatusSeverity _statusSeverity = StatusSeverity.Info;
+    private int _statusToken;
 
     // Cluster Telemetry
     private string _nodeName = "—";
@@ -1261,7 +1263,7 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
 
             if (_isConnected && SdkStatus == SdkCompatibilityStatus.UpdateAvailable)
             {
-                _connectionText.text = $"Online • ⚠️ Out of Sync (Server v{RemoteSdkVersion ?? RemoteVersion})";
+                _connectionText.text = $"Online • Out of Sync (Server v{RemoteSdkVersion ?? RemoteVersion})";
                 _connectionText.style.color = ExoforgeUIStyle.AccentOrange;
             }
             else
@@ -1420,8 +1422,16 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
 
     private void DrawStatusBanner()
     {
+        var previous = GUI.backgroundColor;
+        GUI.backgroundColor = ExoforgeExtensionOps.StatusColor(_statusSeverity);
         EditorGUILayout.BeginHorizontal(EditorStyles.helpBox);
-        EditorGUILayout.HelpBox(_statusMessage, _statusMessageType);
+        GUI.backgroundColor = previous;
+
+        var iconStyle = new GUIStyle(EditorStyles.boldLabel) { fontSize = 14, alignment = TextAnchor.UpperCenter };
+        iconStyle.normal.textColor = ExoforgeExtensionOps.StatusColor(_statusSeverity);
+        GUILayout.Label(ExoforgeExtensionOps.StatusIcon(_statusSeverity), iconStyle, GUILayout.Width(20));
+        GUILayout.Label(_statusMessage, EditorStyles.wordWrappedLabel);
+
         if (GUILayout.Button("✕", EditorStyles.miniButton, GUILayout.Width(22), GUILayout.Height(22)))
         {
             _statusMessage = "";
