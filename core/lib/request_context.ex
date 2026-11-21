@@ -33,6 +33,9 @@ defmodule Exoforge.RequestContext do
   def capture, do: with(%{capture: capture} <- current(), do: capture)
   def capturing?, do: capture() not in [nil, :off]
 
+  @doc "The scopes of the request that started the chain (`:internal` for server-started work), or nil outside a dispatch."
+  def scopes, do: with(%{scopes: scopes} <- current(), do: scopes)
+
   @doc """
   Enters a context for the current process and returns the previous one; `restore/1` pops it.
   """

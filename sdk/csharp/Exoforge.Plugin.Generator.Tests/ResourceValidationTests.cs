@@ -414,4 +414,47 @@ public class ResourceValidationTests
         Assert.Contains("OrdinaryClass", error.GetMessage());
         Assert.Contains("RefProp", error.GetMessage());
     }
+
+    [Fact]
+    public void ExplicitNavigation_IsNotAColumn_AndRequiresDeclaredForeignKey()
+    {
+        const string valid = """
+            using Exoforge.Plugin.SDK;
+            namespace TestPlugin;
+            [ExoService("test_svc", Resources = new[] { typeof(Order) })] public partial class TestPlugin { }
+            [ExoResource("items")] public class Item { public string Id { get; set; } = ""; }
+            [ExoResource("orders")] public class Order
+            {
+                public string Id { get; set; } = "";
+                [ExoColumn(ForeignKey = true, References = "items.id", ReferencesType = typeof(Item))] public string ItemId { get; set; } = "";
+                [ExoNavigation(nameof(ItemId))] public virtual Item? Item { get; set; }
+            }
+            """;
+        var path = Path.Combine(Path.GetTempPath(), $"exoforge_navigation_{Guid.NewGuid():N}.json");
+        try
+        {
+            var (_, diagnostics) = RunGenerator(valid, path);
+            Assert.DoesNotContain(diagnostics, d => d.Id == "EXO005");
+            var columns = JsonNode.Parse(File.ReadAllText(path))!["services"]!.AsArray()[0]!["resources"]!.AsArray()[0]!["columns"]!.AsArray();
+            Assert.DoesNotContain(columns, c => c!["name"]!.GetValue<string>() == "item");
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
+
+        const string invalid = """
+            using Exoforge.Plugin.SDK;
+            namespace TestPlugin;
+            [ExoService("test_svc", Resources = new[] { typeof(Order) })] public partial class TestPlugin { }
+            [ExoResource("items")] public class Item { public string Id { get; set; } = ""; }
+            [ExoResource("orders")] public class Order
+            {
+                public string Id { get; set; } = "";
+                public string ItemId { get; set; } = "";
+                [ExoNavigation(nameof(ItemId))] public virtual Item? Item { get; set; }
+            }
+            """;
+        var (_, invalidDiagnostics) = RunGenerator(invalid);
+        var error = Assert.Single(invalidDiagnostics, d => d.Id == "EXO005");
+        Assert.Contains("ItemId", error.GetMessage());
+        Assert.Contains("navigation", error.GetMessage());
+    }
 }

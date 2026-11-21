@@ -837,6 +837,14 @@ public partial class ExoforgeControlCenter : EditorWindow
             await BuildPluginAsync(plugin, thenDeploy: false);
         }
 
+        // A failed build already said why in the banner; deploying the rest would bury it and ship an older binary.
+        var failedBuilds = targets.Where(p => SessionState.GetString(BuildFailureKey(p.Name), "").Length > 0).Select(p => p.Name).ToList();
+        if (failedBuilds.Count > 0)
+        {
+            ShowStatus($"Not deploying: the build failed for {string.Join(", ", failedBuilds)}. See the extension cards or the Build Log.", MessageType.Error);
+            return;
+        }
+
         await DeployAllAsync();
     }
 
@@ -951,18 +959,6 @@ public partial class ExoforgeControlCenter : EditorWindow
             ShowStatus($"✓ Built '{plugin.Name}' ({build.ExtensionType}).", MessageType.Info);
             RefreshLocalPlugins();
 
-            if (ExoforgeEditorConfig.AutoGenerateStubsOnBuild && !ExoforgeExtensionOps.IsExcluded(Workspace, plugin.Name))
-            {
-                try
-                {
-                    await GenerateStubsAsync(plugin);
-                }
-                catch (Exception ex)
-                {
-                    UnityEngine.Debug.LogWarning($"[Exoforge] Auto-generation of stubs for '{plugin.Name}' skipped: {ex.Message}");
-                }
-            }
-
             if (thenDeploy)
             {
                 await DeployPluginAsync(plugin);
@@ -976,7 +972,11 @@ public partial class ExoforgeControlCenter : EditorWindow
             ExoforgeExtensionOps.RecordBuildFailure(plugin.Name, errorDetails);
 
             UnityEngine.Debug.LogError($"[Exoforge] Build failed for extension '{plugin.Name}':\n{errorDetails}");
-            ShowStatus($"Build failed for '{plugin.Name}' — see Unity Console or Build Log.", MessageType.Error);
+            // The stub pass is the start of the build; its reason is short and says what to do, so the banner carries it.
+            ShowStatus(ex is ExoStubPassException
+                    ? $"Cannot build '{plugin.Name}': {ex.Message}"
+                    : $"Build failed for '{plugin.Name}' — see Unity Console or Build Log.",
+                MessageType.Error);
             RefreshLocalPlugins();
         }
         finally
@@ -1025,13 +1025,20 @@ public partial class ExoforgeControlCenter : EditorWindow
         return null;
     }
 
+    /// <summary>The stub button: the same pass every build starts with. Only a click runs it.</summary>
     private async Task GenerateStubsAsync(LocalPluginInfo plugin)
     {
         try
         {
             var deployer = new ExoDeployer(Workspace);
-            string output = await deployer.GenerateExtensionStubsAsync(plugin.Name, existingClient: _isConnected ? _editorClient : null);
-            ShowStatus($"✓ Generated typed service stubs for '{plugin.Name}' → {output}", MessageType.Info);
+            var result = await deployer.GenerateStubsAsync(new[] { plugin.Name }, existingClient: _isConnected ? _editorClient : null);
+            var item = result.Items[0];
+            ShowStatus(item.Outcome switch
+            {
+                StubOutcome.Generated => $"✓ Generated typed service stubs for '{plugin.Name}' → {item.Output}",
+                StubOutcome.Failed => $"Stubs for '{plugin.Name}' could not be made: {item.Detail}",
+                _ => item.Detail,
+            }, item.Outcome == StubOutcome.Failed ? MessageType.Error : MessageType.Info);
         }
         catch (Exception ex)
         {

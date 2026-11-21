@@ -416,7 +416,7 @@ When architecting backend extensions for Exoforge, keep these five principles in
    Never waste time building custom internal admin tools. Decorate your records with `[ExoColumn]` roles (`ExoRole.PlayerId`, `ExoRole.Currency`, `Badge = true`, `InputType = ExoInput.Range`), and Producer Studio will automatically generate searchable tables, filter bars, editing drawers, and foreign-key links.
 
 3. **Decouple Extensions via `[ExoDependency]` & Events**  
-   Separate complex domains into independent extensions (e.g., `inventory`, `matchmaker`, `billing`). Call other extensions using generated typed stubs (open the extension in Studio and click **Stubs**), and broadcast major lifecycle events (`player.registered`, `item.crafted`, `match.ended`) so other services can react asynchronously.
+   Separate complex domains into independent extensions (e.g., `inventory`, `matchmaker`, `billing`). Call other extensions using generated typed stubs (`exo extension stubs <name>`, or **Stubs** on the extension card; builds run it first), and broadcast major lifecycle events (`player.registered`, `item.crafted`, `match.ended`) so other services can react asynchronously.
 
 4. **Never Poll from Unity**  
    If a client action requires waiting (e.g. matchmaking, asynchronous crafting, trade acceptance, webhook confirmation), return an immediate response from `[ExoAction]` and push the completion payload using `Exo.Events.EmitAsync`. In Unity, subscribe with the generated service client: `await ExoServices.<Service>.SubscribeAsync("topic")`, then handle its `On<Event>` event.

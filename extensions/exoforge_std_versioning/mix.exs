@@ -4,7 +4,7 @@ defmodule Exoforge.Std.Versioning.MixProject do
   def project do
     [
       app: :exoforge_std_versioning,
-      version: "0.1.0",
+      version: "0.1.1",
       elixir: "~> 1.20",
       deps: deps(),
       compilers: Mix.compilers() ++ [:exoforge_manifest]

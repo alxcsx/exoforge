@@ -621,7 +621,7 @@ defmodule Exoforge.Std.Dashboard.Overlays do
                   phx-value-tab="danger"
                   class={"w-full text-left px-2.5 py-2 rounded-xl font-semibold flex items-center gap-2 transition-colors #{if @settings_tab == "danger", do: "bg-red-600 text-white shadow-sm border border-red-600", else: "text-red-600 hover:text-red-700 hover:bg-red-50"}"}
                 >
-                  <span>⚠</span>
+                  <.icon name="alert" class="w-3.5 h-3.5" />
                   <span>Danger zone</span>
                 </button>
               </div>

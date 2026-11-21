@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
+using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
 
@@ -44,6 +46,40 @@ public interface IDatabaseTable<T>
 
     /// <summary>Runs a query and maps the first row to <typeparamref name="T"/>.</summary>
     T? QuerySingle(string sql, params object?[] args);
+
+    /// <summary>Starts a parameterized query filtered by <paramref name="predicate"/>.</summary>
+    IDatabaseQuery<T> Where(Expression<Func<T, bool>> predicate);
+    IDatabaseQuery<T> Include<TReference>(Expression<Func<T, TReference?>> navigation);
+
+    /// <summary>Starts a query ordered by <paramref name="keySelector"/>.</summary>
+    IDatabaseQuery<T> OrderBy<TKey>(Expression<Func<T, TKey>> keySelector);
+
+    /// <summary>Returns the number of rows in this table.</summary>
+    long Count();
+
+    /// <summary>Returns whether this table contains at least one row.</summary>
+    bool Exists();
+
+    /// <summary>Returns the first row matching <paramref name="predicate"/>, if any.</summary>
+    T? FindBy(Expression<Func<T, bool>> predicate);
+
+    /// <summary>Loads a foreign-key target for <paramref name="entity"/>. The key member must have an <see cref="ExoColumnAttribute"/> with References or ReferencesType.</summary>
+    TReference? Include<TReference>(T entity, Expression<Func<T, object?>> foreignKey);
+}
+
+/// <summary>A composable, parameterized query over a typed database table.</summary>
+public interface IDatabaseQuery<T>
+{
+    IDatabaseQuery<T> Where(Expression<Func<T, bool>> predicate);
+    IDatabaseQuery<T> Include<TReference>(Expression<Func<T, TReference?>> navigation);
+    IDatabaseQuery<T> OrderBy<TKey>(Expression<Func<T, TKey>> keySelector);
+    IDatabaseQuery<T> OrderByDescending<TKey>(Expression<Func<T, TKey>> keySelector);
+    IDatabaseQuery<T> Take(int count);
+    IDatabaseQuery<T> Skip(int count);
+    IReadOnlyList<T> ToList();
+    T? First();
+    long Count();
+    bool Exists();
 }
 
 /// <summary>
@@ -438,6 +474,176 @@ internal class DatabaseTable<T> : IDatabaseTable<T>
     public IReadOnlyList<T> Query(string sql, params object?[] args) => _db.Query<T>(sql, args);
 
     public T? QuerySingle(string sql, params object?[] args) => _db.QuerySingle<T>(sql, args);
+
+    public IDatabaseQuery<T> Where(Expression<Func<T, bool>> predicate) =>
+        new DatabaseQuery<T>(_db).Where(predicate);
+
+    public IDatabaseQuery<T> Include<TReference>(Expression<Func<T, TReference?>> navigation) =>
+        new DatabaseQuery<T>(_db).Include(navigation);
+
+    public IDatabaseQuery<T> OrderBy<TKey>(Expression<Func<T, TKey>> keySelector) =>
+        new DatabaseQuery<T>(_db).OrderBy(keySelector);
+
+    public long Count() => new DatabaseQuery<T>(_db).Count();
+
+    public bool Exists() => new DatabaseQuery<T>(_db).Exists();
+
+    public T? FindBy(Expression<Func<T, bool>> predicate) => Where(predicate).First();
+
+    public TReference? Include<TReference>(T entity, Expression<Func<T, object?>> foreignKey)
+    {
+        if (entity == null) throw new ArgumentNullException(nameof(entity));
+        if (foreignKey == null) throw new ArgumentNullException(nameof(foreignKey));
+        var member = SqlExpression.Member(foreignKey.Body);
+        var column = member.GetCustomAttribute<ExoColumnAttribute>();
+        if (column == null || (!column.ForeignKey && column.ReferencesType == null && string.IsNullOrWhiteSpace(column.References)))
+            throw new InvalidOperationException($"'{typeof(T).Name}.{member.Name}' is not declared as a foreign key.");
+        if (column.ReferencesType != null && column.ReferencesType != typeof(TReference))
+            throw new InvalidOperationException($"'{typeof(T).Name}.{member.Name}' references '{column.ReferencesType.Name}', not '{typeof(TReference).Name}'.");
+        if (!string.IsNullOrWhiteSpace(column.References))
+        {
+            var table = column.References!.Split('.')[0];
+            if (!string.Equals(table, EntityMetadata<TReference>.TableName, StringComparison.Ordinal))
+                throw new InvalidOperationException($"'{typeof(T).Name}.{member.Name}' references table '{table}', not '{EntityMetadata<TReference>.TableName}'.");
+        }
+        var key = foreignKey.Compile()(entity);
+        if (key == null) throw new InvalidOperationException($"'{typeof(T).Name}.{member.Name}' is null and cannot be included.");
+        if (_db is HostDatabase host)
+            return host.Include<TReference>(TableName, SqlExpression.Column(member), key) ?? throw new InvalidOperationException($"Included '{typeof(TReference).Name}' for '{typeof(T).Name}.{member.Name}' was not returned by the host.");
+        return _db.Get<TReference>(EntityMetadata<TReference>.TableName, key.ToString()!) ?? throw new InvalidOperationException($"Included '{typeof(TReference).Name}' for '{typeof(T).Name}.{member.Name}' was not found.");
+    }
+}
+
+internal sealed class DatabaseQuery<T> : IDatabaseQuery<T>
+{
+    private readonly IDatabase _db;
+    private readonly IReadOnlyList<string> _where;
+    private readonly IReadOnlyList<object?> _args;
+    private readonly string? _order;
+    private readonly int? _take;
+    private readonly int? _skip;
+    private readonly IReadOnlyList<IncludeSpec> _includes;
+
+    public DatabaseQuery(IDatabase db) : this(db, Array.Empty<string>(), Array.Empty<object?>(), null, null, null, Array.Empty<IncludeSpec>()) { }
+    private DatabaseQuery(IDatabase db, IReadOnlyList<string> where, IReadOnlyList<object?> args, string? order, int? take, int? skip, IReadOnlyList<IncludeSpec> includes)
+        => (_db, _where, _args, _order, _take, _skip, _includes) = (db, where, args, order, take, skip, includes);
+
+    public IDatabaseQuery<T> Where(Expression<Func<T, bool>> predicate)
+    {
+        if (predicate == null) throw new ArgumentNullException(nameof(predicate));
+        var args = _args.ToList();
+        var where = _where.Append(SqlExpression.Translate(predicate.Body, args)).ToArray();
+        return new DatabaseQuery<T>(_db, where, args, _order, _take, _skip, _includes);
+    }
+
+    public IDatabaseQuery<T> Include<TReference>(Expression<Func<T, TReference?>> navigation)
+    {
+        if (navigation == null) throw new ArgumentNullException(nameof(navigation));
+        var property = SqlExpression.Member(navigation.Body) as PropertyInfo
+            ?? throw new InvalidOperationException("Include requires a navigation property.");
+        var spec = IncludeSpec.Create<TReference>(property);
+        return new DatabaseQuery<T>(_db, _where, _args, _order, _take, _skip, _includes.Append(spec).ToArray());
+    }
+
+    public IDatabaseQuery<T> OrderBy<TKey>(Expression<Func<T, TKey>> keySelector) => SetOrder(keySelector, false);
+    public IDatabaseQuery<T> OrderByDescending<TKey>(Expression<Func<T, TKey>> keySelector) => SetOrder(keySelector, true);
+    public IDatabaseQuery<T> Take(int count) { if (count < 0) throw new ArgumentOutOfRangeException(nameof(count)); return new DatabaseQuery<T>(_db, _where, _args, _order, count, _skip, _includes); }
+    public IDatabaseQuery<T> Skip(int count) { if (count < 0) throw new ArgumentOutOfRangeException(nameof(count)); return new DatabaseQuery<T>(_db, _where, _args, _order, _take, count, _includes); }
+    public IReadOnlyList<T> ToList() => _includes.Count == 0 ? _db.Query<T>(Sql("*"), _args.ToArray()) : _db is HostDatabase host ? host.QueryWithIncludes<T>(Sql("*"), _args.ToArray(), _includes) : throw new NotSupportedException("Include requires HostDatabase so the host can enforce foreign-key permissions.");
+    public T? First() { var rows = Take(1).ToList(); return rows.Count == 0 ? default : rows[0]; }
+    public long Count()
+    {
+        // Count the query's result set, including its requested window.  Counting directly from
+        // the table used to ignore Take/Skip.
+        var rows = _db.Query<DatabaseCount>($"SELECT COUNT(*) AS value FROM ({Sql("*", page: true)}) AS \"__exo_count\"", _args.ToArray());
+        return rows.Count == 0 ? 0 : rows[0].Value;
+    }
+    public bool Exists() => Take(1).ToList().Count != 0;
+
+    private IDatabaseQuery<T> SetOrder<TKey>(Expression<Func<T, TKey>> keySelector, bool descending)
+    {
+        if (keySelector == null) throw new ArgumentNullException(nameof(keySelector));
+        var order = SqlExpression.Column(SqlExpression.Member(keySelector.Body)) + (descending ? " DESC" : " ASC");
+        return new DatabaseQuery<T>(_db, _where, _args, order, _take, _skip, _includes);
+    }
+
+    private string Sql(string select, bool page = true)
+    {
+        var sql = $"SELECT {select} FROM {SqlExpression.Quote(EntityMetadata<T>.TableName)}";
+        if (_where.Count > 0) sql += " WHERE " + string.Join(" AND ", _where);
+        if (_order != null && page) sql += " ORDER BY " + _order;
+        if (_take is int take && page) sql += " LIMIT " + take.ToString(CultureInfo.InvariantCulture);
+        else if (_skip is not null && page) sql += " LIMIT -1";
+        if (_skip is int skip && page) sql += " OFFSET " + skip.ToString(CultureInfo.InvariantCulture);
+        return sql;
+    }
+
+    private sealed class DatabaseCount { public long Value { get; set; } }
+}
+
+internal sealed class IncludeSpec
+{
+    public string Column { get; }
+    public PropertyInfo? Navigation { get; }
+    public Type ReferenceType { get; }
+    public IncludeSpec(string column, PropertyInfo? navigation, Type referenceType) => (Column, Navigation, ReferenceType) = (column, navigation, referenceType);
+    public static IncludeSpec Create<TReference>(PropertyInfo navigation)
+    {
+        var pairing = navigation.GetCustomAttribute<ExoNavigationAttribute>();
+        if (!navigation.CanWrite || navigation.PropertyType != typeof(TReference) || pairing is null)
+            throw new InvalidOperationException($"'{navigation.DeclaringType?.Name}.{navigation.Name}' must be a settable property of the referenced record type, marked [ExoNavigation(nameof(ForeignKeyProperty))].");
+        var fk = navigation.DeclaringType!.GetProperty(pairing.ForeignKeyProperty, BindingFlags.Public | BindingFlags.Instance);
+        var column = fk?.GetCustomAttribute<ExoColumnAttribute>();
+        if (fk is null || column is null || (!column.ForeignKey && column.ReferencesType is null && string.IsNullOrWhiteSpace(column.References)))
+            throw new InvalidOperationException($"Navigation '{navigation.DeclaringType.Name}.{navigation.Name}' names '{pairing.ForeignKeyProperty}', which is missing or is not a declared [ExoColumn(ForeignKey = true)] column.");
+        if (column.ReferencesType is not null && column.ReferencesType != typeof(TReference))
+            throw new InvalidOperationException($"Navigation '{navigation.DeclaringType.Name}.{navigation.Name}' targets '{typeof(TReference).Name}', but FK '{fk.Name}' references '{column.ReferencesType.Name}'.");
+        return new IncludeSpec(SqlExpression.Column(fk), navigation, typeof(TReference));
+    }
+}
+
+internal static class SqlExpression
+{
+    public static string Translate(Expression expression, List<object?> args)
+    {
+        expression = Strip(expression);
+        if (expression is BinaryExpression binary)
+        {
+            if (binary.NodeType == ExpressionType.AndAlso || binary.NodeType == ExpressionType.OrElse)
+                return $"({Translate(binary.Left, args)} {(binary.NodeType == ExpressionType.AndAlso ? "AND" : "OR")} {Translate(binary.Right, args)})";
+            var op = binary.NodeType switch { ExpressionType.Equal => "=", ExpressionType.NotEqual => "<>", ExpressionType.LessThan => "<", ExpressionType.LessThanOrEqual => "<=", ExpressionType.GreaterThan => ">", ExpressionType.GreaterThanOrEqual => ">=", _ => null };
+            if (op == null) throw Unsupported(expression);
+            var leftMember = TryMember(binary.Left);
+            var rightMember = TryMember(binary.Right);
+            if (leftMember != null && rightMember == null) return Compare(Column(leftMember), op, Value(binary.Right), args);
+            if (rightMember != null && leftMember == null) return Compare(Column(rightMember), Reverse(op), Value(binary.Left), args);
+            throw Unsupported(expression);
+        }
+        if (expression is UnaryExpression { NodeType: ExpressionType.Not } not)
+            return $"(NOT {Translate(not.Operand, args)})";
+        if (TryMember(expression) is MemberInfo member && IsBoolean(member)) return Column(member) + " = TRUE";
+        if (expression is ConstantExpression { Value: bool value }) return value ? "TRUE" : "FALSE";
+        throw Unsupported(expression);
+    }
+
+    public static MemberInfo Member(Expression expression) => TryMember(expression) ?? throw Unsupported(expression);
+    public static string Column(MemberInfo member) => Quote(member.GetCustomAttribute<ExoColumnAttribute>()?.Name ?? ExoNaming.ToSnakeCase(member.Name));
+    public static string Quote(string identifier) => "\"" + identifier.Replace("\"", "\"\"") + "\"";
+    private static string Compare(string column, string op, object? value, List<object?> args)
+    {
+        if (value == null) return column + (op == "=" ? " IS NULL" : op == "<>" ? " IS NOT NULL" : throw new InvalidOperationException("Only equality comparisons support null."));
+        args.Add(value); return column + " " + op + " $" + args.Count.ToString(CultureInfo.InvariantCulture);
+    }
+    private static string Reverse(string op) => op switch { "<" => ">", ">" => "<", "<=" => ">=", ">=" => "<=", _ => op };
+    private static MemberInfo? TryMember(Expression expression)
+    {
+        expression = Strip(expression);
+        return expression is MemberExpression member && member.Expression is ParameterExpression ? member.Member : null;
+    }
+    private static object? Value(Expression expression) => Expression.Lambda(Strip(expression)).Compile().DynamicInvoke();
+    private static Expression Strip(Expression expression) { while (expression.NodeType is ExpressionType.Convert or ExpressionType.ConvertChecked) expression = ((UnaryExpression)expression).Operand; return expression; }
+    private static bool IsBoolean(MemberInfo member) => member switch { PropertyInfo p => Nullable.GetUnderlyingType(p.PropertyType) == null && p.PropertyType == typeof(bool), FieldInfo f => Nullable.GetUnderlyingType(f.FieldType) == null && f.FieldType == typeof(bool), _ => false };
+    private static NotSupportedException Unsupported(Expression expression) => new($"The expression '{expression}' cannot be translated to SQL.");
 }
 
 internal static class EntityMetadata<T>

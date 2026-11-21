@@ -170,7 +170,7 @@ public static class Program
           reload <name>    Re-boot an installed extension without re-uploading it
           logs <name>      Show recent log lines the extension emitted
           usage [name]     Show metered usage (calls, CPU, memory) for an extension or the title
-          stubs <name>     Generate typed service stubs from the contracts this extension calls
+          stubs <name>|--all  Generate typed service stubs (under obj/exoforge) for what an extension calls
           list             List installed extensions
           remove <id>      Remove an extension from the cluster
 
@@ -1800,6 +1800,9 @@ public static class Program
 
               --rid <rid>   Target runtime, e.g. linux-x64 (default: this machine)
               --all         Build every extension except those in exoforge.json "excluded_extensions", providers first
+
+            Each build starts with the stub pass (as `exo extension stubs`): typed stubs for the services the
+            extension calls are written to its obj/exoforge, and a service with no contract stops the build.
             """);
             return 0;
         }
@@ -1834,7 +1837,8 @@ public static class Program
                    exo extension push --all [--rid <rid>] [--env <name>] [--dir <path>] [--no-verify]
 
             --all builds and pushes every extension except those in exoforge.json "excluded_extensions",
-            providers first. It refuses when an included extension needs an excluded one.
+            providers first. It refuses when an included extension needs an excluded one. Every build begins
+            with the stub pass (`exo extension stubs`).
 
             Builds, uploads, and then confirms the cluster is actually running the new build.
             --rid defaults to the connected cluster's runtime, not this machine's.
@@ -2126,40 +2130,56 @@ public static class Program
         if (cli.WantsHelp)
         {
             Console.WriteLine("""
-            Usage: exo extension stubs <name> [--services a,b] [--out <path>] [--file <export.json>]
-                   exo extension stubs --project-dir <extension dir>   (what the build runs)
+            Usage: exo extension stubs <name> [--dir <path>]
+                   exo extension stubs --all [--dir <path>]
+                   exo extension stubs <name> [--services a,b] [--out <path>] [--file <export.json>]
+                   exo extension stubs --project-dir <extension dir>
 
-            Stubs are written under the extension's obj/, which the build compiles; none live in src/.
+            Makes typed stubs for the services an extension calls, under the extension's obj/exoforge, which
+            the build compiles. Nothing is written into src/ and nothing is committed. Only this command and
+            `exo extension build|push` generate stubs; MSBuild and Unity's import never do.
 
-            Reads the cluster's contracts, and lays this workspace's own built extensions over them, so an
-            extension that is built but not deployed still produces stubs. Without a cluster it uses what
-            has been built locally.
+            --all covers every extension except those in exoforge.json "excluded_extensions", providers first.
 
-            Generates typed stubs for the contracts this extension calls, so extension code does not
-            hand-roll service and action names.
+            The services come from the sources (ExoServices.<Service> and [ExoDependency("x")] pins), so a
+            new extension needs no earlier build. Their contracts come from the built manifests of the other
+            extensions, then the cached server contracts (Exoforge/.contracts_cache.json), then the server,
+            which is only asked when something is still unknown.
             """);
             return 0;
         }
 
-        if (cli.Positional.Count == 0 && cli.Value("project-dir") is null)
+        if (cli.Positional.Count == 0 && cli.Value("project-dir") is null && !cli.Has("all"))
         {
             return Missing("extension name", "exo extension stubs <name>");
         }
 
-        // The build's own call: only what the extension declares, from the manifests beside it.
-        if (cli.Value("project-dir") is { } projectDir)
+        if (cli.Has("all"))
         {
-            projectDir = Path.GetFullPath(projectDir);
-            var (built, unresolved) = await ExoDeployer.BesideExtension(projectDir).GenerateDependencyStubsAsync(projectDir).ConfigureAwait(false);
-
-            if (unresolved.Count > 0)
+            var allWs = ExoWorkspace.Load(cli.Value("dir") ?? Directory.GetCurrentDirectory());
+            if (allWs.IncludedExtensions().Count == 0)
             {
-                Error($"[Exoforge] No contracts for: {string.Join(", ", unresolved)}. Start the server (`just dev`), or build the extension that provides them.");
+                Error($"[Exoforge] No extensions to make stubs for in {allWs.ExtensionsPath} (after excluded_extensions).");
                 return 1;
             }
 
-            if (built != null) Success($"[Exoforge] Generated typed extension service stubs:\n  {built}");
-            return 0;
+            var problems = allWs.ValidateIncluded();
+            foreach (string problem in problems) Console.Error.WriteLine($"[Exoforge] Warning: {problem}.");
+            return ReportStubs(await new ExoDeployer(allWs).GenerateIncludedStubsAsync(emit: Console.WriteLine).ConfigureAwait(false));
+        }
+
+        // The build's own shape: one extension, siblings beside it.
+        if (cli.Value("project-dir") is { } projectDir)
+        {
+            projectDir = Path.GetFullPath(projectDir);
+            return ReportStubs(await ExoDeployer.BesideExtension(projectDir)
+                .GenerateStubsAsync(new[] { Path.GetFileName(projectDir) }, emit: Console.WriteLine).ConfigureAwait(false));
+        }
+
+        if (cli.Value("services") is null && cli.Value("out") is null && cli.Value("file") is null)
+        {
+            var passWs = ExoWorkspace.Load(cli.Value("dir") ?? Directory.GetCurrentDirectory());
+            return ReportStubs(await new ExoDeployer(passWs).GenerateStubsAsync(new[] { cli.Positional[0] }, emit: Console.WriteLine).ConfigureAwait(false));
         }
 
         string name = ExoScaffolder.NormalizeExtensionName(cli.Positional[0]);
@@ -2335,6 +2355,19 @@ public static class Program
         Success($"[Exoforge] Instance reset ({(everything ? "everything" : "extensions")}).");
         Console.WriteLine(result);
         return 0;
+    }
+
+    /// <summary>Prints what a stub pass did and returns the exit code: 1 when an extension could not get its stubs.</summary>
+    private static int ReportStubs(StubPassResult result)
+    {
+        foreach (var item in result.Items)
+        {
+            if (item.Outcome == StubOutcome.Failed) Error($"[Exoforge] {item.Detail}");
+            else if (item.Outcome == StubOutcome.Generated) Success($"[Exoforge] {item.Name}: generated typed service stubs:\n  {item.Output}");
+            else Console.WriteLine($"[Exoforge] {item.Name}: {item.Detail}");
+        }
+
+        return result.Ok ? 0 : 1;
     }
 
     /// <summary>The order for <c>--all</c>, or null (after saying why) when an included extension needs an excluded one or the order does not resolve.</summary>

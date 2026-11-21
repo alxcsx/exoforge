@@ -49,6 +49,9 @@ defmodule Exoforge.Std.Dashboard.ResourceForms do
         choices: column[:choices] || column["choices"] || [],
         # The input-override a column declared, so a resource can edit any value with any widget.
         input: column[:input] || column["input"] || nil,
+        # "<resource>.<column>": the row this value points at. ResourceRefs turns it into a link and a picker.
+        references: column[:references] || column["references"],
+        foreign_key: column[:foreign_key] || column["foreign_key"] || false,
         primary_key: to_string(key) == primary
       }
     end)

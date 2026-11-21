@@ -15,6 +15,39 @@
   </PropertyGroup>
 
   <!--
+    Typed stubs for the services a plugin calls, compiled from where `exo extension stubs` (and every
+    `exo extension build|push`) wrote them: <plugin>/obj/exoforge. This is only a file glob. No process
+    runs from MSBuild, so a build, an IDE load or a design-time pass never reaches for a server, and the
+    stubs are made when someone asks for them. A plugin that still commits its own Generated/PluginServices.g.cs
+    keeps it: two copies of the types would not compile.
+  -->
+  <PropertyGroup>
+    <ExoforgeStubsDir Condition="'$(ExoforgeStubsDir)' == ''">$([System.IO.Path]::GetDirectoryName($([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(ExoforgeManifestPath)'))))/obj/exoforge</ExoforgeStubsDir>
+  </PropertyGroup>
+
+  <ItemGroup Condition="Exists('$(ExoforgeStubsDir)') and !Exists('$(MSBuildProjectDirectory)/Generated/PluginServices.g.cs')">
+    <Compile Include="$(ExoforgeStubsDir)/**/*.cs" />
+  </ItemGroup>
+
+  <!--
+    The one thing a plain `dotnet build` or an IDE build can get wrong: no stubs yet. The compiler's own error
+    would be "ExoServices does not contain Items", which says nothing about what to do, so when the stubs folder is
+    absent and a source mentions ExoServices.<Service> (not a capability such as Database) this says it first. A condition and a message, nothing runs.
+  -->
+  <Target Name="ExoforgeStubsHint"
+          BeforeTargets="CoreCompile"
+          Condition="'$(DesignTimeBuild)' != 'true' and !Exists('$(ExoforgeStubsDir)') and !Exists('$(MSBuildProjectDirectory)/Generated/PluginServices.g.cs')">
+    <ItemGroup>
+      <ExoforgeStubCaller Include="@(Compile)"
+                          Condition="'%(Extension)' == '.cs' and Exists('%(FullPath)') and $([System.Text.RegularExpressions.Regex]::IsMatch($([System.IO.File]::ReadAllText('%(FullPath)')), 'ExoServices\s*\.\s*(?!(Database|Logger|Events|Actions|Context|Services|Reset)\b)[A-Za-z]'))" />
+    </ItemGroup>
+
+    <Warning Condition="'@(ExoforgeStubCaller)' != ''"
+             Code="EXOFORGE003"
+             Text="$(MSBuildProjectName) calls other services through ExoServices.&lt;Service&gt;, and its typed stubs are not generated yet (no $(ExoforgeStubsDir)). Run `exo extension stubs $(MSBuildProjectName)` (or `exo extension build $(MSBuildProjectName)`), then build again. Compile errors about a missing ExoServices member come from this." />
+  </Target>
+
+  <!--
     How a plugin is deployed.
 
     Framework-dependent: a plugin ships IL and its dependencies, and the runtime comes from the host.

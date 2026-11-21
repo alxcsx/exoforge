@@ -181,10 +181,12 @@ public partial class ExoforgeControlCenter : EditorWindow
                 await _editorClient.SubscribeAsync("*", cancellationToken: cts.Token);
                 await RefreshRemoteInfoAsync();
 
-                string generatedPath = ExoforgeEditorConfig.GetAbsoluteGeneratedScriptPath();
-                if (!File.Exists(generatedPath))
+                // The client file is not made on connect: say so, and a click on Sync Client makes it.
+                if (ExoClientBindings.Message(
+                        ExoClientBindings.Check(Workspace, ExoforgeEditorConfig.GetAbsoluteGeneratedScriptPath()),
+                        ExoforgeEditorConfig.GeneratedScriptPath) is { } clientNote)
                 {
-                    _ = SyncAndGenerateClientAsync(forceReload: false);
+                    ShowStatus(clientNote, StatusSeverity.Warning);
                 }
             }
             else

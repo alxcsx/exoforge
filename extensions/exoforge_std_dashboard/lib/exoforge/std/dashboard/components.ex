@@ -199,6 +199,8 @@ defmodule Exoforge.Std.Dashboard.Components do
   attr(:columns, :list, required: true)
   attr(:row_click_event, :string, default: nil)
   attr(:empty_text, :string, default: "No items match your criteria.")
+  # `{column, value}` => link, from `ResourceRefs.links/3`: a foreign-key cell becomes a link.
+  attr(:fk_links, :map, default: %{})
 
   def data_table(assigns) do
     ~H"""
@@ -227,7 +229,15 @@ defmodule Exoforge.Std.Dashboard.Components do
               >
                 <%= for col <- @columns do %>
                   <td class="py-3 px-4">
-                    <%= render_col_value(row, col) %>
+                    <% fk = fk_link(@fk_links, row, col) %>
+                    <%= if fk do %>
+                      <%!-- The row itself is clickable; a click on the link must only follow the link. --%>
+                      <span phx-click={Phoenix.LiveView.JS.dispatch("exo:noop")}>
+                        <Exoforge.Std.Dashboard.ResourceRefs.fk_value link={fk} value={fk_value_of(row, col)} />
+                      </span>
+                    <% else %>
+                      <%= render_col_value(row, col) %>
+                    <% end %>
                   </td>
                 <% end %>
               </tr>
@@ -238,6 +248,17 @@ defmodule Exoforge.Std.Dashboard.Components do
     </div>
     """
   end
+
+  defp fk_value_of(row, col), do: Map.get(row, col.key) || Map.get(row, to_string(col.key))
+
+  defp fk_link(links, row, col) when map_size(links) > 0 do
+    case fk_value_of(row, col) do
+      nil -> nil
+      val -> Map.get(links, {to_string(col.key), to_string(val)})
+    end
+  end
+
+  defp fk_link(_links, _row, _col), do: nil
 
   defp render_col_value(row, col) do
     key = col.key

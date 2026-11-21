@@ -43,6 +43,7 @@ public static class PluginJson
     [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "Reflection-only path used when no JSON context is registered; the plugin build refuses trimming.")]
     private static JsonSerializerOptions BuildReflectionOptions() => new()
     {
+        TypeInfoResolver = WithNavigationsIgnored(new DefaultJsonTypeInfoResolver()),
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
         PropertyNameCaseInsensitive = true,
         // An enum is written as its name, snake_cased - the same spelling a schema's `choices` uses and
@@ -100,7 +101,7 @@ public static class PluginJson
         // the warnings that reached every plugin author's build log.
         _options = new JsonSerializerOptions
         {
-            TypeInfoResolver = resolver,
+            TypeInfoResolver = WithNavigationsIgnored(resolver),
             PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
             PropertyNameCaseInsensitive = true,
         };
@@ -125,7 +126,7 @@ public static class PluginJson
 
             options = new JsonSerializerOptions
             {
-                TypeInfoResolver = JsonTypeInfoResolver.Combine(resolvers.ToArray()),
+                TypeInfoResolver = WithNavigationsIgnored(JsonTypeInfoResolver.Combine(resolvers.ToArray())),
                 PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
                 PropertyNameCaseInsensitive = true,
             };
@@ -134,6 +135,17 @@ public static class PluginJson
         options.Converters.Add(new DatabaseBooleanConverter());
         return options;
     }
+
+    private static IJsonTypeInfoResolver WithNavigationsIgnored(IJsonTypeInfoResolver resolver) => resolver.WithAddedModifier(info =>
+    {
+        if (info.Kind != JsonTypeInfoKind.Object) return;
+        foreach (var property in info.Properties)
+        {
+            if (property.AttributeProvider is not System.Reflection.PropertyInfo member ||
+                member.GetCustomAttributes(typeof(ExoNavigationAttribute), true).Length == 0) continue;
+            property.ShouldSerialize = (_, _) => false;
+        }
+    });
 
     /// <summary>Serializes a value to JSON, mapping lists and arrays to JSON arrays.</summary>
     [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "Reflection JSON is the non-AOT fallback; a source-generated context is used when present, and the catch turns a failure into an actionable message.")]

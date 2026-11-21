@@ -33,6 +33,7 @@ public sealed class ExoforgePluginGenerator : IIncrementalGenerator
     private const string SeedAttribute = "Exoforge.Plugin.SDK.ExoSeedAttribute";
     private const string EventAttribute = "Exoforge.Plugin.SDK.ExoEventAttribute";
     private const string ColumnAttribute = "Exoforge.Plugin.SDK.ExoColumnAttribute";
+    private const string NavigationAttribute = "Exoforge.Plugin.SDK.ExoNavigationAttribute";
     private const string DependencyAttribute = "Exoforge.Plugin.SDK.ExoDependencyAttribute";
     private const string InputTypeAttribute = "Exoforge.Plugin.SDK.ExoInputTypeAttribute";
     private const string JsonContextBase = "System.Text.Json.Serialization.JsonSerializerContext";
@@ -318,6 +319,7 @@ namespace Exoforge.Plugin.SDK
         // same with `provides: [ContractA, ContractB]` - and every action, event and resource is
         // attributed to one of them. Without an explicit Service it belongs to the first.
         var services = new List<ServiceModel>();
+        var registry = new TypeRegistry();
 
         foreach (var attr in serviceAttrs)
         {
@@ -331,7 +333,10 @@ namespace Exoforge.Plugin.SDK
                 NamedString(attr, "Icon"),
                 NamedBool(attr, "System"),
                 NamedString(attr, "DashboardElement"),
-                NamedString(attr, "DashboardEntry")));
+                NamedString(attr, "DashboardEntry"))
+            {
+                Registry = registry,
+            });
         }
 
         ServiceModel ServiceFor(string? name)
@@ -359,7 +364,8 @@ namespace Exoforge.Plugin.SDK
             var cronAttr = FindAttribute(method.GetAttributes(), CronAttribute);
             if (actionAttr is null && webhookAttr is null && cronAttr is null) continue;
 
-            var (returnsScalar, returnFields, returnsList, returnsType) = DescribeReturn(method.ReturnType);
+            var (returnsScalar, returnFields, returnsList, returnsType) = DescribeReturn(method.ReturnType, registry);
+            var returnShape = ShapeOf(method.ReturnType, registry);
 
             if (cronAttr is not null)
             {
@@ -379,11 +385,14 @@ namespace Exoforge.Plugin.SDK
                     ResolveActionMode(cronAttr, method.ReturnType),
                     "server",
                     "auto",
-                    method.Parameters.Select(ParamOf).ToList(),
+                    method.Parameters.Select(p => ParamOf(p, registry)).ToList(),
                     returnsScalar,
                     returnFields,
                     returnsList,
-                    returnsType));
+                    returnsType)
+                {
+                    ReturnShape = returnShape,
+                });
 
                 cronService.Crons.Add(new CronModel(
                     cronName,
@@ -419,12 +428,15 @@ namespace Exoforge.Plugin.SDK
                 isWebhook ? "sync" : ResolveActionMode(targetAttr, method.ReturnType),
                 NamedString(targetAttr, "Scope") ?? (isWebhook ? "webhook" : "player"),
                 isWebhook ? "webhook" : "auto",
-                method.Parameters.Select(ParamOf).ToList(),
+                method.Parameters.Select(p => ParamOf(p, registry)).ToList(),
                 returnsScalar,
                 returnFields,
                 returnsList,
                 returnsType,
-                DocSummary(method)));
+                DocSummary(method))
+            {
+                ReturnShape = returnShape,
+            });
         }
 
         // Events: declared on the declaration itself and on its methods.
@@ -948,12 +960,10 @@ namespace Exoforge.Plugin.SDK
 
         if (payloadType is not null)
         {
-            foreach (var member in payloadType.GetMembers())
+            var registry = service.Registry ?? new TypeRegistry();
+            foreach (var (property, wire) in WireProperties(payloadType))
             {
-                if (member is IPropertySymbol property && property.DeclaredAccessibility == Accessibility.Public)
-                {
-                    payload.Add(new ParamModel(ToSnakeCase(property.Name), MapTypeToElixir(property.Type), IsNullableValue(property.Type)));
-                }
+                payload.Add(new ParamModel(wire, MapTypeToElixir(property.Type), IsNullableValue(property.Type), Shape: ShapeOf(property.Type, registry)));
             }
         }
 
@@ -1137,6 +1147,14 @@ namespace Exoforge.Plugin.SDK
             var fkAttr = FindForeignKeyAttribute(property.GetAttributes())
                          ?? (recParam is not null ? FindForeignKeyAttribute(recParam.GetAttributes()) : null);
 
+            var navigationAttr = FindAttribute(property.GetAttributes(), NavigationAttribute);
+            if (navigationAttr is not null)
+            {
+                ValidateNavigation(type, property, navigationAttr, diagnostics);
+                // Navigations exist only at Include time, never in a resource schema or payload.
+                continue;
+            }
+
             bool isExplicitPk = NamedBool(colAttr, "PrimaryKey") || property.Name.Equals("Id", StringComparison.OrdinalIgnoreCase);
 
             // Without [ExoColumn] the property still counts when the record carries [ExoResource] or [ExoForeignKey].
@@ -1286,6 +1304,30 @@ namespace Exoforge.Plugin.SDK
         }
 
         return columns;
+    }
+
+    private static void ValidateNavigation(
+        INamedTypeSymbol resourceType,
+        IPropertySymbol navigation,
+        AttributeData navigationAttr,
+        List<string>? diagnostics)
+    {
+        string? fkName = PositionalString(navigationAttr, 0);
+        if (string.IsNullOrWhiteSpace(fkName))
+        {
+            diagnostics?.Add($"Resource '{resourceType.Name}': navigation '{navigation.Name}' must name its foreign-key property with [ExoNavigation(nameof(ForeignKeyProperty))].");
+            return;
+        }
+
+        var fk = resourceType.GetMembers().OfType<IPropertySymbol>()
+            .FirstOrDefault(p => string.Equals(p.Name, fkName, StringComparison.Ordinal));
+        var column = fk is null ? null : FindAttribute(fk.GetAttributes(), ColumnAttribute);
+        bool declaredFk = column is not null &&
+            (NamedBool(column, "ForeignKey") || NamedType(column, "ReferencesType") is not null || !string.IsNullOrWhiteSpace(NamedString(column, "References")));
+        if (!declaredFk)
+        {
+            diagnostics?.Add($"Resource '{resourceType.Name}': navigation '{navigation.Name}' names '{fkName}', but that property is missing or is not a declared [ExoColumn(ForeignKey = true)] column.");
+        }
     }
 
 
@@ -1521,7 +1563,7 @@ namespace Exoforge.Generated
         return null;
     }
 
-    private static ParamModel ParamOf(IParameterSymbol p)
+    private static ParamModel ParamOf(IParameterSymbol p, TypeRegistry registry)
     {
         string? json = null;
 
@@ -1537,7 +1579,7 @@ namespace Exoforge.Generated
             };
         }
 
-        return new ParamModel(ToSnakeCase(p.Name), MapTypeToElixir(p.Type), IsNullableValue(p.Type), p.HasExplicitDefaultValue, json);
+        return new ParamModel(ToSnakeCase(p.Name), MapTypeToElixir(p.Type), IsNullableValue(p.Type), p.HasExplicitDefaultValue, json, ShapeOf(p.Type, registry));
     }
 
     private static bool IsNullableValue(ITypeSymbol type) =>
@@ -1695,18 +1737,18 @@ namespace Exoforge.Generated
     /// <c>:ok</c> for nothing - plus whether the whole thing is a list. Without the field shape a
     /// generated client can only offer <c>JsonElement</c>.
     /// </summary>
-    private static (string? Scalar, List<ParamModel> Fields, bool IsList, string? TypeName) DescribeReturn(ITypeSymbol type)
+    private static (string? Scalar, List<ParamModel> Fields, bool IsList, string? TypeName) DescribeReturn(ITypeSymbol type, TypeRegistry registry)
     {
         if (type is INamedTypeSymbol named)
         {
             if (named.Name == "Task" && named.ContainingNamespace?.ToDisplayString() == "System.Threading.Tasks")
             {
-                return named.TypeArguments.Length == 1 ? DescribeReturn(named.TypeArguments[0]) : ("ok", new List<ParamModel>(), false, null);
+                return named.TypeArguments.Length == 1 ? DescribeReturn(named.TypeArguments[0], registry) : ("ok", new List<ParamModel>(), false, null);
             }
 
             if (named.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T && named.TypeArguments.Length == 1)
             {
-                return DescribeReturn(named.TypeArguments[0]);
+                return DescribeReturn(named.TypeArguments[0], registry);
             }
         }
 
@@ -1715,7 +1757,7 @@ namespace Exoforge.Generated
 
         if (IsList(type, out var element))
         {
-            var (scalar, innerFields, _, typeName) = DescribeReturn(element!);
+            var (scalar, innerFields, _, typeName) = DescribeReturn(element!, registry);
             return (scalar, innerFields, true, typeName);
         }
 
@@ -1727,18 +1769,253 @@ namespace Exoforge.Generated
         // A record: its public properties are the response fields.
         var fields = new List<ParamModel>();
 
-        foreach (var member in type.GetMembers())
+        foreach (var (property, wire) in WireProperties(type))
         {
-            if (member is IPropertySymbol property && property.DeclaredAccessibility == Accessibility.Public && !property.IsStatic)
-            {
-                fields.Add(new ParamModel(ToSnakeCase(property.Name), MapTypeToElixir(property.Type), IsNullableValue(property.Type)));
-            }
+            fields.Add(new ParamModel(wire, MapTypeToElixir(property.Type), IsNullableValue(property.Type), Shape: ShapeOf(property.Type, registry)));
         }
 
         if (fields.Count == 0) return (MapTypeToElixir(type), fields, false, null);
 
         return (null, fields, false, type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
     }
+
+    // ---- Typed stubs: the shape of a nested value --------------------------------------------------------
+
+    private const int MaxShapeDepth = 16;
+
+    private static readonly HashSet<string> ListLikeNames = new(StringComparer.Ordinal)
+    {
+        "List", "IReadOnlyList", "IList", "IEnumerable", "IReadOnlyCollection", "ICollection", "Collection",
+        "HashSet", "ISet", "IReadOnlySet", "ImmutableArray", "ImmutableList", "IAsyncEnumerable",
+    };
+
+    private static readonly HashSet<string> DictionaryNames = new(StringComparer.Ordinal)
+    {
+        "Dictionary", "IDictionary", "IReadOnlyDictionary", "SortedDictionary", "ConcurrentDictionary", "ImmutableDictionary",
+    };
+
+    /// <summary>
+    /// What a C# type looks like on the wire, down to the leaves: a list says what is in it, a dictionary
+    /// what it maps to, a record names its entry in the service's <c>types</c> (registered here, once, so a
+    /// type that contains itself ends at a reference). <c>Task&lt;T&gt;</c> is its <c>T</c>. Only what the
+    /// stubs cannot know - <c>object</c>, <c>JsonElement</c>, a type nothing is known about, a record nested
+    /// deeper than <see cref="MaxShapeDepth"/> - is <c>json</c>.
+    /// </summary>
+    internal static ShapeModel ShapeOf(ITypeSymbol type, TypeRegistry registry, int depth = 0)
+    {
+        if (depth > MaxShapeDepth) return new ShapeModel("json");
+
+        bool nullable = type.NullableAnnotation == NullableAnnotation.Annotated;
+
+        if (type is INamedTypeSymbol named)
+        {
+            if (IsTask(named))
+            {
+                return named.TypeArguments.Length == 1 ? ShapeOf(named.TypeArguments[0], registry, depth) : new ShapeModel("json");
+            }
+
+            if (named.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T && named.TypeArguments.Length == 1)
+            {
+                return ShapeOf(named.TypeArguments[0], registry, depth) with { Nullable = true };
+            }
+        }
+
+        var shape = ShapeOfNonNull(type, registry, depth);
+        return nullable ? shape with { Nullable = true } : shape;
+    }
+
+    private static ShapeModel ShapeOfNonNull(ITypeSymbol type, TypeRegistry registry, int depth)
+    {
+        if (type is IArrayTypeSymbol array)
+        {
+            return array.ElementType.SpecialType == SpecialType.System_Byte
+                ? new ShapeModel("binary")
+                : new ShapeModel("list", Items: ShapeOf(array.ElementType, registry, depth + 1));
+        }
+
+        switch (type.SpecialType)
+        {
+            case SpecialType.System_String:
+            case SpecialType.System_Char:
+                return new ShapeModel("string");
+            case SpecialType.System_Int16:
+            case SpecialType.System_Int32:
+            case SpecialType.System_Byte:
+            case SpecialType.System_SByte:
+            case SpecialType.System_UInt16:
+                return new ShapeModel("int");
+            case SpecialType.System_Int64:
+            case SpecialType.System_UInt32:
+            case SpecialType.System_UInt64:
+                return new ShapeModel("integer");
+            case SpecialType.System_Boolean:
+                return new ShapeModel("boolean");
+            case SpecialType.System_Single:
+            case SpecialType.System_Double:
+                return new ShapeModel("float");
+            case SpecialType.System_Decimal:
+                return new ShapeModel("decimal");
+            case SpecialType.System_DateTime:
+                return new ShapeModel("datetime");
+            case SpecialType.System_Object:
+            case SpecialType.System_Void:
+                return new ShapeModel("json");
+        }
+
+        if (type.TypeKind == TypeKind.Enum)
+        {
+            var choices = type.GetMembers().OfType<IFieldSymbol>().Where(f => f.IsConst).Select(f => ToSnakeCase(f.Name)).ToList();
+            return new ShapeModel("string", Choices: choices.Count == 0 ? null : choices);
+        }
+
+        if (type.TypeKind == TypeKind.TypeParameter || type.TypeKind == TypeKind.Dynamic || type is IPointerTypeSymbol) return new ShapeModel("json");
+
+        string display = type.ToDisplayString();
+        switch (display)
+        {
+            case "System.DateTimeOffset": return new ShapeModel("datetime");
+            case "System.Guid": return new ShapeModel("uuid");
+            case "System.TimeSpan": return new ShapeModel("timespan");
+        }
+
+        if (type is not INamedTypeSymbol named) return new ShapeModel("json");
+
+        if (named.TypeArguments.Length == 1 && ListLikeNames.Contains(named.Name))
+        {
+            return new ShapeModel("list", Items: ShapeOf(named.TypeArguments[0], registry, depth + 1));
+        }
+
+        if (named.TypeArguments.Length == 2 && DictionaryNames.Contains(named.Name))
+        {
+            // The wire map is string-keyed; a stub cannot offer another key type, so it is dynamic.
+            return named.TypeArguments[0].SpecialType == SpecialType.System_String
+                ? new ShapeModel("map", Values: ShapeOf(named.TypeArguments[1], registry, depth + 1))
+                : new ShapeModel("json");
+        }
+
+        // The platform's and the serializer's own types are not the plugin's records.
+        string ns = named.ContainingNamespace?.ToDisplayString() ?? "";
+        if (ns == "System" || ns.StartsWith("System.", StringComparison.Ordinal) || ns.StartsWith("Microsoft.", StringComparison.Ordinal))
+        {
+            return new ShapeModel("json");
+        }
+
+        if (named.TypeKind is not (TypeKind.Class or TypeKind.Struct or TypeKind.Interface))
+        {
+            return new ShapeModel("json");
+        }
+
+        return RecordShape(named, registry, depth);
+    }
+
+    /// <summary>
+    /// The properties System.Text.Json writes for a type, with the name it writes them under: public instance
+    /// properties with a public getter (own and inherited; a derived property hides the base's), minus indexers and
+    /// <c>[JsonIgnore]</c> without a condition or with <c>Always</c>. A <c>[JsonPropertyName]</c> is the wire name, else the snake_case of the C# name.
+    /// Used for every record the manifest describes - action returns, event payloads and nested types - so they agree.
+    /// </summary>
+    internal static List<(IPropertySymbol Property, string Wire)> WireProperties(ITypeSymbol type)
+    {
+        var result = new List<(IPropertySymbol, string)>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        for (var t = type; t is not null && t.SpecialType != SpecialType.System_Object; t = t.BaseType)
+        {
+            foreach (var property in t.GetMembers().OfType<IPropertySymbol>())
+            {
+                if (property.DeclaredAccessibility != Accessibility.Public || property.IsStatic || property.IsIndexer) continue;
+                if (property.GetMethod is not { DeclaredAccessibility: Accessibility.Public }) continue;
+                if (!seen.Add(property.Name)) continue;
+                if (IsJsonIgnored(property)) continue;
+
+                result.Add((property, JsonNameOf(property)));
+            }
+        }
+
+        return result;
+    }
+
+    private static bool IsJsonIgnored(IPropertySymbol property)
+    {
+        foreach (var attribute in property.GetAttributes())
+        {
+            if (attribute.AttributeClass?.ToDisplayString() != "System.Text.Json.Serialization.JsonIgnoreAttribute") continue;
+
+            // JsonIgnoreCondition: Never = 0, Always = 1, WhenWritingDefault = 2, WhenWritingNull = 3. No condition means Always.
+            foreach (var named in attribute.NamedArguments)
+            {
+                if (named.Key == "Condition") return named.Value.Value is int condition && condition == 1;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    private static string JsonNameOf(IPropertySymbol property)
+    {
+        foreach (var attribute in property.GetAttributes())
+        {
+            if (attribute.AttributeClass?.ToDisplayString() == "System.Text.Json.Serialization.JsonPropertyNameAttribute" &&
+                attribute.ConstructorArguments.Length == 1 &&
+                attribute.ConstructorArguments[0].Value is string name && name.Length > 0)
+            {
+                return name;
+            }
+        }
+
+        return ToSnakeCase(property.Name);
+    }
+
+    private static ShapeModel RecordShape(INamedTypeSymbol named, TypeRegistry registry, int depth)
+    {
+        string symbolKey = named.WithNullableAnnotation(NullableAnnotation.None).ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+        if (registry.NamesBySymbol.TryGetValue(symbolKey, out var known)) return new ShapeModel("record", Ref: known);
+
+        var properties = WireProperties(named);
+
+        // Nothing public to describe: the wire value is whatever the type serializes as.
+        if (properties.Count == 0) return new ShapeModel("json");
+
+        string name = TypeKeyOf(named, registry);
+        registry.NamesBySymbol[symbolKey] = name;
+
+        // The name is taken before the fields are read: a field of this very type resolves to the reference.
+        var model = new TypeModel(name, new List<KeyValuePair<string, ShapeModel>>());
+        registry.Types[name] = model;
+
+        foreach (var (property, wire) in properties)
+        {
+            model.Fields.Add(new KeyValuePair<string, ShapeModel>(wire, ShapeOf(property.Type, registry, depth + 1)));
+        }
+
+        return new ShapeModel("record", Ref: name);
+    }
+
+    /// <summary>
+    /// The type's key in <c>types</c>: its own name (a generic one carries its arguments, <c>PageItem</c>), and the
+    /// enclosing namespace's last part in front when another type already took the name.
+    /// </summary>
+    private static string TypeKeyOf(INamedTypeSymbol named, TypeRegistry registry)
+    {
+        string name = named.Name + string.Concat(named.TypeArguments.Select(ShortName));
+        if (!registry.Types.ContainsKey(name)) return name;
+
+        string? scope = named.ContainingNamespace?.Name;
+        string qualified = string.IsNullOrEmpty(scope) ? name : scope + name;
+        string candidate = qualified;
+        for (int i = 2; registry.Types.ContainsKey(candidate); i++) candidate = qualified + i;
+        return candidate;
+    }
+
+    private static string ShortName(ITypeSymbol type) => type switch
+    {
+        INamedTypeSymbol n => n.Name + string.Concat(n.TypeArguments.Select(ShortName)),
+        IArrayTypeSymbol a => ShortName(a.ElementType) + "Array",
+        _ => type.Name,
+    };
 
     private static bool IsList(ITypeSymbol type, out ITypeSymbol? element)
     {

@@ -30,7 +30,7 @@ defmodule Exoforge.Std.Database do
   }
 
   alias Exoforge.ActionDispatcher
-  alias Exoforge.Std.Database.{KindCache, Store}
+  alias Exoforge.Std.Database.{Include, KindCache, Store}
 
   def children, do: [KindCache]
 
@@ -42,18 +42,22 @@ defmodule Exoforge.Std.Database do
     operation = extract_operation(payload)
     arguments = extract_arguments(payload)
 
-    result =
-      case operation do
-        %{} = command -> Store.run(plugin, command)
-        _ ->
-          result = lldb(:exec, %{namespace: plugin, operation: operation, arguments: arguments})
-          if ddl?(operation), do: KindCache.forget(plugin)
-          result
-      end
+    with {:ok, columns} <- Include.parse(fetch_any(payload, [:include], nil)),
+         {:ok, plans} <- plan_includes(plugin, operation, columns) do
+      result =
+        case operation do
+          %{} = command -> Store.run(plugin, command)
+          _ ->
+            result = lldb(:exec, %{namespace: plugin, operation: operation, arguments: arguments})
+            if ddl?(operation), do: KindCache.forget(plugin)
+            result
+        end
 
-    case result do
-      {:ok, rows} when is_list(rows) -> {:ok, %{rows: rows}}
-      res -> res
+      case result do
+        {:ok, rows} when is_list(rows) -> with_included({:ok, %{rows: rows}}, plans)
+        {:ok, %{rows: rows} = res} when plans != [] and is_list(rows) -> with_included({:ok, res}, plans)
+        res -> res
+      end
     end
   end
 
@@ -124,6 +128,27 @@ defmodule Exoforge.Std.Database do
   ## ---- PRIVATE HELPERS ----
 
   defp exec(plugin, command), do: Store.run(plugin, command)
+
+  defp plan_includes(_plugin, _operation, []), do: {:ok, []}
+
+  defp plan_includes(plugin, operation, columns) do
+    root_table =
+      case operation do
+        %{} = command -> fetch_any(command, [:table], nil) |> then(&(&1 && to_string(&1)))
+        sql -> Include.table_of_sql(sql)
+      end
+
+    Include.plan(plugin, root_table, columns)
+  end
+
+  # `included` rides next to `rows`; a warning (a reference to a resource nobody deploys) never fails the query.
+  defp with_included(result, []), do: result
+
+  defp with_included({:ok, %{rows: rows} = res}, plans) do
+    {included, warnings} = Include.fetch(plans, rows)
+    res = Map.put(res, :included, included)
+    {:ok, if(warnings == [], do: res, else: Map.put(res, :warnings, warnings))}
+  end
 
   # A statement that changes tables: what this extension remembers about them is stale.
   defp ddl?(query) when is_binary(query), do: Regex.match?(~r/^\s*(create|alter|drop|truncate)\b/i, query)

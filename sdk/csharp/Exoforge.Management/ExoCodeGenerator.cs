@@ -15,6 +15,55 @@ public class ServiceContractModel
     public List<EventContractModel> Events { get; set; } = new();
     public List<ResourceContractModel> Resources { get; set; } = new();
     public List<(string PascalName, string Id)> CustomInputs { get; set; } = new();
+
+    /// <summary>The records the service's actions and events use, by the name the manifest gives them (<c>types</c>); empty for an older manifest.</summary>
+    public Dictionary<string, ContractTypeModel> Types { get; set; } = new(StringComparer.Ordinal);
+}
+
+/// <summary>A record in the manifest's <c>types</c> section: its fields by wire name, each with the shape that says what it holds.</summary>
+public class ContractTypeModel
+{
+    public string Name { get; set; } = string.Empty;
+    public List<ParamModel> Fields { get; set; } = new();
+}
+
+/// <summary>
+/// What a nested value is: a scalar, a list of <see cref="Items"/>, a string-keyed map of <see cref="Values"/>, or a
+/// record named <see cref="Ref"/> in the service's types. Mirrors the manifest's shape objects.
+/// </summary>
+public class TypeShape
+{
+    public string Type { get; set; } = "json";
+    public bool Nullable { get; set; }
+    public TypeShape? Items { get; set; }
+    public TypeShape? Values { get; set; }
+    public string? Ref { get; set; }
+    public List<string>? Choices { get; set; }
+
+    /// <summary>Whether it says more than the plain scalar atom beside it in the manifest does.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsRich => Type is "list" or "map" or "record" || Choices != null;
+
+    internal static TypeShape? Parse(JsonElement element, int depth = 0)
+    {
+        if (element.ValueKind != JsonValueKind.Object || depth > 32) return null;
+
+        var shape = new TypeShape
+        {
+            Type = element.TryGetProperty("type", out var t) && t.ValueKind == JsonValueKind.String ? t.GetString() ?? "json" : "json",
+            Nullable = element.TryGetProperty("nullable", out var n) && n.ValueKind == JsonValueKind.True,
+            Ref = element.TryGetProperty("ref", out var r) && r.ValueKind == JsonValueKind.String ? r.GetString() : null,
+        };
+
+        if (element.TryGetProperty("items", out var items)) shape.Items = Parse(items, depth + 1);
+        if (element.TryGetProperty("values", out var values)) shape.Values = Parse(values, depth + 1);
+        if (element.TryGetProperty("choices", out var choices) && choices.ValueKind == JsonValueKind.Array)
+        {
+            shape.Choices = choices.EnumerateArray().Select(c => c.GetString() ?? "").ToList();
+        }
+
+        return shape;
+    }
 }
 
 public class ActionContractModel
@@ -35,6 +84,9 @@ public class ActionContractModel
     /// takes that name, so the client mirrors the plugin's types instead of inventing `…Response`.
     /// </summary>
     public string? ReturnTypeName { get; set; }
+
+    /// <summary>The whole return as a shape (<c>returns_shape</c>), when the manifest says more than <c>returns</c> does.</summary>
+    public TypeShape? ReturnShape { get; set; }
 }
 
 public class ParamModel
@@ -46,6 +98,9 @@ public class ParamModel
 
     /// <summary>The server-side default as JSON text (a valid C# literal for a number, bool or string).</summary>
     public string? Default { get; set; }
+
+    /// <summary>What the value holds, for a list, a map, a record or an enum (<c>params_shapes</c>, <c>returns_shapes</c>, <c>payload_shapes</c>, a type's fields).</summary>
+    public TypeShape? Shape { get; set; }
 }
 
 public class EventContractModel
@@ -433,6 +488,7 @@ public static class ExoCodeGenerator
                 }
 
                 MarkNullable(aModel.Params, act, "params_nullable");
+                MarkShapes(aModel.Params, act, "params_shapes");
                 MarkParamDefaults(aModel.Params, act);
 
                 if (act.TryGetProperty("returns_list", out var listElem) && listElem.ValueKind == JsonValueKind.True)
@@ -478,6 +534,8 @@ public static class ExoCodeGenerator
                 }
 
                 MarkNullable(aModel.ReturnFields, act, "returns_nullable");
+                MarkShapes(aModel.ReturnFields, act, "returns_shapes");
+                if (act.TryGetProperty("returns_shape", out var returnShape)) aModel.ReturnShape = TypeShape.Parse(returnShape);
 
                 model.Actions.Add(aModel);
             }
@@ -522,7 +580,29 @@ public static class ExoCodeGenerator
                 }
 
                 MarkNullable(eModel.PayloadFields, evt, "payload_nullable");
+                MarkShapes(eModel.PayloadFields, evt, "payload_shapes");
                 model.Events.Add(eModel);
+            }
+        }
+
+        // Types: the records the shapes above refer to.
+        if (svc.TryGetProperty("types", out var types) && types.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var entry in types.EnumerateObject())
+            {
+                var type = new ContractTypeModel { Name = entry.Name };
+
+                if (entry.Value.ValueKind == JsonValueKind.Object &&
+                    entry.Value.TryGetProperty("fields", out var fields) && fields.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var field in fields.EnumerateObject())
+                    {
+                        var shape = TypeShape.Parse(field.Value);
+                        type.Fields.Add(new ParamModel { Name = field.Name, Type = shape?.Type ?? "json", Shape = shape, Nullable = shape?.Nullable ?? false });
+                    }
+                }
+
+                model.Types[entry.Name] = type;
             }
         }
 
@@ -782,7 +862,7 @@ public static class ExoCodeGenerator
             string svcPascal = ToPascalCase(svc.Name);
             foreach (var act in svc.Actions)
             {
-                if (act.ReturnFields.Count > 0 || !string.IsNullOrEmpty(act.ReturnTypeName))
+                if ((act.ReturnFields.Count > 0 || !string.IsNullOrEmpty(act.ReturnTypeName)) && !UsesShape(svc, act))
                 {
                     string respName = ResolveResponseModelName(svcPascal, act, emittedModelSignatures);
                     actionRespNames[act] = respName;
@@ -794,6 +874,10 @@ public static class ExoCodeGenerator
                 }
             }
         }
+
+        // The records the shapes name: one class each, shared by every request, response and event that holds one.
+        var types = new StubTypes(serviceList, ModelNames(serviceList));
+        AppendTypeClasses(sb, types, "    ", false, null, serializable);
 
         // Models
         foreach (var svc in serviceList)
@@ -832,7 +916,7 @@ public static class ExoCodeGenerator
                 var usedReqProps = new HashSet<string>(StringComparer.Ordinal);
                 foreach (var p in act.Params)
                 {
-                    string propType = WithNullable(MapTypeToCSharp(p.Type), p.Nullable);
+                    string propType = types.Field(svc, p, WithNullable(MapTypeToCSharp(p.Type), p.Nullable));
                     string propName = SafePropertyName(p.Name, reqName, usedReqProps);
                     sb.AppendLine($"        [JsonPropertyName(\"{p.Name}\")]");
                     if (p.Optional || propType == "JsonElement")
@@ -844,9 +928,9 @@ public static class ExoCodeGenerator
                 sb.AppendLine("    }");
                 sb.AppendLine();
 
-                if (act.ReturnFields.Count > 0)
+                if (act.ReturnFields.Count > 0 && actionRespNames.TryGetValue(act, out var legacyRespName))
                 {
-                    string respName = actionRespNames[act];
+                    string respName = legacyRespName;
 
                     if (!emittedModels.Add(respName))
                     {
@@ -862,7 +946,7 @@ public static class ExoCodeGenerator
                     {
                         string propName = SafePropertyName(f.Name, respName, usedRespProps);
                         sb.AppendLine($"        [JsonPropertyName(\"{f.Name}\")]");
-                        sb.AppendLine($"        public {WithNullable(MapReturnFieldType(svc, f), f.Nullable)} {propName} {{ get; set; }} = default!;");
+                        sb.AppendLine($"        public {types.Field(svc, f, WithNullable(MapReturnFieldType(svc, f), f.Nullable))} {propName} {{ get; set; }} = default!;");
                     }
                     sb.AppendLine("    }");
                     sb.AppendLine();
@@ -881,7 +965,7 @@ public static class ExoCodeGenerator
                 {
                     string propName = SafePropertyName(f.Name, evtName, usedProps);
                     sb.AppendLine($"        [JsonPropertyName(\"{f.Name}\")]");
-                    sb.AppendLine($"        public {WithNullable(MapTypeToCSharp(f.Type), f.Nullable)} {propName} {{ get; set; }} = default!;");
+                    sb.AppendLine($"        public {types.Field(svc, f, WithNullable(MapTypeToCSharp(f.Type), f.Nullable))} {propName} {{ get; set; }} = default!;");
                 }
                 sb.AppendLine("    }");
                 sb.AppendLine();
@@ -919,8 +1003,8 @@ public static class ExoCodeGenerator
                 string actPascal = ToPascalCase(act.Name);
                 string reqName = $"{svcPascal}{actPascal}Request";
                 string? respName = actionRespNames.TryGetValue(act, out var arName) ? arName : null;
-                string respType = ReturnTypeName(svcPascal, act, respName);
-                string declaration = respType == "JsonElement" ? "JsonElement" : respType + "?";
+                string respType = ReturnCs(types, svc, svcPascal, act, respName);
+                string declaration = respType == "JsonElement" || respType.EndsWith("?", StringComparison.Ordinal) ? respType : respType + "?";
                 string scope = string.IsNullOrEmpty(act.Scope) ? "" : $", Scope = \"{act.Scope}\"";
 
                 sb.AppendLine($"        [ExoAction(\"{act.Name}\"{scope})]");
@@ -949,8 +1033,8 @@ public static class ExoCodeGenerator
                 string actPascal = ToPascalCase(act.Name);
                 string reqName = $"{svcPascal}{actPascal}Request";
                 string? respName = actionRespNames.TryGetValue(act, out var arName) ? arName : null;
-                string respType = ReturnTypeName(svcPascal, act, respName);
-                string declaration = respType == "JsonElement" ? "JsonElement" : respType + "?";
+                string respType = ReturnCs(types, svc, svcPascal, act, respName);
+                string declaration = respType == "JsonElement" || respType.EndsWith("?", StringComparison.Ordinal) ? respType : respType + "?";
                 bool isValueType = respType is "int" or "long" or "bool" or "float" or "double" or "byte" or "short" or "uint" or "ulong" or "sbyte" or "ushort" or "decimal";
                 string callType = isValueType ? respType + "?" : respType;
 
@@ -1243,6 +1327,222 @@ public static class ExoCodeGenerator
         return sb.ToString();
     }
 
+    // ---- Typed stubs: nested records, lists and dictionaries ---------------------------------------------
+
+    private static readonly string[] FixedGeneratedNames =
+    {
+        "ExoClient", "ExoServices", "Exo", "Exoforge", "ExoforgePluginServices", "ExoforgeServicesHub",
+        "ExoClientGeneratedExtensions", "ExoStudioServices", "GeneratedServicesJsonContext", "GeneratedServicesBootstrap",
+        "ExoContractResourceAttribute", "ExoActionException", "ExoEventFrame",
+    };
+
+    /// <summary>True when the action's return is described by a shape whose every record the service's <c>types</c> has.</summary>
+    private static bool UsesShape(ServiceContractModel svc, ActionContractModel act) =>
+        act.ReturnShape is { IsRich: true } shape && Resolvable(svc, shape);
+
+    private static bool Resolvable(ServiceContractModel svc, TypeShape shape)
+    {
+        if (shape.Type == "record" && (shape.Ref is null || !svc.Types.ContainsKey(shape.Ref))) return false;
+        return (shape.Items is null || Resolvable(svc, shape.Items)) && (shape.Values is null || Resolvable(svc, shape.Values));
+    }
+
+    /// <summary>
+    /// The C# names of a stub file's nested records, and the C# type of a shape. A record's name is its key in
+    /// <c>types</c>; it is prefixed with the service's name only when another model of the file already has it,
+    /// and a record two services describe identically is emitted once.
+    /// </summary>
+    private sealed class StubTypes
+    {
+        private readonly HashSet<string> _reserved;
+        private readonly Dictionary<string, string> _signatures = new(StringComparer.Ordinal);
+        private readonly Dictionary<(ServiceContractModel, string), string> _names = new();
+        private readonly List<(string Name, ServiceContractModel Svc, ContractTypeModel Type)> _emit = new();
+
+        public StubTypes(IReadOnlyList<ServiceContractModel> services, IEnumerable<string> reserved)
+        {
+            _reserved = new HashSet<string>(reserved, StringComparer.Ordinal);
+            foreach (string fixedName in FixedGeneratedNames) _reserved.Add(fixedName);
+
+            // Only the records something reaches: a filtered service leaves its unreachable records out.
+            foreach (var svc in services)
+            {
+                foreach (string key in Reached(svc, RootShapes(svc)).OrderBy(k => k, StringComparer.Ordinal))
+                {
+                    Resolve(svc, key);
+                }
+            }
+        }
+
+        public IReadOnlyList<(string Name, ServiceContractModel Svc, ContractTypeModel Type)> Types => _emit;
+
+        public static IEnumerable<TypeShape> RootShapes(ServiceContractModel svc, Func<ActionContractModel, bool>? actionFilter = null, bool events = true)
+        {
+            foreach (var act in svc.Actions.Where(a => actionFilter?.Invoke(a) ?? true))
+            {
+                if (act.ReturnShape != null && UsesShape(svc, act)) yield return act.ReturnShape;
+                foreach (var f in act.ReturnFields) if (f.Shape != null) yield return f.Shape;
+                foreach (var p in act.Params) if (p.Shape != null) yield return p.Shape;
+            }
+
+            if (!events) yield break;
+            foreach (var evt in svc.Events)
+            {
+                foreach (var f in evt.PayloadFields) if (f.Shape != null) yield return f.Shape;
+            }
+        }
+
+        /// <summary>The keys of the service's types the shapes reach, directly or through other types.</summary>
+        public static HashSet<string> Reached(ServiceContractModel svc, IEnumerable<TypeShape> roots)
+        {
+            var reached = new HashSet<string>(StringComparer.Ordinal);
+            var pending = new Stack<TypeShape>(roots);
+
+            while (pending.Count > 0)
+            {
+                var shape = pending.Pop();
+                if (shape.Items != null) pending.Push(shape.Items);
+                if (shape.Values != null) pending.Push(shape.Values);
+
+                if (shape.Ref != null && svc.Types.TryGetValue(shape.Ref, out var type) && reached.Add(shape.Ref))
+                {
+                    foreach (var field in type.Fields) if (field.Shape != null) pending.Push(field.Shape);
+                }
+            }
+
+            return reached;
+        }
+
+        /// <summary>The emitted names of the records the shapes reach.</summary>
+        public HashSet<string> NamesReached(ServiceContractModel svc, IEnumerable<TypeShape> roots) =>
+            new(Reached(svc, roots).Select(k => _names[(svc, k)]), StringComparer.Ordinal);
+
+        private string Resolve(ServiceContractModel svc, string key)
+        {
+            if (_names.TryGetValue((svc, key), out var known)) return known;
+
+            var type = svc.Types[key];
+            string signature = SignatureOfType(svc, key, new HashSet<string>(StringComparer.Ordinal));
+            string baseName = ToPascalCase(key);
+            string svcPascal = ToPascalCase(svc.Name);
+
+            string name = baseName;
+            if (_reserved.Contains(name) || (_signatures.TryGetValue(name, out var other) && other != signature)) name = svcPascal + baseName;
+            for (int i = 2; _reserved.Contains(name) || (_signatures.TryGetValue(name, out var again) && again != signature); i++)
+            {
+                name = $"{svcPascal}{baseName}{i}";
+            }
+
+            _names[(svc, key)] = name;
+
+            // Two services describing the same record the same way share the one class.
+            if (_signatures.TryAdd(name, signature)) _emit.Add((name, svc, type));
+
+            return name;
+        }
+
+        /// <summary>
+        /// A record's structure, the records it refers to included, so two services share a class only when everything
+        /// under it matches. A record already being described (a cycle) is written as a back reference.
+        /// </summary>
+        private static string SignatureOfType(ServiceContractModel svc, string key, HashSet<string> visiting)
+        {
+            if (!svc.Types.TryGetValue(key, out var type)) return "?" + key;
+            if (!visiting.Add(key)) return "^" + key;
+
+            string signature = "{" + string.Join("|", type.Fields.Select(f => $"{f.Name}:{SignatureOf(svc, f.Shape, visiting)}")) + "}";
+            visiting.Remove(key);
+            return signature;
+        }
+
+        private static string SignatureOf(ServiceContractModel svc, TypeShape? shape, HashSet<string> visiting)
+        {
+            if (shape is null) return "json";
+
+            string choices = shape.Choices is null ? "" : "=" + string.Join(",", shape.Choices);
+            string target = shape.Ref is null ? "" : shape.Ref + SignatureOfType(svc, shape.Ref, visiting);
+            return $"{shape.Type}{(shape.Nullable ? "?" : "")}{choices}<{(shape.Items is null ? "" : SignatureOf(svc, shape.Items, visiting))},{(shape.Values is null ? "" : SignatureOf(svc, shape.Values, visiting))},{target}>";
+        }
+
+        /// <summary>The C# type of a shape, with a <c>?</c> when it is nullable.</summary>
+        public string Cs(ServiceContractModel svc, TypeShape shape)
+        {
+            string type = shape.Type switch
+            {
+                "string" => "string",
+                "int" => "int",
+                "integer" => "long",
+                "float" => "double",
+                "decimal" => "decimal",
+                "boolean" => "bool",
+                "uuid" => "Guid",
+                "datetime" => "DateTimeOffset",
+                "timespan" => "TimeSpan",
+                "binary" => "byte[]",
+                "list" => shape.Items is null ? "List<JsonElement>" : $"List<{Cs(svc, shape.Items)}>",
+                "map" => shape.Values is null ? "JsonElement" : $"Dictionary<string, {Cs(svc, shape.Values)}>",
+                "record" => shape.Ref != null && svc.Types.ContainsKey(shape.Ref) ? Resolve(svc, shape.Ref) : "JsonElement",
+                _ => "JsonElement",
+            };
+
+            return shape.Nullable && type != "JsonElement" ? type + "?" : type;
+        }
+
+        /// <summary>A field's C# type: from its shape when the manifest gave a rich one, else what <paramref name="legacy"/> says.</summary>
+        public string Field(ServiceContractModel svc, ParamModel field, string legacy) =>
+            field.Shape is { IsRich: true } shape && Resolvable(svc, shape) ? Cs(svc, shape) : legacy;
+
+        /// <summary>The return type of an action whose return is described by a shape.</summary>
+        public string Return(ServiceContractModel svc, ActionContractModel act) => Cs(svc, act.ReturnShape!);
+    }
+
+    private static void AppendTypeClasses(StringBuilder sb, StubTypes types, string indent, bool unityDocs, HashSet<string>? clientNames, List<string>? serializable)
+    {
+        foreach (var (name, svc, type) in types.Types.OrderBy(t => t.Name, StringComparer.Ordinal))
+        {
+            bool editorOnly = clientNames != null && !clientNames.Contains(name);
+            serializable?.Add(name);
+
+            if (editorOnly) sb.AppendLine("#if UNITY_EDITOR");
+            if (unityDocs) sb.AppendLine($"{indent}/// <summary>Record used by the {svc.Name} service.</summary>");
+            sb.AppendLine($"{indent}public class {name}");
+            sb.AppendLine($"{indent}{{");
+
+            var used = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var field in type.Fields)
+            {
+                string propName = SafePropertyName(field.Name, name, used);
+                string csType = field.Shape != null ? types.Cs(svc, field.Shape) : "JsonElement";
+                sb.AppendLine($"{indent}    [JsonPropertyName(\"{field.Name}\")]");
+                sb.AppendLine($"{indent}    public {csType} {propName} {{ get; set; }} = default!;");
+            }
+
+            sb.AppendLine($"{indent}}}");
+            if (editorOnly) sb.AppendLine("#endif");
+            sb.AppendLine();
+        }
+    }
+
+    /// <summary>The names the other generated models of a stub file take, so a nested record never collides with one.</summary>
+    private static IEnumerable<string> ModelNames(IEnumerable<ServiceContractModel> services)
+    {
+        foreach (var svc in services)
+        {
+            string svcPascal = ToPascalCase(svc.Name);
+            yield return $"{svcPascal}ServiceClient";
+            yield return $"I{svcPascal}Service";
+            yield return $"{svcPascal}Inputs";
+
+            foreach (var res in svc.Resources) yield return $"{svcPascal}{ResourceTypeName(res)}";
+            foreach (var evt in svc.Events) yield return $"{svcPascal}{ToPascalCase(evt.Name)}Event";
+
+            foreach (var act in svc.Actions)
+            {
+                yield return $"{svcPascal}{ToPascalCase(act.Name)}Request";
+                if (!UsesShape(svc, act) && (act.ReturnFields.Count > 0 || !string.IsNullOrEmpty(act.ReturnTypeName))) yield return ResponseModelName(svcPascal, act);
+            }
+        }
+    }
+
     private static string MapReturnFieldType(ServiceContractModel svc, ParamModel field)
     {
         string lower = field.Type.ToLowerInvariant();
@@ -1294,7 +1594,7 @@ public static class ExoCodeGenerator
                 {
                     clientModelNames.Add($"{svcPascal}{ToPascalCase(act.Name)}Request");
                 }
-                if (act.ReturnFields.Count > 0 || !string.IsNullOrEmpty(act.ReturnTypeName))
+                if ((act.ReturnFields.Count > 0 || !string.IsNullOrEmpty(act.ReturnTypeName)) && !UsesShape(svc, act))
                 {
                     string respName = ResolveResponseModelName(svcPascal, act, emittedModelSignatures);
                     actionRespNames[act] = respName;
@@ -1313,7 +1613,7 @@ public static class ExoCodeGenerator
             string svcPascal = ToPascalCase(svc.Name);
             foreach (var act in svc.Actions)
             {
-                if ((act.ReturnFields.Count > 0 || !string.IsNullOrEmpty(act.ReturnTypeName)) && !actionRespNames.ContainsKey(act))
+                if ((act.ReturnFields.Count > 0 || !string.IsNullOrEmpty(act.ReturnTypeName)) && !UsesShape(svc, act) && !actionRespNames.ContainsKey(act))
                 {
                     string respName = ResolveResponseModelName(svcPascal, act, emittedModelSignatures);
                     actionRespNames[act] = respName;
@@ -1344,6 +1644,15 @@ public static class ExoCodeGenerator
         sb.AppendLine($"namespace {targetNamespace}");
         sb.AppendLine("{");
 
+        // The records the shapes name, one class each. Those only the Studio's actions or services reach stay in the editor.
+        var types = new StubTypes(serviceList, ModelNames(serviceList));
+        var clientTypeNames = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var svc in serviceList.Where(IsClientVisibleService))
+        {
+            clientTypeNames.UnionWith(types.NamesReached(svc, StubTypes.RootShapes(svc, IsClientAction)));
+        }
+        AppendTypeClasses(sb, types, "", true, clientTypeNames, null);
+
         // 1. Strongly-typed Models (Requests, Responses, Events)
         foreach (var svc in serviceList)
         {
@@ -1366,7 +1675,7 @@ public static class ExoCodeGenerator
                     foreach (var p in act.Params)
                     {
                         string propName = SafePropertyName(p.Name, reqName, usedProps);
-                        string csType = WithNullable(MapTypeToCSharp(p.Type), p.Nullable);
+                        string csType = types.Field(svc, p, WithNullable(MapTypeToCSharp(p.Type), p.Nullable));
                         sb.AppendLine($"    [JsonPropertyName(\"{p.Name}\")]");
                         if (p.Optional || csType == "JsonElement")
                         {
@@ -1379,9 +1688,9 @@ public static class ExoCodeGenerator
                     sb.AppendLine();
                 }
 
-                if (act.ReturnFields.Count > 0)
+                if (act.ReturnFields.Count > 0 && actionRespNames.TryGetValue(act, out var legacyRespName))
                 {
-                    string respName = actionRespNames[act];
+                    string respName = legacyRespName;
 
                     if (emittedModels.Add(respName))
                     {
@@ -1394,7 +1703,7 @@ public static class ExoCodeGenerator
                         foreach (var r in act.ReturnFields)
                         {
                             string propName = SafePropertyName(r.Name, respName, usedProps);
-                            string csType = WithNullable(MapTypeToCSharp(r.Type), r.Nullable);
+                            string csType = types.Field(svc, r, WithNullable(MapTypeToCSharp(r.Type), r.Nullable));
                             sb.AppendLine($"    [JsonPropertyName(\"{r.Name}\")]");
                             sb.AppendLine($"    public {csType} {propName} {{ get; set; }} = default!;");
                         }
@@ -1421,7 +1730,7 @@ public static class ExoCodeGenerator
                     foreach (var f in evt.PayloadFields)
                     {
                         string propName = SafePropertyName(f.Name, evtName, usedProps);
-                        string csType = MapTypeToCSharp(f.Type);
+                        string csType = types.Field(svc, f, MapTypeToCSharp(f.Type));
                         sb.AppendLine($"    [JsonPropertyName(\"{f.Name}\")]");
                         sb.AppendLine($"    public {csType} {propName} {{ get; set; }} = default!;");
                     }
@@ -1691,7 +2000,7 @@ public static class ExoCodeGenerator
 
                 bool hasParams = act.Params.Count > 0;
                 string? respName = actionRespNames.TryGetValue(act, out var arName) ? arName : null;
-                string returnType = ReturnTypeName(svcPascal, act, respName);
+                string returnType = ReturnCs(types, svc, svcPascal, act, respName);
 
                 bool isAuthAction = svc.Name.Equals("auth", StringComparison.OrdinalIgnoreCase) &&
                     (act.Name.Equals("anonymous", StringComparison.OrdinalIgnoreCase) ||
@@ -1714,7 +2023,7 @@ public static class ExoCodeGenerator
 
                     foreach (var p in act.Params)
                     {
-                        string csType = MapTypeToCSharp(p.Type);
+                        string csType = types.Field(svc, p, MapTypeToCSharp(p.Type));
                         string propName = SafePropertyName(p.Name, $"{svcPascal}{actPascal}Request", usedReqProps);
                         string paramName = EscapeIdentifier(SafeParamName(p.Name, usedParams));
                         paramDefs.Add($"{csType} {paramName}");
@@ -1923,6 +2232,9 @@ public static class ExoCodeGenerator
         return baseName;
     }
 
+    private static string ReturnCs(StubTypes types, ServiceContractModel svc, string svcPascal, ActionContractModel act, string? explicitResponseModelName) =>
+        UsesShape(svc, act) ? types.Return(svc, act) : ReturnTypeName(svcPascal, act, explicitResponseModelName);
+
     private static string ReturnTypeName(string svcPascal, ActionContractModel act, string? explicitResponseModelName = null)
     {
         string element;
@@ -1959,7 +2271,8 @@ public static class ExoCodeGenerator
             Actions = actions,
             Events = service.Events,
             Resources = service.Resources,
-            CustomInputs = service.CustomInputs
+            CustomInputs = service.CustomInputs,
+            Types = service.Types
         };
     }
 
@@ -1983,6 +2296,17 @@ public static class ExoCodeGenerator
 
         var set = new HashSet<string>(names.EnumerateArray().Select(n => n.GetString() ?? ""), StringComparer.Ordinal);
         foreach (var field in fields) field.Nullable = set.Contains(field.Name);
+    }
+
+    /// <summary>Attaches the shapes the manifest lists under <paramref name="key"/> (a map of field name to shape object).</summary>
+    private static void MarkShapes(List<ParamModel> fields, JsonElement owner, string key)
+    {
+        if (!owner.TryGetProperty(key, out var shapes) || shapes.ValueKind != JsonValueKind.Object) return;
+
+        foreach (var field in fields)
+        {
+            if (shapes.TryGetProperty(field.Name, out var shape)) field.Shape = TypeShape.Parse(shape);
+        }
     }
 
     /// <summary>Applies <c>params_optional</c> and <c>params_defaults</c>: a parameter the caller may omit, and what the server then uses.</summary>

@@ -55,7 +55,10 @@ defmodule Exoforge.ActionDispatcher do
         rid: rid,
         depth: if(parent, do: parent.depth + 1, else: 0),
         capture: capture,
-        internal: internal?
+        internal: internal?,
+        # The scopes of the request that started the chain: a nested internal dispatch (an extension
+        # reading its own database for a player) still answers to the player who asked.
+        scopes: (parent && Map.get(parent, :scopes)) || extract_caller_scopes(payload, opts)
       })
 
     try do

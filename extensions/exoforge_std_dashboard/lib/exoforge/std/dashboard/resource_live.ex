@@ -8,6 +8,7 @@ defmodule Exoforge.Std.Dashboard.ResourceLive do
   import Exoforge.Std.Dashboard.Components
   alias Exoforge.ExtensionRegistry
   alias Exoforge.DrawerRegistry
+  alias Exoforge.Std.Dashboard.ResourceRefs
 
   # 25 rows a page: a resource can hold thousands, and the browser is a scan surface.
   @per_page 25
@@ -33,7 +34,8 @@ defmodule Exoforge.Std.Dashboard.ResourceLive do
           %{
             key: c[:name] || c["name"],
             label: Phoenix.Naming.humanize(to_string(c[:name] || c["name"])),
-            type: if((c[:name] || c["name"]) in [:id, :player_id], do: :code, else: :text)
+            type: if((c[:name] || c["name"]) in [:id, :player_id], do: :code, else: :text),
+            references: c[:references] || c["references"]
           }
         end)
       end
@@ -47,12 +49,14 @@ defmodule Exoforge.Std.Dashboard.ResourceLive do
        resource: res,
        columns: table_columns,
        rows: rows,
+       fk_links: ResourceRefs.links(table_columns, rows, ref_opts(socket)),
        row_total: total,
        row_page: 1,
        per_page: @per_page,
        row_pages: max(ceil(total / @per_page), 1),
        drawer_open: false,
        inspected_row: nil,
+       referenced_by: [],
        drawer_tabs: drawer_tabs,
        inspected_tab: "overview",
        export_modal_open: false,
@@ -68,15 +72,19 @@ defmodule Exoforge.Std.Dashboard.ResourceLive do
     row =
       case params["focus"] do
         "row:" <> id ->
+          # A link from another resource can point at a row that is not on the first page.
           Enum.find(socket.assigns.rows, fn r ->
             to_string(r[:id] || r["id"] || r[:player_id] || r["player_id"]) == id
-          end)
+          end) || ResourceRefs.fetch_row(socket.assigns.resource_name, id, ref_opts(socket).scopes)
 
         _ ->
           nil
       end
 
-    {:noreply, assign(socket, drawer_open: row != nil, inspected_row: row)}
+    referenced_by =
+      if row, do: ResourceRefs.referenced_by(socket.assigns.resource_name, row, ref_opts(socket)), else: []
+
+    {:noreply, assign(socket, drawer_open: row != nil, inspected_row: row, referenced_by: referenced_by)}
   end
 
   @impl true
@@ -161,6 +169,10 @@ defmodule Exoforge.Std.Dashboard.ResourceLive do
     {:noreply, load_page(socket, target)}
   end
 
+  # Reads of referenced resources run as the viewer, not as the server.
+  defp ref_opts(socket),
+    do: %{scopes: socket.assigns[:current_scopes] || [Exoforge.Auth.Roles.studio()]}
+
   defp load_page(socket, page) do
     page = max(page, 1)
     offset = (page - 1) * @per_page
@@ -174,6 +186,7 @@ defmodule Exoforge.Std.Dashboard.ResourceLive do
 
         assign(socket,
           rows: rows,
+          fk_links: ResourceRefs.links(socket.assigns.columns, rows, ref_opts(socket)),
           row_total: total,
           row_page: min(page, pages),
           row_pages: pages
@@ -252,6 +265,7 @@ defmodule Exoforge.Std.Dashboard.ResourceLive do
         id="declarative_resource_table"
         rows={@rows}
         columns={@columns}
+        fk_links={@fk_links}
         row_click_event="inspect_row"
         empty_text={"No records found for #{@resource_name}."}
       />
@@ -268,6 +282,7 @@ defmodule Exoforge.Std.Dashboard.ResourceLive do
         <%= if @inspected_row do %>
           <div class="space-y-4 text-xs">
             <pre class="p-4 bg-gray-50 border rounded-xl overflow-x-auto font-mono text-gray-700"><%= Jason.encode!(@inspected_row, pretty: true) %></pre>
+            <ResourceRefs.referenced_by_list groups={@referenced_by} />
           </div>
         <% end %>
       </.side_drawer>

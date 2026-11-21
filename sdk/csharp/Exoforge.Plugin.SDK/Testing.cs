@@ -75,11 +75,11 @@ public class InMemoryDatabase : IDatabase
         _store.TryRemove((table.ToLowerInvariant(), key), out _);
     }
 
-    public IReadOnlyList<T> Query<T>(string sql, params object?[] args) => All<T>("");
+    public IReadOnlyList<T> Query<T>(string sql, params object?[] args) => throw new NotSupportedException("InMemoryDatabase does not implement SQL; use All/Get or a host-backed database.");
 
-    public T? QuerySingle<T>(string sql, params object?[] args) => All<T>("").FirstOrDefault();
+    public T? QuerySingle<T>(string sql, params object?[] args) => throw new NotSupportedException("InMemoryDatabase does not implement SQL; use All/Get or a host-backed database.");
 
-    public int Execute(string sql, params object?[] args) => 0;
+    public int Execute(string sql, params object?[] args) => throw new NotSupportedException("InMemoryDatabase does not implement SQL.");
 
     public void Transaction(Action<ITransaction> tx)
     {

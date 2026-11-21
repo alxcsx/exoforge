@@ -214,6 +214,33 @@ public class HostDatabase : IDatabase
         return list;
     }
 
+    internal IReadOnlyList<T> QueryWithIncludes<T>(string sql, object?[] args, IReadOnlyList<IncludeSpec> includes)
+    {
+        var result = RunSql(sql, args, includes, out _);
+        if (result.Rows is null) return Array.Empty<T>();
+        var list = new List<T>();
+        foreach (var row in result.Rows.Value.EnumerateArray())
+        {
+            var value = PluginJson.DeserializeDatabaseRow<T>(row.GetRawText());
+            if (value is null) continue;
+            foreach (var include in includes)
+            {
+                if (!row.TryGetProperty(include.Column.Trim('"'), out var fk) || fk.ValueKind == JsonValueKind.Null) continue;
+                if (!result.Included.TryGetValue(include.Column.Trim('"'), out var values) || !values.TryGetValue(fk.ToString(), out var referenced)) continue;
+                include.Navigation!.SetValue(value, PluginJson.DeserializeDatabaseRow(referenced.GetRawText(), include.ReferenceType));
+            }
+            list.Add(value);
+        }
+        return list;
+    }
+
+    internal TReference? Include<TReference>(string table, string column, object key)
+    {
+        var result = RunSql($"SELECT * FROM {SqlExpression.Quote(table)} WHERE {column} = $1 LIMIT 1", new[] { key }, new[] { new IncludeSpec(column, null, typeof(TReference)) }, out _);
+        return result.Included.TryGetValue(column.Trim('"'), out var values) && values.TryGetValue(key.ToString()!, out var row)
+            ? PluginJson.DeserializeDatabaseRow<TReference>(row.GetRawText()) : default;
+    }
+
     public T? QuerySingle<T>(string sql, params object?[] args)
     {
         var rows = Query<T>(sql, args);
@@ -288,7 +315,9 @@ public class HostDatabase : IDatabase
     }
 
     /// <summary>Runs SQL through the <c>:database</c> service and returns its rows array.</summary>
-    private JsonElement? RunSql(string sql, object?[] args, out int affected)
+    private JsonElement? RunSql(string sql, object?[] args, out int affected) => RunSql(sql, args, Array.Empty<IncludeSpec>(), out affected).Rows;
+
+    private (JsonElement? Rows, Dictionary<string, Dictionary<string, JsonElement>> Included) RunSql(string sql, object?[] args, IReadOnlyList<IncludeSpec> includes, out int affected)
     {
         affected = 0;
 
@@ -298,6 +327,12 @@ public class HostDatabase : IDatabase
             ["query"] = sql,
             ["args"] = JsonNode.Parse(PluginJson.Serialize(args ?? Array.Empty<object?>()))
         };
+        if (includes.Count > 0)
+        {
+            var include = new JsonArray();
+            foreach (var item in includes) include.Add(new JsonObject { ["column"] = item.Column.Trim('"') });
+            payload["include"] = include;
+        }
 
         string? raw = HostBridge.CallActionRaw("database", "execute", payload);
         if (raw is null)
@@ -320,12 +355,15 @@ public class HostDatabase : IDatabase
                 affected = num.GetInt32();
             }
 
-            return root.TryGetProperty("rows", out var rows) && rows.ValueKind == JsonValueKind.Array
-                ? rows.Clone()
-                : null;
+            var included = new Dictionary<string, Dictionary<string, JsonElement>>(StringComparer.Ordinal);
+            if (root.TryGetProperty("included", out var includedRoot) && includedRoot.ValueKind == JsonValueKind.Object)
+                foreach (var column in includedRoot.EnumerateObject())
+                    if (column.Value.ValueKind == JsonValueKind.Object)
+                        included[column.Name] = column.Value.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.Clone(), StringComparer.Ordinal);
+            return (root.TryGetProperty("rows", out var rows) && rows.ValueKind == JsonValueKind.Array ? rows.Clone() : null, included);
         }
 
-        return root.ValueKind == JsonValueKind.Array ? root.Clone() : null;
+        return (root.ValueKind == JsonValueKind.Array ? root.Clone() : null, new Dictionary<string, Dictionary<string, JsonElement>>(StringComparer.Ordinal));
     }
 }
 

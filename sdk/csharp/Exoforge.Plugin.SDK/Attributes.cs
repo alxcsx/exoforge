@@ -321,6 +321,24 @@ public class ExoColumnAttribute : Attribute
 }
 
 /// <summary>
+/// Marks a resource navigation that is populated only by <c>Include</c>.
+/// The argument names the resource's declared foreign-key column property.
+/// Navigations are never persisted or serialized.
+/// </summary>
+[AttributeUsage(AttributeTargets.Property, Inherited = false, AllowMultiple = false)]
+public sealed class ExoNavigationAttribute : Attribute
+{
+    public string ForeignKeyProperty { get; }
+
+    public ExoNavigationAttribute(string foreignKeyProperty)
+    {
+        if (string.IsNullOrWhiteSpace(foreignKeyProperty))
+            throw new ArgumentException("A navigation must name its foreign-key property.", nameof(foreignKeyProperty));
+        ForeignKeyProperty = foreignKeyProperty;
+    }
+}
+
+/// <summary>
 /// Built-in standard dashboard input widget types for <see cref="ExoColumnAttribute.InputType"/>.
 /// </summary>
 public static partial class ExoInput

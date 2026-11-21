@@ -568,20 +568,6 @@ namespace Exoforge.Unity.Editor
                 actionsGroup.Add(buildDeployAllBtn);
             }
 
-            var autoStubsToggle = new Toggle("Auto-stubs on rebuild")
-            {
-                value = ExoforgeEditorConfig.AutoGenerateStubsOnBuild,
-                tooltip = "Automatically regenerate typed C# plugin stubs after compiling or rebuilding an extension"
-            };
-            autoStubsToggle.style.marginLeft = 8;
-            autoStubsToggle.style.marginRight = 8;
-            autoStubsToggle.style.alignSelf = Align.Center;
-            autoStubsToggle.RegisterValueChangedCallback(evt =>
-            {
-                ExoforgeEditorConfig.AutoGenerateStubsOnBuild = evt.newValue;
-            });
-            actionsGroup.Add(autoStubsToggle);
-
             var studioBtn = ExoforgeUIStyle.CreateModernButton(
                 "⚡ Studio Window ↗",
                 () => ExoforgeControlCenter.ShowWindow(),
@@ -3037,9 +3023,10 @@ namespace Exoforge.Unity.Editor
             await BuildPluginAsync(plugin);
         }
 
-        private async Task BuildPluginAsync(PluginCardModel plugin)
+        /// <summary>Builds one extension (the stub pass runs first). Returns false when it did not build; the banner says why.</summary>
+        private async Task<bool> BuildPluginAsync(PluginCardModel plugin)
         {
-            if (_isBuilding) return;
+            if (_isBuilding) return false;
 
             string targetName = !string.IsNullOrEmpty(plugin.Id) ? plugin.Id : plugin.Name;
             _isBuilding = true;
@@ -3058,19 +3045,8 @@ namespace Exoforge.Unity.Editor
                 ExoforgeExtensionOps.ClearBuildFailure(targetName);
                 ShowStatus($"✓ Successfully built '{targetName}'.");
 
-                if (ExoforgeEditorConfig.AutoGenerateStubsOnBuild && !plugin.IsExcluded)
-                {
-                    try
-                    {
-                        await GenerateStubsAsync(plugin);
-                    }
-                    catch (Exception ex)
-                    {
-                        UnityEngine.Debug.LogWarning($"[Exoforge] Auto-generation of stubs for '{targetName}' skipped: {ex.Message}");
-                    }
-                }
-
                 await RefreshPluginsDataAsync();
+                return true;
             }
             catch (Exception ex)
             {
@@ -3080,8 +3056,12 @@ namespace Exoforge.Unity.Editor
                 ExoforgeExtensionOps.RecordBuildFailure(targetName, errorDetails);
 
                 UnityEngine.Debug.LogError($"[Exoforge] Build failed for extension '{targetName}':\n{errorDetails}");
-                ShowStatus($"Build failed for '{targetName}' — see Unity Console or Build Log.");
+                ShowStatus(ex is ExoStubPassException
+                        ? $"Cannot build '{targetName}': {ex.Message}"
+                        : $"Build failed for '{targetName}' — see Unity Console or Build Log.",
+                    StatusSeverity.Error);
                 await RefreshPluginsDataAsync();
+                return false;
             }
             finally
             {
@@ -3122,9 +3102,17 @@ namespace Exoforge.Unity.Editor
             }
 
             ShowStatus($"Building {wsPlugins.Count} workspace extension(s)…");
+            var failedBuilds = new List<string>();
             foreach (var p in wsPlugins)
             {
-                await BuildPluginAsync(p);
+                if (!await BuildPluginAsync(p)) failedBuilds.Add(p.Name);
+            }
+
+            // The banner for the failed build says why; deploying the rest would bury it and ship an older binary.
+            if (failedBuilds.Count > 0)
+            {
+                ShowStatus($"Not deploying: the build failed for {string.Join(", ", failedBuilds)}. See the Build Log.", StatusSeverity.Error);
+                return;
             }
 
             if (!ExoforgeExtensionOps.ConfirmDeploy(ExoforgeControlCenter.ActiveEnvironment?.Name ?? "default", ExoforgeControlCenter.ActiveWsEndpoint, wsPlugins.Count))
@@ -3213,12 +3201,18 @@ namespace Exoforge.Unity.Editor
             {
                 var ws = ExoWorkspace.Load(ExoforgeEditorConfig.GetAbsoluteWorkspacePath());
                 var deployer = new ExoDeployer(ws);
-                string output = await deployer.GenerateExtensionStubsAsync(plugin.Name, existingClient: GetClient());
-                ShowStatus($"✓ Generated stubs for '{plugin.Name}' → {output}");
+                var result = await deployer.GenerateStubsAsync(new[] { plugin.Name }, existingClient: GetClient());
+                var item = result.Items[0];
+                switch (item.Outcome)
+                {
+                    case StubOutcome.Generated: ShowStatus($"✓ Generated stubs for '{plugin.Name}' → {item.Output}", StatusSeverity.Success); break;
+                    case StubOutcome.Failed: ShowStatus($"Stubs for '{plugin.Name}' could not be made: {item.Detail}", StatusSeverity.Error); break;
+                    default: ShowStatus(item.Detail, StatusSeverity.Info); break;
+                }
             }
             catch (Exception ex)
             {
-                ShowStatus($"Stub generation failed: {ex.Message}");
+                ShowStatus($"Stub generation failed: {ex.Message}", StatusSeverity.Error);
             }
         }
 

@@ -53,6 +53,8 @@ The Studio is a web app served by the `dashboard` extension and is where a produ
 | **Timeline and health** | `observability` | Paste a request id (`rid`) to see the calls, events, queries and logs of one request; turn on deep capture for one player and replay a captured request. |
 | **Developer Guide** | `docs` | This guide, plus the live catalog of every service and action registered on this server. |
 
+A column that declares a foreign key (`[ExoForeignKey<T>]`, or `References` / `ReferencesType` on `[ExoColumn]`) is more than text in Studio. In the row table and the row drawer its value is a link that opens the referenced row, whichever extension owns it, and a value with no matching row stays plain text marked *no match*, so a dangling reference is easy to spot. In the create and edit forms the column is a picker of the referenced rows, shown as the key plus the row's `name`, `nome` or `title` when it has one; past 200 rows, or when the rows cannot be read, it is an ordinary text input. The drawer of the referenced row ends with a **Referenced by** list: the rows in other resources that point at it, each a link, so you can see what a deletion would break before you make it.
+
 The `admin` account is an ordinary account set up by whoever runs the server; developers and trusted servers get their own accounts with a role (`exo user create <email> --role service`, then `exo user token <id>`).
 
 > [!NOTE]

@@ -129,6 +129,29 @@ public TransferItemResponse TransferItem(TransferItemRequest req)
 > [!CAUTION]
 > Throwing `new ExoActionException(code, message)` ensures structured error payloads propagate through the WebSocket layer with consistent error codes and clear user-facing messages.
 
+### Typed stubs for nested values
+
+The generated stubs (the typed plugin stubs and the Unity client) mirror what an action takes and returns, not just the top level. A return such as
+
+```csharp
+public record Item(int Slot, string? Name, Rarity Rarity, List<Item> Children);
+public record Inventory(string Id, long Gold, List<Item> Items, Dictionary<string, int> Counts, Owner? Owner);
+
+[ExoAction] public Inventory GetInventory(string owner) => ...;
+```
+
+becomes `Inventory { string Id; long Gold; List<Item> Items; Dictionary<string, int> Counts; Owner? Owner; }` in the stubs, with a class for each nested record (named as in your C#). A `JsonElement` is left only for what is dynamic: `object`, `JsonElement`, `dynamic`, a type with no public properties, or one nested more than 16 levels deep. Enums travel as their snake_case names and are `string` in the stubs. A record that contains itself is fine.
+
+The build writes this into `manifest.json` next to the keys that were always there (older tools keep reading those and ignore the new ones):
+
+- `returns_shape` (on an action): the whole return as a shape, when it is a list, dictionary or record.
+- `returns_shapes` (on an action): the shape of each return field that is a list, dictionary, record or enum, by field name.
+- `params_shapes` (on an action): the same for the parameters.
+- `payload_shapes` (on an event): the same for the event payload fields.
+- `types` (on a service): the records those shapes refer to, by type name, for example `{"Item": {"fields": {"slot": {...}}}}`, each field a shape.
+
+A shape is `{"type": ..., "nullable": true, "items": ..., "values": ..., "ref": "Item", "choices": [...]}` where only the keys that apply are present. `type` is one of `string`, `int` (32-bit), `integer` (64-bit), `float`, `decimal`, `boolean`, `uuid`, `datetime`, `timespan`, `binary`, `json` (dynamic), `list` (its element is `items`), `map` (string keys, its value is `values`) or `record` (`ref` is a key of `types`). Two different C# types with the same name get distinct keys.
+
 ---
 
 ## [ExoCron]
@@ -298,6 +321,28 @@ Marks a column as a foreign key to another record type: `[ExoForeignKey<Achievem
 
 ---
 
+## [ExoNavigation]
+
+Declares a **virtual** property that holds the record a foreign key points at, the way an ORM navigation property does. The foreign key stays an ordinary stored column; the navigation exists only because of `Include`:
+
+```csharp
+[ExoResource("loja_ofertas")]
+public class LojaOferta
+{
+    [ExoColumn(ForeignKey = true, References = "itens.id")]
+    public string ItemId { get; set; } = "";
+
+    [ExoNavigation(nameof(ItemId))]
+    public Item? Item { get; set; }          // not a column, not stored, null until included
+}
+
+var ofertas = ExoServices.Database.Table<LojaOferta>().Include(o => o.Item).Where(o => o.Ativo).ToList();
+```
+
+The argument names the foreign-key property; a navigation that points at a missing property, or one that is not a declared foreign key, is a build error. The related rows are loaded by the server in one extra query for all the rows, also when they belong to **another** extension, and a player only gets the ones the referenced resource lets players read. A row that does not exist, or that the caller may not read, leaves the navigation `null`.
+
+---
+
 ## [ExoSeed]
 
 Marks a parameterless method (`void` or `Task`) on the extension root that creates the data the extension needs to start with. It runs once after `OnExtensionStart()` on **every** start, so it must be idempotent: check whether the rows exist before inserting. A seed that throws fails the lifecycle handshake and the extension does not come up.
@@ -441,6 +486,8 @@ public class EconomyService
 
 - **Type-Safe Table Repository (`Exo.Database.Table<T>()`):** Pure C# CRUD with auto-resolved table names, primary keys, and singleton lookups. Zero SQL strings needed.
 - **Parameterized Raw SQL (`Exo.Database.Query<T>()`):** High-performance SQL queries with positional `$1, $2, ...` arguments, automatic record mapping, and atomic in-place updates.
+
+**Reading a foreign key's row with the query (`include` on `database.execute`).** The `database.execute` action takes an optional `include: [{"column": "item_id"}]` next to the SQL. Each column must be a foreign key your own resources declare (`ForeignKey` with `References` or `ReferencesType`); the referenced resource may belong to another extension. The host collects the distinct non-null values of that column in the result, reads them from the owner with one query, and answers with `included: {"item_id": {"<value>": <row>}}` next to `rows`. A row that does not exist, or that the original caller may not read, is simply absent, so the navigation stays null: a player's request can include only a resource marked `AllowPlayerRead`, while server, studio and internal callers can include any. A column that is not a declared foreign key fails with `invalid_include`. A reference to a resource no deployed extension declares does not fail: that column is left out of `included` and a `warnings` entry with code `missing_reference` names it. The query itself still reads only your own tables; filtering or ordering by a column of the included table is not supported.
 
 :::end
 

@@ -87,6 +87,7 @@ public record TypedScoreRow
 /// <summary>A context a plugin may still declare itself: snake_case names, one entry per record.</summary>
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
 [JsonSerializable(typeof(TypedScoreRow))]
+[JsonSerializable(typeof(JsonNavigationRoot))]
 internal partial class TestJsonContext : JsonSerializerContext
 {
 }
@@ -94,6 +95,19 @@ internal partial class TestJsonContext : JsonSerializerContext
 public record TypedOtherRow
 {
     public int Value { get; init; }
+}
+
+[ExoResource("json_navigation_targets")]
+public record JsonNavigationTarget { public string Id { get; init; } = ""; }
+
+[ExoResource("json_navigation_roots")]
+public record JsonNavigationRoot
+{
+    public string Id { get; init; } = "";
+    [ExoColumn(ForeignKey = true, ReferencesType = typeof(JsonNavigationTarget))]
+    public string TargetId { get; init; } = "";
+    [ExoNavigation(nameof(TargetId))]
+    public JsonNavigationTarget? Target { get; set; }
 }
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
@@ -104,6 +118,33 @@ internal partial class OtherJsonContext : JsonSerializerContext
 
 public class PluginJsonTests
 {
+    [Fact]
+    public void Serialize_ExcludesExplicitNavigation()
+    {
+        var json = PluginJson.Serialize(new JsonNavigationRoot
+        {
+            Id = "root", TargetId = "target", Target = new JsonNavigationTarget { Id = "target" }
+        });
+
+        Assert.Contains("\"target_id\":\"target\"", json);
+        Assert.DoesNotContain("\"target\":", json);
+    }
+
+    [Fact]
+    public void Serialize_ExcludesExplicitNavigation_WithSourceGeneratedContext()
+    {
+        PluginJson.UseContext(new TestJsonContext());
+        try
+        {
+            var json = PluginJson.Serialize(new JsonNavigationRoot
+            {
+                Id = "root", TargetId = "target", Target = new JsonNavigationTarget { Id = "target" }
+            });
+            Assert.DoesNotContain("\"target\":", json);
+        }
+        finally { PluginJson.UseContext(null); }
+    }
+
     [Fact]
     public void Serialize_UsesSnakeCase_AndRoundTrips()
     {

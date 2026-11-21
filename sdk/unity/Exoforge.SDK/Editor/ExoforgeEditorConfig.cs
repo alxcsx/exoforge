@@ -51,7 +51,6 @@ public static class ExoforgeEditorConfig
     private static string WorkspacePathKey => Scoped("Exoforge_WorkspacePath");
     private static string GeneratedScriptPathKey => Scoped("Exoforge_GeneratedScriptPath");
     private static string LastSyncTimeKey => Scoped("Exoforge_LastSyncTime");
-    private static string AutoGenerateStubsOnBuildKey => Scoped("Exoforge_AutoGenerateStubsOnBuild");
     private static string LoginEmailKey => Scoped("Exoforge_LoginEmail");
     private static string LoginPasswordKey => Scoped("Exoforge_LoginPassword");
     private static string InitialSetupCompletedKey => Scoped("Exoforge_InitialSetupCompleted");
@@ -197,7 +196,6 @@ public static class ExoforgeEditorConfig
     private static string _fallbackWorkspacePath = DefaultWorkspaceRelPath;
     private static string _fallbackGeneratedPath = DefaultGeneratedScriptRelPath;
     private static string _fallbackLastSyncTime = "";
-    private static bool _fallbackAutoGenerateStubsOnBuild = true;
     private static bool _fallbackInitialSetupCompleted = false;
     private static string _fallbackDotnetPath = "dotnet";
     private static string _fallbackLoginEmail = DefaultLoginEmail;
@@ -254,27 +252,6 @@ public static class ExoforgeEditorConfig
             EditorPrefs.SetString(LastSyncTimeKey, value ?? string.Empty);
 #else
             _fallbackLastSyncTime = value ?? string.Empty;
-#endif
-        }
-    }
-
-    /// <summary>Whether to automatically regenerate typed C# plugin stubs when an extension is rebuilt.</summary>
-    public static bool AutoGenerateStubsOnBuild
-    {
-        get
-        {
-#if UNITY_EDITOR
-            return EditorPrefs.GetBool(AutoGenerateStubsOnBuildKey, true);
-#else
-            return _fallbackAutoGenerateStubsOnBuild;
-#endif
-        }
-        set
-        {
-#if UNITY_EDITOR
-            EditorPrefs.SetBool(AutoGenerateStubsOnBuildKey, value);
-#else
-            _fallbackAutoGenerateStubsOnBuild = value;
 #endif
         }
     }

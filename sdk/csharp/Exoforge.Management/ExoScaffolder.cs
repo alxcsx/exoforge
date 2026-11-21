@@ -470,7 +470,7 @@ public static class ExoScaffolder
         | Path | What it is |
         | :--- | :--- |
         | `src/{className}{suffix}.cs` | the {term}: `[ExoAction]` methods are what callers invoke |
-        | `obj/exoforge/` | typed service stubs generated from `[ExoDependency]` declarations |
+        | `obj/exoforge/` | typed service stubs for the services the code calls (`exo extension stubs`; every build runs it first). Not committed |
         | `manifest.json` | generated from the attributes; do not edit |
         | `{cleanName}` | the staged native binary; generated |
 

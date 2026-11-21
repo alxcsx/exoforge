@@ -24,10 +24,10 @@ if (!session.HasDisplayName)
 
 ## Regenerate service stubs
 
-Client stubs come from the live contract export. Studio generates server-side stubs for the dependencies declared in `manifest.json`.
+Client stubs come from the live contract export. Server-side stubs are made for the services an extension calls (`ExoServices.<Service>` in its code, plus any `[ExoDependency("x")]` pin). They are generated only when you ask, never when Unity loads or MSBuild runs.
 
-1. Click **Sync Client** in the Unity toolbar to refresh the typed client.
-2. In the **Extensions** tab, open the extension and click **Stubs** for its server-side dependencies.
+1. Click **Sync Client** in the Unity toolbar to refresh the typed client. It is a file you can commit; if it is missing or older than an extension you built, Studio says so in a banner and generates nothing by itself.
+2. For server-side stubs, run `exo extension stubs <name>` (or `--all`), or click **Stubs** on the extension card. Every `exo extension build` and `push`, and Build / Build & Deploy All in Unity, run this step first.
 
 ## Add persistence and seed on startup
 

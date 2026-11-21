@@ -7,7 +7,37 @@ using System.Text;
 namespace Exoforge.Plugin.Generator;
 
 /// <summary><c>Default</c> is the C# default as JSON text, set only for a parameter that declares one.</summary>
-internal sealed record ParamModel(string Name, string Type, bool Nullable = false, bool Optional = false, string? Default = null);
+internal sealed record ParamModel(string Name, string Type, bool Nullable = false, bool Optional = false, string? Default = null, ShapeModel? Shape = null);
+
+/// <summary>
+/// A C# type as the manifest's typed-stub keys describe it: <c>Type</c> is the shape's own vocabulary
+/// (see <see cref="ManifestEmitter.ShapeJson"/>), <c>Items</c> the element of a list, <c>Values</c> the
+/// value of a string-keyed map, <c>Ref</c> a key of the service's <c>types</c> section.
+/// </summary>
+internal sealed record ShapeModel(
+    string Type,
+    bool Nullable = false,
+    ShapeModel? Items = null,
+    ShapeModel? Values = null,
+    string? Ref = null,
+    List<string>? Choices = null)
+{
+    /// <summary>Whether the shape says more than the plain scalar atom already in the manifest does.</summary>
+    public bool IsRich => Type is "list" or "map" or "record" || Choices is not null;
+}
+
+/// <summary>A record or class reachable from an action, event or another type: its fields by wire name.</summary>
+internal sealed record TypeModel(string Name, List<KeyValuePair<string, ShapeModel>> Fields);
+
+/// <summary>
+/// The types one extension's services use, by the name the manifest gives them. Shared by every service
+/// of the extension; each service writes out only what it reaches.
+/// </summary>
+internal sealed class TypeRegistry
+{
+    public Dictionary<string, TypeModel> Types { get; } = new(StringComparer.Ordinal);
+    public Dictionary<string, string> NamesBySymbol { get; } = new(StringComparer.Ordinal);
+}
 
 /// <summary>An enum a column is typed as: its type, and its members with the names the schema uses.</summary>
 internal sealed record EnumModel(string Type, List<KeyValuePair<string, string>> Members);
@@ -43,7 +73,11 @@ internal sealed record ActionModel(
     List<ParamModel> ReturnFields,
     bool ReturnsList,
     string? ReturnsType,
-    string? Doc = null);
+    string? Doc = null)
+{
+    /// <summary>The whole return as a shape, when it says more than <c>returns</c> does (a list of lists, a dictionary, a record).</summary>
+    public ShapeModel? ReturnShape { get; init; }
+}
 
 internal sealed record EventModel(
     string Name,
@@ -91,6 +125,9 @@ internal sealed record ServiceModel(
     List<CronModel>? Crons = null)
 {
     public List<CronModel> Crons { get; init; } = Crons ?? new();
+
+    /// <summary>Where the types the shapes of this service refer to are described.</summary>
+    public TypeRegistry? Registry { get; init; }
 }
 
 internal sealed record InputTypeModel(string Id, string Element, string Entry);
@@ -207,7 +244,11 @@ internal static class ManifestEmitter
                 sb.Append($"\"arity\": {action.Params.Count}, ");
                 sb.Append($"\"params\": {AtomMap(action.Params)}{ParamHints(action.Params)}, ");
                 sb.Append($"\"returns\": {Returns(action)}, ");
-                sb.Append($"\"returns_list\": {Lower(action.ReturnsList)}{returnsType}{NullableNames("returns_nullable", action.ReturnFields)}}}");
+                sb.Append($"\"returns_list\": {Lower(action.ReturnsList)}{returnsType}{NullableNames("returns_nullable", action.ReturnFields)}");
+                sb.Append(ShapeHints("returns_shape", action.ReturnShape));
+                sb.Append(ShapeMap("returns_shapes", action.ReturnFields));
+                sb.Append(ShapeMap("params_shapes", action.Params));
+                sb.Append('}');
                 sb.Append(comma).Append('\n');
             }
 
@@ -219,7 +260,7 @@ internal static class ManifestEmitter
                 var evt = service.Events[i];
                 string comma = i == service.Events.Count - 1 ? "" : ",";
                 string topic = evt.Topic is null ? "" : $", \"topic\": {Str(evt.Topic)}";
-                string payload = evt.Payload.Count == 0 ? "" : $", \"payload\": {AtomMap(evt.Payload)}{NullableNames("payload_nullable", evt.Payload)}";
+                string payload = evt.Payload.Count == 0 ? "" : $", \"payload\": {AtomMap(evt.Payload)}{NullableNames("payload_nullable", evt.Payload)}{ShapeMap("payload_shapes", evt.Payload)}";
                 string payloadType = evt.PayloadTypeName is null ? "" : $", \"payload_type\": {Str(evt.PayloadTypeName)}";
 
                 string eventDoc = string.IsNullOrEmpty(evt.Doc) ? "" : $", \"doc\": {Str(evt.Doc!)}";
@@ -285,6 +326,9 @@ internal static class ManifestEmitter
             }
 
             sb.Append("      ]");
+
+            string typesJson = TypesSection(service);
+            if (typesJson.Length > 0) sb.Append(",\n      \"types\": ").Append(typesJson);
 
             if (service.Crons != null && service.Crons.Count > 0)
             {
@@ -443,6 +487,79 @@ internal static class ManifestEmitter
         var defaults = list.Where(p => p.Default is not null).ToList();
         if (defaults.Count > 0) sb.Append(", \"params_defaults\": {").Append(string.Join(", ", defaults.Select(p => Str(p.Name) + ": " + p.Default))).Append('}');
         return sb.ToString();
+    }
+
+    /// <summary><c>, "key": {shape}</c>, or nothing when the shape adds nothing to the plain atom.</summary>
+    private static string ShapeHints(string key, ShapeModel? shape) =>
+        shape is { IsRich: true } ? $", \"{key}\": {ShapeJson(shape)}" : "";
+
+    /// <summary><c>, "key": {name: shape}</c> for the fields whose shape is a list, a map, a record or an enum; nothing when none is.</summary>
+    private static string ShapeMap(string key, IEnumerable<ParamModel> fields)
+    {
+        var rich = fields.Where(f => f.Shape is { IsRich: true }).ToList();
+        return rich.Count == 0 ? "" : $", \"{key}\": {{" + string.Join(", ", rich.Select(f => Str(f.Name) + ": " + ShapeJson(f.Shape!))) + "}";
+    }
+
+    /// <summary>
+    /// A shape as JSON. <c>type</c> is one of <c>string int integer float decimal boolean uuid datetime timespan
+    /// binary json list map record</c>; <c>items</c>, <c>values</c>, <c>ref</c>, <c>choices</c> and <c>nullable</c> are written only when they apply.
+    /// </summary>
+    internal static string ShapeJson(ShapeModel shape)
+    {
+        var sb = new StringBuilder("{");
+        sb.Append("\"type\": ").Append(Str(shape.Type));
+        if (shape.Nullable) sb.Append(", \"nullable\": true");
+        if (shape.Items is not null) sb.Append(", \"items\": ").Append(ShapeJson(shape.Items));
+        if (shape.Values is not null) sb.Append(", \"values\": ").Append(ShapeJson(shape.Values));
+        if (shape.Ref is not null) sb.Append(", \"ref\": ").Append(Str(shape.Ref));
+        if (shape.Choices is not null) sb.Append(", \"choices\": ").Append(Atoms(shape.Choices));
+        return sb.Append('}').ToString();
+    }
+
+    /// <summary>The types this service reaches, from its actions, events and the types they reach, in name order. Empty when there are none.</summary>
+    private static string TypesSection(ServiceModel service)
+    {
+        var registry = service.Registry;
+        if (registry is null) return "";
+
+        var reached = new SortedDictionary<string, TypeModel>(StringComparer.Ordinal);
+        var pending = new Stack<string>();
+
+        void Visit(ShapeModel? shape)
+        {
+            if (shape is null) return;
+            if (shape.Ref is not null && registry.Types.TryGetValue(shape.Ref, out var type) && !reached.ContainsKey(shape.Ref))
+            {
+                reached[shape.Ref] = type;
+                pending.Push(shape.Ref);
+            }
+            Visit(shape.Items);
+            Visit(shape.Values);
+        }
+
+        foreach (var action in service.Actions)
+        {
+            Visit(action.ReturnShape);
+            foreach (var f in action.ReturnFields) Visit(f.Shape);
+            foreach (var p in action.Params) Visit(p.Shape);
+        }
+
+        foreach (var evt in service.Events)
+        {
+            foreach (var f in evt.Payload) Visit(f.Shape);
+        }
+
+        while (pending.Count > 0)
+        {
+            foreach (var field in registry.Types[pending.Pop()].Fields) Visit(field.Value);
+        }
+
+        if (reached.Count == 0) return "";
+
+        var entries = reached.Values.Select(t =>
+            $"        {Str(t.Name)}: {{\"fields\": {{" + string.Join(", ", t.Fields.Select(f => Str(f.Key) + ": " + ShapeJson(f.Value))) + "}}");
+
+        return "{\n" + string.Join(",\n", entries) + "\n      }";
     }
 
     private static string AtomMap(IEnumerable<ParamModel> parameters) =>

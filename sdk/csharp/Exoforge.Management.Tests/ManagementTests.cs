@@ -114,6 +114,12 @@ public class ManagementTests : IDisposable
         Assert.Equal("local@host", export.GetProperty("cluster").GetString());
     }
 
+    private static void WriteProject(string extensionDir)
+    {
+        Directory.CreateDirectory(Path.Combine(extensionDir, "src"));
+        File.WriteAllText(Path.Combine(extensionDir, "src", Path.GetFileName(extensionDir) + ".csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\" />");
+    }
+
     private static void WriteManifest(string extensionsPath, string name, string json)
     {
         string dir = Path.Combine(extensionsPath, name);
@@ -134,14 +140,16 @@ public class ManagementTests : IDisposable
         """);
         WriteManifest(_tempDir, "caller", """{"id":"caller","version":"1.0.0","type":"native","dependencies":["loja"]}""");
         string extensionDir = Path.Combine(_tempDir, "caller");
+        WriteProject(extensionDir);
 
-        var (output, missing) = await ExoDeployer.BesideExtension(extensionDir).GenerateDependencyStubsAsync(extensionDir);
+        var result = await ExoDeployer.BesideExtension(extensionDir).GenerateStubsAsync(new[] { "caller" });
 
-        Assert.Empty(missing);
+        Assert.True(result.Ok, result.FailureMessage);
+        string output = result.Items[0].Output!;
         Assert.Equal(ExoDeployer.StubsPath(extensionDir), output);
-        Assert.Contains("class LojaServiceClient", File.ReadAllText(output!));
+        Assert.Contains("class LojaServiceClient", File.ReadAllText(output));
         Assert.StartsWith(Path.Combine(extensionDir, "obj") + Path.DirectorySeparatorChar, output);
-        Assert.False(Directory.Exists(Path.Combine(extensionDir, "src")));
+        Assert.False(Directory.Exists(Path.Combine(extensionDir, "src", "Generated")));
     }
 
     [Fact]
@@ -149,11 +157,12 @@ public class ManagementTests : IDisposable
     {
         WriteManifest(_tempDir, "caller", """{"id":"caller","version":"1.0.0","type":"native","dependencies":["ghost"]}""");
         string extensionDir = Path.Combine(_tempDir, "caller");
+        WriteProject(extensionDir);
 
-        var (output, missing) = await ExoDeployer.BesideExtension(extensionDir).GenerateDependencyStubsAsync(extensionDir);
+        var result = await ExoDeployer.BesideExtension(extensionDir).GenerateStubsAsync(new[] { "caller" });
 
-        Assert.Null(output);
-        Assert.Equal(new[] { "ghost" }, missing);
+        Assert.False(result.Ok);
+        Assert.Contains("ghost", result.FailureMessage);
         Assert.False(File.Exists(ExoDeployer.StubsPath(extensionDir)));
     }
 
@@ -162,11 +171,12 @@ public class ManagementTests : IDisposable
     {
         WriteManifest(_tempDir, "caller", """{"id":"caller","version":"1.0.0","type":"native","dependencies":["database","resource_store"]}""");
         string extensionDir = Path.Combine(_tempDir, "caller");
+        WriteProject(extensionDir);
 
-        var (output, missing) = await ExoDeployer.BesideExtension(extensionDir).GenerateDependencyStubsAsync(extensionDir);
+        var result = await ExoDeployer.BesideExtension(extensionDir).GenerateStubsAsync(new[] { "caller" });
 
-        Assert.Null(output);
-        Assert.Empty(missing);
+        Assert.True(result.Ok);
+        Assert.Equal(StubOutcome.NoDependencies, result.Items[0].Outcome);
     }
 
     [Fact]

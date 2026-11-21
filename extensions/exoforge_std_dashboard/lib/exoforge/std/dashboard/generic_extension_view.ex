@@ -8,6 +8,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
   alias Exoforge.ActionDispatcher
   alias Exoforge.Std.Dashboard.ActionForms
   alias Exoforge.Std.Dashboard.ResourceForms
+  alias Exoforge.Std.Dashboard.ResourceRefs
   alias Exoforge.EventDispatcher
   alias Exoforge.ExtensionRegistry
   alias Exoforge.DrawerRegistry
@@ -38,6 +39,10 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
        inspected_drawer_tab: "overview",
        drawer_tabs: [],
        resource_form: nil,
+       fk_links: %{},
+       fk_options: %{},
+       drawer_fk: %{},
+       referenced_by: [],
        export_modal_open: false,
        export_format: "CSV",
        export_content: "",
@@ -125,7 +130,9 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
         drawer_open: true,
         inspected_row: row,
         drawer_tabs: tabs,
-        inspected_drawer_tab: "overview"
+        inspected_drawer_tab: "overview",
+        drawer_fk: if(row, do: ResourceRefs.links(current_resource_columns(socket), [row], ref_opts(socket)), else: %{}),
+        referenced_by: if(row && res_name, do: ResourceRefs.referenced_by(res_name, row, ref_opts(socket)), else: [])
       )
     end
   end
@@ -236,7 +243,8 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
 
     {:noreply,
      assign(socket,
-       resource_form: %{mode: :new, values: ResourceForms.defaults(columns), errors: %{}}
+       resource_form: %{mode: :new, values: ResourceForms.defaults(columns), errors: %{}},
+       fk_options: ResourceRefs.options(columns, ref_opts(socket))
      )}
   end
 
@@ -245,7 +253,11 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
     columns = current_resource_columns(socket)
     values = ResourceForms.values_for(socket.assigns.inspected_row, columns)
 
-    {:noreply, assign(socket, resource_form: %{mode: :edit, values: values, errors: %{}})}
+    {:noreply,
+     assign(socket,
+       resource_form: %{mode: :edit, values: values, errors: %{}},
+       fk_options: ResourceRefs.options(columns, ref_opts(socket))
+     )}
   end
 
   @impl true
@@ -702,7 +714,10 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
               end
 
             saved_indicator = socket.assigns[:singleton_saved] || false
-            assign(socket, singleton_form: %{values: values, errors: %{}, saved: saved_indicator})
+            assign(socket,
+              singleton_form: %{values: values, errors: %{}, saved: saved_indicator},
+              fk_options: ResourceRefs.options(columns, ref_opts(socket))
+            )
           else
             assign(socket, singleton_form: nil)
           end
@@ -714,9 +729,13 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
         |> assign(:resource_total, total)
         |> assign(:resource_page, min(page, pages))
         |> assign(:resource_pages, pages)
+        |> assign(:fk_links, ResourceRefs.links(columns, rows, ref_opts(socket)))
         |> apply_resource_search()
     end
   end
+
+  # Reads of referenced resources run as the viewer, so a resource they may not read is not shown.
+  defp ref_opts(socket), do: %{scopes: socket.assigns[:current_scopes] || []}
 
   defp resource_page(name, page, search) do
     ExtensionRegistry.page_resource_rows(name,
@@ -861,6 +880,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
       |> assign(:custom_spec, custom_spec)
       |> assign(:is_file_ref, is_file_ref)
       |> assign(:bucket, bucket)
+      |> assign(:fk_choices, fk_choices(assigns))
 
     ~H"""
     <div>
@@ -939,6 +959,18 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
         <%= if is_map(@custom_spec) do %>
           <.widget spec={@custom_spec} name={"values[#{@key}]"} value={@value} readonly={@locked} />
         <% else %>
+          <%= if is_list(@fk_choices) and not @locked do %>
+            <select
+              name={"values[#{@key}]"}
+              class="exo-select font-mono"
+              data-fk-picker
+            >
+              <option value="" selected={to_string(@value) == ""}>-</option>
+              <%= for {val, text} <- @fk_choices do %>
+                <option value={val} selected={to_string(@value) == val}><%= text %></option>
+              <% end %>
+            </select>
+          <% else %>
           <%= if @column.choices != [] do %>
             <select
               name={"values[#{@key}]"}
@@ -989,10 +1021,28 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                 />
             <% end %>
           <% end %>
+          <% end %>
         <% end %>
       <% end %>
     </div>
     """
+  end
+
+  # The picker a foreign-key column gets, or nil for a plain input (no `references`, a list too
+  # long to pick from, or one that could not be read). A stored value that no longer has a row is
+  # kept as an option so that opening the form does not silently rewrite it.
+  defp fk_choices(assigns) do
+    case Map.get(assigns[:fk_options] || %{}, to_string(assigns.column.key)) do
+      list when is_list(list) ->
+        value = to_string(assigns[:value] || "")
+
+        if value == "" or Enum.any?(list, fn {v, _} -> v == value end),
+          do: list,
+          else: list ++ [{value, "#{value} (no such row)"}]
+
+      _ ->
+        nil
+    end
   end
 
   ## ---- TEMPLATE RENDERING ----
@@ -1404,7 +1454,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                     <% value = Map.get(@singleton_form.values, key, "") %>
                     <% locked = column.primary_key %>
 
-                    <.column_input column={column} value={value} locked={locked} target="singleton" myself={@myself} />
+                    <.column_input column={column} value={value} locked={locked} target="singleton" myself={@myself} fk_options={@fk_options} />
 
                     <%= if error = @singleton_form.errors[key] do %>
                       <p class="text-[11px] text-red-600 mt-1 font-semibold"><%= error %></p>
@@ -1473,6 +1523,9 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                                   <% else %>
                                     <span class="text-xs text-gray-400 italic">none</span>
                                   <% end %>
+
+                                <% fk = Map.get(@fk_links, {to_string(col[:key]), to_string(val)}) -> %>
+                                  <ResourceRefs.fk_value link={fk} value={val} />
 
                                 <% link = column_link(col[:role]) -> %>
                                   <.link
@@ -1631,7 +1684,10 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                       <%= if is_nil(value) or value == "" do %>
                         <span class="text-gray-300 italic">no value</span>
                       <% else %>
-                        <%= value %>
+                        <ResourceRefs.fk_value
+                          link={Map.get(@drawer_fk, {key, to_string(value)})}
+                          value={value}
+                        />
                       <% end %>
                     </span>
                   </div>
@@ -1647,6 +1703,10 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
               <% end %>
             </div>
           <% end %>
+
+          <div class="mt-4">
+            <ResourceRefs.referenced_by_list groups={@referenced_by} />
+          </div>
 
           <div class="pt-4 border-t border-gray-200/80 flex items-center gap-2">
             <button
@@ -1717,7 +1777,7 @@ defmodule Exoforge.Std.Dashboard.GenericExtensionView do
                   <% value = Map.get(@resource_form.values, key, "") %>
                   <% locked = column.primary_key and @resource_form.mode == :edit %>
 
-                  <.column_input column={column} value={value} locked={locked} target="resource_form" myself={@myself} />
+                  <.column_input column={column} value={value} locked={locked} target="resource_form" myself={@myself} fk_options={@fk_options} />
 
                   <%= if error = @resource_form.errors[key] do %>
                     <p class="text-[11px] text-red-600 mt-1 font-medium"><%= error %></p>

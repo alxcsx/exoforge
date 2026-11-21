@@ -273,11 +273,6 @@ public partial class ExoforgeControlCenter : EditorWindow
             ExoforgeEditorConfig.TargetBuildRid = newIndex == 0 ? "" : ridOptions[newIndex];
         }
 
-        EditorGUILayout.Space(2);
-        ExoforgeEditorConfig.AutoGenerateStubsOnBuild = EditorGUILayout.Toggle(
-            new GUIContent("Auto-Generate Stubs on Build", "Automatically regenerate typed C# plugin stubs after compiling or rebuilding an extension"),
-            ExoforgeEditorConfig.AutoGenerateStubsOnBuild);
-
         EditorGUILayout.EndVertical();
 
         EditorGUILayout.Space(8);

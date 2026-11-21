@@ -15,7 +15,7 @@ using Exoforge.Client;
 
 namespace Exoforge.Management;
 
-public class ExoDeployer
+public partial class ExoDeployer
 {
     private readonly ExoWorkspace _workspace;
 
@@ -968,80 +968,17 @@ public class ExoDeployer
             new ExoProjectConfig { ExtensionsDir = Path.GetDirectoryName(Path.GetFullPath(extensionDir))! }));
 
     /// <summary>
-    /// Build-time stubs: the services the extension declares as dependencies, from the sibling manifests,
-    /// asking the cluster only for what they do not cover. Nothing declared means nothing to generate
-    /// (<c>Output</c> is null); a dependency with no contract anywhere comes back in <c>Missing</c>.
+    /// Typed stubs for every extension the workspace includes (see <see cref="GenerateStubsAsync"/>), providers first.
+    /// Every extension gets its stubs even when one fails; the failure is thrown at the end as an <see cref="ExoStubPassException"/>.
     /// </summary>
-    public async Task<(string? Output, IReadOnlyList<string> Missing)> GenerateDependencyStubsAsync(
-        string extensionDir,
-        CancellationToken cancellationToken = default)
-    {
-        // `database` (Exo.Database) and `resource_store` are the host's own capabilities, reached without a
-        // stub, and the generator declares them for any extension that stores anything - so they must not
-        // demand a contract offline.
-        if (ReadManifestDependencies(extensionDir) is not { } all
-            || all.Where(d => d is not ("database" or "resource_store")).ToList() is not { Count: > 0 } deps)
-        {
-            return (null, Array.Empty<string>());
-        }
-
-        string export = MergeLocalContracts("{\"export\":{\"extensions\":[]}}");
-
-        if (MissingServices(export, deps).Count > 0)
-        {
-            try
-            {
-                export = MergeLocalContracts(await GetContractsExportJsonAsync(cancellationToken: cancellationToken).ConfigureAwait(false));
-            }
-            catch (Exception)
-            {
-                // No cluster to ask: whatever the siblings did not cover stays missing, and is reported.
-            }
-        }
-
-        var missing = MissingServices(export, deps);
-        if (missing.Count > 0) return (null, missing);
-
-        string output = StubsPath(extensionDir);
-        ExoCodeGenerator.GeneratePluginStubsToFile(export, output, services: deps, pluginId: Path.GetFileName(extensionDir), codeSearchRoot: extensionDir);
-        return (output, missing);
-    }
-
-    /// <summary>Generates typed stubs for every extension in the workspace that has a project.</summary>
     public async Task<List<string>> GenerateAllExtensionStubsAsync(
         string? environmentName = null,
         ExoClient? existingClient = null,
         CancellationToken cancellationToken = default)
     {
-        var outputs = new List<string>();
-        string extensionsDir = _workspace.ExtensionsPath;
-
-        if (!Directory.Exists(extensionsDir)) return outputs;
-
-        // One export for all extensions.
-        string exportJson;
-        try
-        {
-            exportJson = await GetContractsExportJsonAsync(environmentName, existingClient, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception) when (existingClient == null)
-        {
-            exportJson = LoadCachedOrEmptyContracts();
-        }
-
-        string merged = MergeLocalContracts(exportJson);
-
-        foreach (string dir in Directory.GetDirectories(extensionsDir))
-        {
-            string name = Path.GetFileName(dir);
-            if (FindExtensionCsproj(dir, name) == null) continue;
-
-            string output = StubsPath(dir);
-            ExoCodeGenerator.GeneratePluginStubsToFile(merged, output, services: ReadManifestDependencies(dir), pluginId: name, codeSearchRoot: dir, log: null);
-            outputs.Add(output);
-        }
-
-        return outputs;
+        var result = await GenerateIncludedStubsAsync(existingClient, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (!result.Ok) throw new ExoStubPassException(result.FailureMessage);
+        return result.Outputs.ToList();
     }
 
     public async Task<int> SyncContractsAsync(
@@ -1600,35 +1537,9 @@ public class ExoDeployer
         // in a manifest cannot be correlated with the builds that produced them.
         int buildNumber = PeekBuildNumber(extensionDir);
         string buildStamp = $"{buildNumber}.{fingerprint}";
-        // Refresh stubs from contracts before compiling if stubs file exists and cached contracts are available
-        string stubsFile = StubsPath(extensionDir);
-        if (File.Exists(stubsFile))
-        {
-            try
-            {
-                string cachedContracts = LoadCachedOrEmptyContracts();
-                if (!string.IsNullOrWhiteSpace(cachedContracts) && cachedContracts.Trim() != "{}")
-                {
-                    string contractsJson = MergeLocalContracts(cachedContracts);
-                    var available = AvailableServices(contractsJson).ToHashSet(StringComparer.OrdinalIgnoreCase);
-                    var deps = ReadManifestDependencies(extensionDir);
-
-                    if (deps is { Count: > 0 } && !deps.Any(d => available.Contains(d)))
-                    {
-                        // Contracts for declared dependencies cannot be resolved offline/unconnected; preserve existing stubs
-                        Emit($"[build] Contracts for dependencies ({string.Join(", ", deps)}) not in offline cache; preserving existing stubs.");
-                    }
-                    else if (deps is { Count: > 0 })
-                    {
-                        ExoCodeGenerator.GeneratePluginStubsToFile(contractsJson, stubsFile, services: deps, pluginId: cleanName, codeSearchRoot: extensionDir, log: Emit);
-                    }
-                }
-            }
-            catch
-            {
-                // Best-effort: existing file remains if contracts cannot be resolved
-            }
-        }
+        // The stub pass runs here, as part of the explicit build, and nowhere else: not from MSBuild, not from
+        // Unity's load. Stubs land in obj/exoforge; a service with no contract stops the build with the reason.
+        EnsureStubs(cleanName, Emit);
 
         // One compiled kind. A runtime that needs its own toolchain adds that branch back alongside
         // its runner.

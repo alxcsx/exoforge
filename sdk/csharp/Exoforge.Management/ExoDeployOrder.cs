@@ -133,21 +133,25 @@ public static class ExoDeployOrder
         return problems;
     }
 
-    /// <summary>Reads the nodes from each extension's <c>manifest.json</c>; an extension not built yet has none and counts as having no links.</summary>
+    /// <summary>
+    /// Reads the nodes: what each extension provides from its <c>manifest.json</c>, and what it calls from its sources
+    /// and pins as well as the manifest (<see cref="ExoDependencyDiscovery"/>), so an extension that was never built
+    /// still has its links. A half-written manifest counts as having none.
+    /// </summary>
     public static List<DeployNode> ReadNodes(string extensionsPath, IEnumerable<string> names)
     {
+        var siblings = ExoDependencyDiscovery.SiblingServices(extensionsPath);
         var nodes = new List<DeployNode>();
         foreach (string name in names)
         {
             var provides = new List<string>();
-            var dependencies = new List<string>();
-            string path = Path.Combine(extensionsPath, name, "manifest.json");
+            string dir = Path.Combine(extensionsPath, name);
+            string path = Path.Combine(dir, "manifest.json");
             try
             {
                 if (File.Exists(path) && JsonNode.Parse(File.ReadAllText(path)) is JsonObject manifest)
                 {
                     provides.AddRange(Strings(manifest["provides"]));
-                    dependencies.AddRange(Strings(manifest["dependencies"]));
                 }
             }
             catch (System.Text.Json.JsonException)
@@ -155,7 +159,7 @@ public static class ExoDeployOrder
                 // a half-written manifest: treat as unlinked, the build will rewrite it
             }
 
-            nodes.Add(new DeployNode(name, provides, dependencies));
+            nodes.Add(new DeployNode(name, provides, ExoDependencyDiscovery.Discover(dir, name, siblings).Services));
         }
 
         return nodes;
