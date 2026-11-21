@@ -52,30 +52,11 @@
   <Import Project="$(ExoforgeCSharpSdk)/Exoforge.Plugin.SDK/build/Exoforge.Plugin.SDK.targets"
           Condition="('$(ExoforgeExtension)' == 'true' or '$(ExoforgePlugin)' == 'true') and '$(ExoforgeInRepo)' == 'true'" />
 
-  <!-- ===== Typed stubs for the services an extension declares ===== -->
-
   <!--
-    The services an extension declares with [ExoDependency] get typed stubs, made from the manifests
-    beside it (the cluster only for what those do not cover) and compiled from obj/, so no stubs file is
-    committed. The declaration is read from the manifest the last build wrote; an extension with none
-    skips this entirely. A declared service no source has a contract for fails the build. An extension
-    that still commits its own src/Generated stubs keeps them: two copies of the types would not compile.
+    Typed stubs are not made here. `exo extension stubs` and every `exo extension build|push` write them
+    to <extension>/obj/exoforge, and the SDK's targets (imported above) compile that folder. Building
+    with plain `dotnet build` uses what the last of those wrote, and starts no process.
   -->
-  <Target Name="ExoforgeTypedStubs"
-          BeforeTargets="CoreCompile"
-          Condition="('$(ExoforgeExtension)' == 'true' or '$(ExoforgePlugin)' == 'true') and '$(ExoforgeInRepo)' == 'true' and Exists('$(ExoforgeManifestPath)')">
-    <PropertyGroup>
-      <ExoforgeExtensionDir>$([System.IO.Path]::GetDirectoryName($([System.IO.Path]::GetFullPath('$(ExoforgeManifestPath)'))))</ExoforgeExtensionDir>
-      <ExoforgeDeclaresDependencies>$([System.Text.RegularExpressions.Regex]::IsMatch($([System.IO.File]::ReadAllText('$(ExoforgeManifestPath)')), '&quot;dependencies&quot;\s*:\s*\[\s*&quot;'))</ExoforgeDeclaresDependencies>
-    </PropertyGroup>
-
-    <Exec Condition="'$(ExoforgeDeclaresDependencies)' == 'True' and !Exists('$(ExoforgeExtensionDir)/src/Generated/PluginServices.g.cs')"
-          Command="&quot;$(DOTNET_HOST_PATH)&quot; run --project &quot;$(ExoforgeCSharpSdk)/Exoforge.CLI&quot; --no-launch-profile -- extension stubs --project-dir &quot;$(ExoforgeExtensionDir)&quot;" />
-
-    <ItemGroup>
-      <Compile Include="$(ExoforgeExtensionDir)/obj/exoforge/**/*.cs" />
-    </ItemGroup>
-  </Target>
 
   <!-- ===== Staging for the Unity package ===== -->
 

@@ -363,7 +363,14 @@ defmodule Exoforge.Std.ExtensionManager do
         |> Enum.uniq_by(&to_string(&1.id))
 
       ids = Enum.map(user_manifests, &to_string(&1.id))
-      removed = Enum.filter(ids, &match?({:ok, _}, remove_extension_internal(%{"id" => &1, "delete_files" => true})))
+      # Only what was uploaded is deleted from disk. A native extension loaded from a checkout (a maintainer's
+      # extensions_csharp/ folder, say) is unloaded and its data dropped, but its source files are never touched.
+      removed =
+        user_manifests
+        |> Enum.filter(fn m ->
+          match?({:ok, _}, remove_extension_internal(%{"id" => to_string(m.id), "delete_files" => uploaded?(m)}))
+        end)
+        |> Enum.map(&to_string(&1.id))
 
       Enum.each(ids, fn id ->
         ExtensionRegistry.clear_failure(id)
@@ -386,14 +393,16 @@ defmodule Exoforge.Std.ExtensionManager do
   # An extension the user deployed: a native (C#) one, or any extension that sits in the uploads folder.
   # Standard extensions are Elixir and live under builtin_extensions/ (or extensions/ in a checkout).
   defp user_deployed?(%{type: :native}), do: true
+  defp user_deployed?(manifest), do: uploaded?(manifest)
 
-  defp user_deployed?(%{physical_path: path}) when is_binary(path) do
+  # Sits in the uploads folder (or its temp fallback), and is not a built-in.
+  defp uploaded?(%{physical_path: path}) when is_binary(path) do
     norm = Path.expand(path)
     uploads = [Path.expand(upload_base_dir()), Path.expand(Path.join(System.tmp_dir!(), "exoforge_uploaded_extensions"))]
     not String.starts_with?(norm, Path.expand("builtin_extensions")) and Enum.any?(uploads, &String.starts_with?(norm, &1))
   end
 
-  defp user_deployed?(_), do: false
+  defp uploaded?(_), do: false
 
   # The wipe helpers live in other standard extensions, which a stripped-down server may not have.
   defp optional(module, fun, args) do

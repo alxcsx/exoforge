@@ -71,4 +71,22 @@ defmodule Exoforge.Std.Dashboard.InstanceResetTest do
     refute "alice" in ids
     assert "admin" in ids
   end
+
+  test "extensions mode never deletes source files outside the uploads folder" do
+    dir = Path.join(System.tmp_dir!(), "reset_checkout_#{System.unique_integer([:positive])}")
+    File.mkdir_p!(dir)
+    File.write!(Path.join(dir, "Source.cs"), "// checked in")
+    on_exit(fn -> File.rm_rf(dir) end)
+
+    Exoforge.ExtensionCase.register_extension(GameStub,
+      id: :reset_checkout,
+      provides: [:reset_checkout_service],
+      type: :native,
+      physical_path: dir
+    )
+
+    assert {:ok, summary} = reset("extensions")
+    assert "reset_checkout" in summary.extensions_removed
+    assert File.exists?(Path.join(dir, "Source.cs"))
+  end
 end
