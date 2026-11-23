@@ -116,6 +116,8 @@ Click **Sync Client** in the Unity toolbar (or the Exoforge Studio menu). This q
 ### Extension-to-Extension Stubs (Server)
 Run `exo extension stubs <name>` (or `--all` for every extension that is not excluded), or click **Stubs** on the extension card. Exoforge finds the services your code calls (`ExoServices.<Service>`, plus any `[ExoDependency("x")]` pin; no earlier build is needed) and writes typed stubs to `obj/exoforge/PluginServices.g.cs`, which the build compiles and you do not commit. `exo extension build` and `push` do this first, so a fresh clone builds with one command. A plain `dotnet build` before any stubs exist warns you to run the command above.
 
+**Sharing a model between extensions.** Do not copy another extension's records. Call it (`ExoServices.Items.ListCatalogAsync()`, or `CallAction<T>("items", "list_catalog", ...)` by name) and use the generated types (`Exoforge.Plugins.Generated.Item`): the call is the dependency, and only the services you call get stubs, so a service you stop using drops out on the next build. Building an extension first builds the extensions it depends on that are not built yet or changed. If one of them fails, the build stops and names it (`Cannot build 'shop': its dependency 'inventory' failed to build ...`); a circle (`circular dependency: a → b → a`) or a dependency in `excluded_extensions` stops it the same way.
+
 ---
 
 ## 5. Call from Unity Gameplay Code

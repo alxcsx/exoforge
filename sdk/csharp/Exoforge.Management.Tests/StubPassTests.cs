@@ -150,7 +150,8 @@ public class StubPassTests : IDisposable
         Extension("items");
         Extension("shop", ShopSource);
 
-        var ex = Assert.Throws<ExoStubPassException>(() => new ExoDeployer(Workspace()).BuildExtension("shop"));
+        // items has no manifest, so it is built first; here it has no project to build, which stops 'shop' with the chain named.
+        var ex = Assert.ThrowsAny<ExoStubPassException>(() => new ExoDeployer(Workspace()).BuildExtension("shop"));
         Assert.Contains("items", ex.Message);
     }
 

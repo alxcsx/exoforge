@@ -9,11 +9,22 @@ using Exoforge.Client;
 namespace Exoforge.Management;
 
 /// <summary>A stub pass that could not give an extension the stubs it needs. The message says what to do.</summary>
-public sealed class ExoStubPassException : InvalidOperationException
+public class ExoStubPassException : InvalidOperationException
 {
     public ExoStubPassException(string message) : base(message)
     {
     }
+}
+
+/// <summary>A build that cannot start because an extension it depends on cannot be built (or the dependencies are circular or excluded).</summary>
+public sealed class ExoDependencyException : ExoStubPassException
+{
+    public ExoDependencyException(string message, Exception? inner = null) : base(message)
+    {
+        Cause = inner;
+    }
+
+    public Exception? Cause { get; }
 }
 
 public enum StubOutcome
@@ -155,8 +166,9 @@ public partial class ExoDeployer
             if (missing.Count > 0)
             {
                 string detail =
-                    $"'{name}' calls {string.Join(", ", missing)}, which has no contract: build the extension that provides it first, " +
-                    "or start the server (its own services are fetched from it).";
+                    $"'{name}' calls {string.Join(", ", missing)}, which has no contract: no extension in this workspace provides it " +
+                    "(check the name, or that its folder is not excluded), and the server does not know it either. " +
+                    "Start the server if it provides the service.";
                 emit?.Invoke($"[stubs] {detail}");
                 items.Add(new StubPassItem(name, StubOutcome.Failed, detail));
                 continue;

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using Exoforge.Management;
 using Xunit;
@@ -69,5 +70,50 @@ public class BinaryOsTests
         string path = Path.GetTempFileName();
         try { File.WriteAllBytes(path, head); Assert.Equal(expected, ExoDeployer.BinaryMatchesRid(path, rid)); }
         finally { File.Delete(path); }
+    }
+}
+
+public class DependencyTreeTests
+{
+    private static DeployNode N(string name, params string[] deps) => new(name, new[] { name }, deps);
+
+    [Fact]
+    public void DependenciesOf_orders_providers_first_transitively()
+    {
+        var nodes = new[] { N("shop", "inventory", "items"), N("inventory", "items"), N("items") };
+        var (order, problem) = ExoDeployOrder.DependenciesOf("shop", nodes, new HashSet<string>());
+        Assert.Null(problem);
+        Assert.Equal(new[] { "items", "inventory" }, order);
+    }
+
+    [Fact]
+    public void DependenciesOf_names_the_circle()
+    {
+        var nodes = new[] { N("a", "b"), N("b", "c"), N("c", "a") };
+        var (_, problem) = ExoDeployOrder.DependenciesOf("a", nodes, new HashSet<string>());
+        Assert.Equal("circular dependency: a → b → c → a", problem);
+    }
+
+    [Fact]
+    public void DependenciesOf_reports_an_excluded_provider()
+    {
+        var nodes = new[] { N("inventory", "items"), N("items") };
+        var (_, problem) = ExoDeployOrder.DependenciesOf("inventory", nodes, new HashSet<string> { "items" });
+        Assert.Contains("'inventory' needs 'items'", problem);
+        Assert.Contains("excluded", problem);
+    }
+
+    [Fact]
+    public void Discovery_sees_a_call_by_name_as_a_dependency()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "exo_dep_" + Path.GetRandomFileName());
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "X.cs"), "var c = ExoServices.Actions.CallAction<List<int>>(\"items\", \"listar\", null);");
+            var found = ExoDependencyDiscovery.Discover(dir, "inventory", new[] { "items" });
+            Assert.Contains("items", found.Services);
+        }
+        finally { Directory.Delete(dir, true); }
     }
 }

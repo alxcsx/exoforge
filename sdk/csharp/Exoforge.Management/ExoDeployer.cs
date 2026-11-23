@@ -1526,6 +1526,49 @@ public partial class ExoDeployer
     /// binary, with <c>manifest.json</c> regenerated.
     /// The result is staged next to <c>manifest.json</c>, ready for <see cref="UploadExtensionAsync"/>.
     /// </summary>
+    /// <summary>
+    /// Builds, first, the workspace extensions this one calls that are not built (or changed since): their manifests
+    /// are what its stubs are made from, so a caller never needs its providers built by hand. A provider that fails to
+    /// build, a circle and an excluded provider stop this build with a message that names the chain.
+    /// </summary>
+    private void EnsureDependenciesBuilt(string cleanName, string? rid, string dotnetPath, Action<string> emit)
+    {
+        var all = _workspace.AllExtensions();
+        var nodes = ExoDeployOrder.ReadNodes(_workspace.ExtensionsPath, all)
+            .Select(n => new DeployNode(n.Name, n.Provides.Append(n.Name).ToList(), n.Dependencies))
+            .ToList();
+        var excluded = new HashSet<string>(all.Where(_workspace.IsExcluded), StringComparer.Ordinal);
+
+        var (order, problem) = ExoDeployOrder.DependenciesOf(cleanName, nodes, excluded);
+        if (problem != null) throw new ExoDependencyException($"Cannot build '{cleanName}': {problem}.");
+        if (order.Count > 0) emit($"[build] '{cleanName}' depends on: {string.Join(", ", order)}");
+
+        foreach (string dependency in order)
+        {
+            string dir = Path.Combine(_workspace.ExtensionsPath, dependency);
+            if (FindExtensionCsproj(dir, dependency) == null) continue;
+
+            bool built = !string.IsNullOrEmpty(StagedBinary(dir, dependency)) && File.Exists(StagedBinary(dir, dependency))
+                && !IsModifiedSinceBuild(dir, ReadManifestVersion(dir));
+            if (built) continue;
+
+            emit($"[build] building dependency '{dependency}' first");
+            try
+            {
+                BuildExtension(dependency, rid, dotnetPath, emit);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                string reason = ex is ExoDependencyException ? ex.Message : FirstMessageLines(ex.Message, 6);
+                throw new ExoDependencyException(
+                    $"Cannot build '{cleanName}': its dependency '{dependency}' failed to build, so '{cleanName}' was not built.\n{reason}", ex);
+            }
+        }
+    }
+
+    private static string FirstMessageLines(string text, int count) =>
+        string.Join("\n", text.Split('\n').Select(l => l.TrimEnd()).Where(l => l.Length > 0).Take(count));
+
     public ExoExtensionBuild BuildExtension(
         string extensionName,
         string? rid = null,
@@ -1569,6 +1612,7 @@ public partial class ExoDeployer
         string buildStamp = $"{buildNumber}.{fingerprint}";
         // The stub pass runs here, as part of the explicit build, and nowhere else: not from MSBuild, not from
         // Unity's load. Stubs land in obj/exoforge; a service with no contract stops the build with the reason.
+        EnsureDependenciesBuilt(cleanName, rid, dotnetPath, Emit);
         EnsureStubs(cleanName, Emit);
 
         // One compiled kind. A runtime that needs its own toolchain adds that branch back alongside

@@ -34,6 +34,9 @@ public static class ExoDependencyDiscovery
     private static readonly Regex ServiceUse = new(@"\bExoServices\s*\.\s*([A-Za-z_]\w*)", RegexOptions.Compiled);
     private static readonly Regex Pin = new("\\bExoDependency(?:Attribute)?\\s*\\(\\s*(?:ServiceName\\s*=\\s*)?\"([^\"]+)\"", RegexOptions.Compiled);
 
+    /// <summary>A call by name, <c>CallAction&lt;T&gt;("items", ...)</c>: a dependency without a pin.</summary>
+    private static readonly Regex NamedCall = new("\\bCallAction(?:Async)?\\s*(?:<[^()]*>)?\\s*\\(\\s*\"([a-z][a-z0-9_]*)\"", RegexOptions.Compiled);
+
     /// <summary>Members of the generated <c>ExoServices</c> class that are capabilities, not services.</summary>
     private static readonly HashSet<string> Members = new(StringComparer.Ordinal)
     {
@@ -67,6 +70,11 @@ public static class ExoDependencyDiscovery
 
             foreach (Match m in ServiceUse.Matches(text)) used.Add(m.Groups[1].Value);
             foreach (Match m in Pin.Matches(text))
+            {
+                if (!pins.Contains(m.Groups[1].Value)) pins.Add(m.Groups[1].Value);
+            }
+
+            foreach (Match m in NamedCall.Matches(text))
             {
                 if (!pins.Contains(m.Groups[1].Value)) pins.Add(m.Groups[1].Value);
             }

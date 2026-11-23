@@ -112,6 +112,55 @@ public static class ExoDeployOrder
         return new DeployPlan(order, problems);
     }
 
+    /// <summary>
+    /// The extensions <paramref name="name"/> needs built before it, transitively, providers first. A circle
+    /// ("a → b → a") or a provider in <paramref name="excluded"/> is a problem and no order is returned.
+    /// </summary>
+    public static (IReadOnlyList<string> Order, string? Problem) DependenciesOf(
+        string name, IReadOnlyCollection<DeployNode> nodes, ISet<string> excluded)
+    {
+        var providerOf = new Dictionary<string, DeployNode>(StringComparer.Ordinal);
+        foreach (var node in nodes)
+            foreach (string service in node.Provides) providerOf.TryAdd(service, node);
+
+        var order = new List<string>();
+        var done = new HashSet<string>(StringComparer.Ordinal);
+        var path = new List<string>();
+        string? problem = null;
+
+        void Visit(DeployNode node)
+        {
+            if (problem != null || done.Contains(node.Name)) return;
+            if (path.Contains(node.Name))
+            {
+                problem = $"circular dependency: {string.Join(" → ", path.SkipWhile(n => n != node.Name).Append(node.Name))}";
+                return;
+            }
+
+            path.Add(node.Name);
+            foreach (string dependency in node.Dependencies)
+            {
+                if (!providerOf.TryGetValue(dependency, out var provider) || provider.Name == node.Name) continue;
+                if (excluded.Contains(provider.Name))
+                {
+                    problem = $"'{node.Name}' needs '{provider.Name}' (for the service '{dependency}'), which is excluded";
+                    return;
+                }
+
+                Visit(provider);
+                if (problem != null) return;
+            }
+
+            path.RemoveAt(path.Count - 1);
+            done.Add(node.Name);
+            if (node.Name != name) order.Add(node.Name);
+        }
+
+        var self = nodes.FirstOrDefault(n => n.Name == name);
+        if (self != null) Visit(self);
+        return (problem == null ? order : Array.Empty<string>(), problem);
+    }
+
     /// <summary>The problems with deploying in this exact order: an extension placed before one it calls.</summary>
     public static IReadOnlyList<string> Verify(IReadOnlyList<string> order, IEnumerable<DeployNode> nodes)
     {
