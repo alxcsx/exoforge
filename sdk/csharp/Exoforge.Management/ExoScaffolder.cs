@@ -296,6 +296,15 @@ public static class ExoScaffolder
     public static bool EnsureBuildFeed(string workspaceRoot, string extensionDir, string? explicitFeed = null)
     {
         string? version = EnsureProjectFeed(workspaceRoot, explicitFeed);
+
+        // NuGet reads the nuget.config nearest the project, walking up from it. When extensions_dir points
+        // outside the workspace (../../extensions, shared by several Unity projects) that walk never reaches
+        // the workspace root, so the feed has to sit beside the extensions themselves, and be kept current there.
+        string extensionsRoot = Path.GetFullPath(Path.GetDirectoryName(Path.GetFullPath(extensionDir).TrimEnd(Path.DirectorySeparatorChar))!);
+        string root = Path.GetFullPath(workspaceRoot).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        if (!(extensionsRoot + Path.DirectorySeparatorChar).StartsWith(root, StringComparison.Ordinal))
+            version = EnsureProjectFeed(extensionsRoot, explicitFeed ?? Path.Combine(workspaceRoot, FeedDirectoryName)) ?? version;
+
         bool changed = version != null && EnsurePackageReference(extensionDir, version);
 
         string stale = Path.Combine(extensionDir, "nuget.config");

@@ -31,3 +31,28 @@ public class ExtensionVisibilityTests
         finally { Directory.Delete(root, true); }
     }
 }
+
+public class ExternalExtensionsFeedTests
+{
+    [Fact]
+    public void EnsureBuildFeed_puts_the_feed_beside_extensions_outside_the_workspace()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "exo_feed_" + Path.GetRandomFileName());
+        try
+        {
+            string ws = Path.Combine(root, "game", "Exoforge");
+            string ext = Path.Combine(root, "extensions", "items");
+            Directory.CreateDirectory(Path.Combine(ws, ".feed"));
+            Directory.CreateDirectory(Path.Combine(ext, "src"));
+            File.WriteAllText(Path.Combine(ws, ".feed", "Exoforge.Plugin.SDK.0.1.71.nupkg"), "x");
+            string csproj = Path.Combine(ext, "src", "items.csproj");
+            File.WriteAllText(csproj, "<Project><ItemGroup><PackageReference Include=\"Exoforge.Plugin.SDK\" Version=\"0.1.52\" /></ItemGroup></Project>");
+
+            ExoScaffolder.EnsureBuildFeed(ws, ext);
+
+            Assert.True(File.Exists(Path.Combine(root, "extensions", ".feed", "Exoforge.Plugin.SDK.0.1.71.nupkg")));
+            Assert.Contains("0.1.71", File.ReadAllText(csproj));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+}
