@@ -919,6 +919,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         foreach (var dir in Directory.GetDirectories(pluginsDir))
         {
             string name = Path.GetFileName(dir);
+            if (!ExoWorkspace.IsExtensionFolder(name) || ExoWorkspace.IsTestExtension(dir)) continue;
             string csproj = Path.Combine(dir, "src", name + ".csproj");
             if (!File.Exists(csproj)) csproj = Path.Combine(dir, name + ".csproj");
             if (!File.Exists(csproj))

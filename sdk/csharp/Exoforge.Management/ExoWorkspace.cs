@@ -254,10 +254,37 @@ public class ExoWorkspace
         Config.ExcludedExtensions is { Count: > 0 } excluded &&
         excluded.Contains(ExoScaffolder.NormalizeExtensionName(name), StringComparer.Ordinal);
 
+    /// <summary>A folder in the extensions directory that is an extension at all: not hidden (<c>.feed</c>) and not a dotted project folder (<c>wallet.Tests</c>).</summary>
+    public static bool IsExtensionFolder(string? name) =>
+        !string.IsNullOrEmpty(name) && !name!.StartsWith('.') && !name.Contains('.');
+
+    /// <summary>
+    /// A test extension, hidden from the editor lists: named <c>test_*</c>, <c>*_test</c> or <c>*_tests</c>, or
+    /// declaring itself one in its manifest (<c>"test": true</c>, or <c>"category": "Test"</c>).
+    /// </summary>
+    public static bool IsTestExtension(string dir)
+    {
+        string name = Path.GetFileName(dir.TrimEnd('/', '\\'));
+        if (name.StartsWith("test_", StringComparison.OrdinalIgnoreCase) ||
+            name.EndsWith("_test", StringComparison.OrdinalIgnoreCase) ||
+            name.EndsWith("_tests", StringComparison.OrdinalIgnoreCase)) return true;
+        try
+        {
+            string manifest = Path.Combine(dir, "manifest.json");
+            if (!File.Exists(manifest)) return false;
+            using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(manifest));
+            var root = doc.RootElement;
+            if (root.TryGetProperty("test", out var t) && t.ValueKind == System.Text.Json.JsonValueKind.True) return true;
+            return root.TryGetProperty("category", out var c) && c.ValueKind == System.Text.Json.JsonValueKind.String &&
+                   string.Equals(c.GetString(), "Test", StringComparison.OrdinalIgnoreCase);
+        }
+        catch { return false; }
+    }
+
     /// <summary>Every extension folder in the extensions directory, included or not, in name order.</summary>
     public List<string> AllExtensions() =>
         Directory.Exists(ExtensionsPath)
-            ? Directory.GetDirectories(ExtensionsPath).Select(Path.GetFileName).Where(n => !string.IsNullOrEmpty(n) && !n!.StartsWith('.') && !n.Contains('.')).Select(n => n!).OrderBy(n => n, StringComparer.Ordinal).ToList()
+            ? Directory.GetDirectories(ExtensionsPath).Select(Path.GetFileName).Where(IsExtensionFolder).Select(n => n!).OrderBy(n => n, StringComparer.Ordinal).ToList()
             : new List<string>();
 
     /// <summary>The extensions to build and deploy: the extensions directory minus <c>excluded_extensions</c>.</summary>

@@ -856,9 +856,20 @@ namespace Exoforge.Unity.Editor
             }
 
             string currentCategory = "";
-            foreach (var p in filtered)
+            VisualElement target = scroll;
+            Foldout? excludedFold = null;
+            // Excluded extensions go last, under a fold.
+            foreach (var p in filtered.OrderBy(x => x.IsExcluded))
             {
-                if (p.Category != currentCategory)
+                if (p.IsExcluded && excludedFold == null)
+                {
+                    int count = filtered.Count(x => x.IsExcluded);
+                    excludedFold = new Foldout { text = $"Not included ({count})", value = false };
+                    excludedFold.style.marginTop = 8;
+                    scroll.Add(excludedFold);
+                    target = excludedFold;
+                }
+                if (!p.IsExcluded && p.Category != currentCategory)
                 {
                     currentCategory = p.Category;
                     var catHeader = new Label(currentCategory.ToUpperInvariant());
@@ -960,7 +971,7 @@ namespace Exoforge.Unity.Editor
                 }
 
                 card.Add(bottomRow);
-                scroll.Add(card);
+                target.Add(card);
             }
         }
 
@@ -2594,6 +2605,7 @@ namespace Exoforge.Unity.Editor
                 {
                     foreach (var dir in Directory.GetDirectories(ws.ExtensionsPath))
                     {
+                        if (!ExoWorkspace.IsExtensionFolder(Path.GetFileName(dir)) || ExoWorkspace.IsTestExtension(dir)) continue;
                         if (scannedPaths.Add(dir)) extensionDirs.Add(dir);
                     }
                 }

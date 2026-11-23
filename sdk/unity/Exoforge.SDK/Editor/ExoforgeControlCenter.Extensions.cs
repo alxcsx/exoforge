@@ -279,9 +279,19 @@ public partial class ExoforgeControlCenter : EditorWindow
         }
         else
         {
-            foreach (var plugin in _localPlugins)
+            foreach (var plugin in _localPlugins.Where(p => !ExoforgeExtensionOps.IsExcluded(Workspace, p.Name)))
             {
                 scroll.Add(BuildExtensionCardToolkit(plugin));
+            }
+
+            // Extensions left out of builds and deploys stay out of the way, under a fold.
+            var notIncluded = _localPlugins.Where(p => ExoforgeExtensionOps.IsExcluded(Workspace, p.Name)).ToList();
+            if (notIncluded.Count > 0)
+            {
+                var fold = new Foldout { text = $"Not included ({notIncluded.Count})", value = false };
+                fold.style.marginTop = 8;
+                foreach (var plugin in notIncluded) fold.Add(BuildExtensionCardToolkit(plugin));
+                scroll.Add(fold);
             }
         }
 

@@ -52,7 +52,7 @@ The Unity window tells a refused session apart from a server that is down:
 
 When one extension calls a service another one provides, deploy the provider first. **Build & Deploy All** in the Unity window does this for you: it reads each extension's `manifest.json`, puts providers before the extensions that call them, and shows a warning if two extensions depend on each other in a circle. A service that nothing in your project provides is expected to be one of the server's own.
 
-A project can leave extensions out with `"excluded_extensions": ["name", ...]` in `exoforge.json` (`exo extension exclude <name>` and `include <name>` edit it, and the Unity window has an Include toggle per extension). `exo extension push --all` and Build & Deploy All skip them, and refuse to run, naming the pair, when an included extension needs an excluded one (for example `daily_rewards needs wallet, which is excluded`).
+A project can leave extensions out with `"excluded_extensions": ["name", ...]` in `exoforge.json` (`exo extension exclude <name>` and `include <name>` edit it, and the Unity window has an Include toggle per extension). `exo extension push --all` and Build & Deploy All skip them, and refuse to run, naming the pair, when an included extension needs an excluded one (for example `daily_rewards needs wallet, which is excluded`). In the Unity window, excluded extensions sit under a *Not included* fold. Folders that are not extensions never appear there: hidden ones (`.feed`) and dotted project folders (`wallet.Tests`). Test extensions are hidden too: a name of `test_*`, `*_test` or `*_tests`, or `"test": true` / `Category = "Test"` in the manifest.
 
 ## Starting over: Danger zone
 
