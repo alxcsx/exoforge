@@ -1565,6 +1565,12 @@ public partial class ExoDeployer
     {
         ExoScaffolder.EnsureBuildFeed(_workspace.RootPath, pluginDir);
 
+        // The SDK package an installed Unity package carries is a restore source in its own right, so a
+        // build never depends on a nuget.config or a copied .feed being where NuGet happens to look
+        // (extensions_dir may point outside the workspace). Importing the package is all a developer does.
+        string? sdkFeed = ExoScaffolder.ResolveDefaultFeed();
+        string feedArg = sdkFeed != null && !sdkFeed.Contains(';') ? $" -p:RestoreAdditionalProjectSources=\"{sdkFeed}\"" : "";
+
         string targetRid = string.IsNullOrWhiteSpace(rid) ? HostRuntimeIdentifier() : rid!;
         string manifest = Path.Combine(pluginDir, "manifest.json");
 
@@ -1602,7 +1608,7 @@ public partial class ExoDeployer
         emit($"[build] dotnet restore -r {targetRid}");
         RunProcess(
             dotnetPath,
-            $"restore \"{RelativeTo(pluginDir, csproj)}\" -r {targetRid}{tfmArg}",
+            $"restore \"{RelativeTo(pluginDir, csproj)}\" -r {targetRid}{tfmArg}{feedArg}",
             pluginDir,
             emit);
 
