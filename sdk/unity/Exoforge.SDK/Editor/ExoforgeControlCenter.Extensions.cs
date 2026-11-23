@@ -300,11 +300,7 @@ public partial class ExoforgeControlCenter : EditorWindow
         if (!string.IsNullOrEmpty(_buildLog))
         {
             var logFold = new Foldout { text = "Build Log", value = _buildLog.Contains("error") || _buildLog.Contains("failed") };
-            var logText = new TextField { value = _buildLog, multiline = true, isReadOnly = true };
-            logText.style.minHeight = 90;
-            logText.style.maxHeight = 260;
-            logText.style.whiteSpace = WhiteSpace.Normal;
-            logFold.Add(logText);
+            logFold.Add(ExoforgeExtensionOps.BuildLogView("Output", () => _buildLog, 90));
             scroll.Add(logFold);
         }
 
@@ -869,7 +865,7 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         if (BlockedByExclusions()) return;
 
-        var unbuilt = InDeployOrder(_localPlugins.Where(p => p.CanBuild && (!p.IsBuilt || p.Modified)).ToList());
+        var unbuilt = InDeployOrder(_localPlugins.Where(p => p.CanBuild && (!p.IsBuilt || p.Modified || !BuiltForServer(p.Name))).ToList());
         if (unbuilt.Count > 0)
         {
             ShowStatus($"Building {unbuilt.Count} unbuilt/modified extension(s) before deploy…", MessageType.Info);
@@ -958,13 +954,14 @@ public partial class ExoforgeControlCenter : EditorWindow
         try
         {
             var deployer = new ExoDeployer(Workspace);
-            string effectiveRid = ExoforgeExtensionOps.ResolveRid(_buildRid, ExoforgeEditorConfig.TargetBuildRid, thenDeploy, _clusterTargetRid);
+            string effectiveRid = ExoforgeExtensionOps.ResolveRid(_buildRid, ExoforgeEditorConfig.TargetBuildRid, thenDeploy || _isConnected, _clusterTargetRid);
 
             var build = await deployer.BuildExtensionAsync(
                 plugin.Name, effectiveRid, ExoforgeEditorConfig.DotnetPath, AppendBuildLog);
 
             _buildLog = build.Output;
             ExoforgeExtensionOps.RecordBuildLog(_buildLog);
+            ExoforgeExtensionOps.LogBuildOutput(plugin.Name, _buildLog);
             SessionState.EraseString(BuildFailureKey(plugin.Name));
             ShowStatus($"✓ Built '{plugin.Name}' ({build.ExtensionType}).", MessageType.Info);
             RefreshLocalPlugins();
@@ -1058,9 +1055,22 @@ public partial class ExoforgeControlCenter : EditorWindow
         Repaint();
     }
 
+    /// <summary>The staged binary runs on the server's OS. A Build made while offline targets this machine, and the server refuses it.</summary>
+    private bool BuiltForServer(string name) =>
+        new ExoDeployer(Workspace).StagedBinaryMatchesRid(name,
+            ExoforgeExtensionOps.ResolveRid(_buildRid, ExoforgeEditorConfig.TargetBuildRid, true, _clusterTargetRid));
+
     private async Task DeployPluginAsync(LocalPluginInfo plugin)
     {
         if (BlockedByExclusions()) return;
+
+        if (!BuiltForServer(plugin.Name))
+        {
+            // BuildPluginAsync deploys when it finishes, now for the server's runtime.
+            ShowStatus($"'{plugin.Name}' was built for another OS than the server's; rebuilding it first…", MessageType.Info);
+            await BuildPluginAsync(plugin, thenDeploy: true);
+            return;
+        }
 
         if (!ExoforgeExtensionOps.ConfirmDeploy(ActiveEnvironment?.Name ?? "default", ActiveWsUrl, 1))
         {

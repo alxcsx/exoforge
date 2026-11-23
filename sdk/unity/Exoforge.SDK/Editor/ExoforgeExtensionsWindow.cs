@@ -1434,17 +1434,7 @@ namespace Exoforge.Unity.Editor
                 ExoforgeUIStyle.ApplyCard(logBox);
                 logBox.style.marginTop = 10;
 
-                var logTitle = new Label("Latest Build Log");
-                logTitle.style.fontSize = 12;
-                logTitle.style.unityFontStyleAndWeight = FontStyle.Bold;
-                logTitle.style.color = ExoforgeUIStyle.TextPrimary;
-                logTitle.style.marginBottom = 6;
-                logBox.Add(logTitle);
-
-                var logText = new TextField { value = _buildLog, multiline = true };
-                logText.isReadOnly = true;
-                logText.style.height = 100;
-                logBox.Add(logText);
+                logBox.Add(ExoforgeExtensionOps.BuildLogView("Latest Build Log", () => _buildLog, 100));
 
                 scroll.Add(logBox);
             }
@@ -3054,6 +3044,7 @@ namespace Exoforge.Unity.Editor
                 var build = await deployer.BuildExtensionAsync(targetName, effectiveRid, ExoforgeEditorConfig.DotnetPath, s => _buildLog += s + "\n");
                 _buildLog = build.Output;
                 ExoforgeExtensionOps.RecordBuildLog(_buildLog);
+                ExoforgeExtensionOps.LogBuildOutput(targetName, _buildLog);
                 ExoforgeExtensionOps.ClearBuildFailure(targetName);
                 ShowStatus($"✓ Successfully built '{targetName}'.");
 
@@ -3187,6 +3178,11 @@ namespace Exoforge.Unity.Editor
             {
                 var ws = ExoWorkspace.Load(ExoforgeEditorConfig.GetAbsoluteWorkspacePath());
                 var deployer = new ExoDeployer(ws);
+                if (!deployer.StagedBinaryMatchesRid(plugin.Name, ExoforgeExtensionOps.ResolveRid(null, ExoforgeEditorConfig.TargetBuildRid, true, ExoforgeControlCenter.ServerTargetRid)))
+                {
+                    ShowStatus($"'{plugin.Name}' was built for another OS than the server's; rebuilding it first…");
+                    if (!await BuildPluginAsync(plugin)) return;
+                }
                 await deployer.UploadExtensionAsync(plugin.Name, existingClient: GetClient());
                 ExoforgeExtensionOps.ClearDeployFailure(plugin.Name);
                 ShowStatus($"✓ Successfully deployed '{plugin.Name}' to server.");

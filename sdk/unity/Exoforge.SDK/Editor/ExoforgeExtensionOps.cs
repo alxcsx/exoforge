@@ -47,6 +47,27 @@ namespace Exoforge.Unity.Editor
 
         public static void RecordBuildLog(string log) => SessionState.SetString(LastBuildLogKey, log ?? "");
 
+        /// <summary>A finished build's output in the Unity console (a failed one is logged as an error by its caller).</summary>
+        public static void LogBuildOutput(string extension, string log) =>
+            Debug.Log($"[Exoforge] Build log for '{extension}':\n{log}");
+
+        /// <summary>A read-only, selectable log box with a Copy button above it.</summary>
+        public static VisualElement BuildLogView(string title, Func<string> getLog, float height)
+        {
+            var box = new VisualElement();
+            var bar = new VisualElement { style = { flexDirection = FlexDirection.Row, alignItems = Align.Center } };
+            var label = new Label(title) { style = { flexGrow = 1, unityFontStyleAndWeight = FontStyle.Bold } };
+            bar.Add(label);
+            bar.Add(new Button(() => GUIUtility.systemCopyBuffer = getLog()) { text = "Copy log" });
+            box.Add(bar);
+            var text = new TextField { value = getLog(), multiline = true, isReadOnly = true };
+            text.style.minHeight = height;
+            text.style.maxHeight = 260;
+            text.style.whiteSpace = WhiteSpace.Normal;
+            box.Add(text);
+            return box;
+        }
+
         public static string LastBuildLog() => SessionState.GetString(LastBuildLogKey, "");
 
         public static string? BuildFailure(string extension) => NullIfEmpty(SessionState.GetString(BuildFailureKey(extension), ""));
@@ -233,7 +254,17 @@ namespace Exoforge.Unity.Editor
             text.style.flexGrow = 1;
             text.style.flexShrink = 1;
             text.style.whiteSpace = WhiteSpace.Normal;
+            text.selection.isSelectable = true;
             banner.Add(text);
+
+            var copy = new Button(() => GUIUtility.systemCopyBuffer = message) { text = "Copy" };
+            copy.style.borderTopWidth = 0;
+            copy.style.borderBottomWidth = 0;
+            copy.style.borderLeftWidth = 0;
+            copy.style.borderRightWidth = 0;
+            copy.style.backgroundColor = Color.clear;
+            copy.style.color = ExoforgeUIStyle.TextSecondary;
+            banner.Add(copy);
 
             var dismiss = new Button(onDismiss) { text = "✕" };
             dismiss.style.borderTopWidth = 0;

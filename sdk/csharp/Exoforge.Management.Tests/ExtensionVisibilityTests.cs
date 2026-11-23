@@ -56,3 +56,18 @@ public class ExternalExtensionsFeedTests
         finally { Directory.Delete(root, true); }
     }
 }
+
+public class BinaryOsTests
+{
+    [Theory]
+    [InlineData(new byte[] { 0xCF, 0xFA, 0xED, 0xFE }, "linux-musl-x64", false)]
+    [InlineData(new byte[] { 0xCF, 0xFA, 0xED, 0xFE }, "osx-arm64", true)]
+    [InlineData(new byte[] { 0x7F, (byte)'E', (byte)'L', (byte)'F' }, "linux-musl-x64", true)]
+    [InlineData(new byte[] { 0x7F, (byte)'E', (byte)'L', (byte)'F' }, "win-x64", false)]
+    public void BinaryMatchesRid_reads_the_executable_format(byte[] head, string rid, bool expected)
+    {
+        string path = Path.GetTempFileName();
+        try { File.WriteAllBytes(path, head); Assert.Equal(expected, ExoDeployer.BinaryMatchesRid(path, rid)); }
+        finally { File.Delete(path); }
+    }
+}

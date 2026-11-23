@@ -177,6 +177,36 @@ public partial class ExoDeployer
         return true;
     }
 
+    /// <summary>
+    /// Whether the staged binary of an extension runs on <paramref name="rid"/>'s operating system, read from its
+    /// first bytes (ELF, Mach-O, or MZ). An extension that is not built yet, or a format not recognised, reads as
+    /// matching, so only a binary known to be for another OS is rebuilt.
+    /// </summary>
+    public bool StagedBinaryMatchesRid(string extensionName, string rid)
+    {
+        string name = extensionName.Trim().ToLowerInvariant().Replace("-", "_");
+        string path = StagedBinary(Path.Combine(_workspace.ExtensionsPath, name), name);
+        return BinaryMatchesRid(path, rid);
+    }
+
+    public static bool BinaryMatchesRid(string binaryPath, string rid)
+    {
+        if (!File.Exists(binaryPath)) return true;
+        var head = new byte[4];
+        using (var f = File.OpenRead(binaryPath)) { if (f.Read(head, 0, 4) < 4) return true; }
+
+        string? built =
+            head[0] == 0x7F && head[1] == (byte)'E' && head[2] == (byte)'L' && head[3] == (byte)'F' ? "linux" :
+            head[0] == (byte)'M' && head[1] == (byte)'Z' ? "win" :
+            (head[0] == 0xCF || head[0] == 0xCE) && head[1] == 0xFA && head[2] == 0xED && head[3] == 0xFE ? "osx" :
+            head[0] == 0xCA && head[1] == 0xFE && head[2] == 0xBA && head[3] == 0xBE ? "osx" : null;
+        if (built == null) return true;
+
+        string r = (rid ?? "").ToLowerInvariant();
+        string wanted = r.StartsWith("win") ? "win" : r.StartsWith("osx") || r.StartsWith("macos") ? "osx" : "linux";
+        return built == wanted;
+    }
+
     public async Task<string> UploadExtensionAsync(
         string extensionName,
         string? environmentName = null,
