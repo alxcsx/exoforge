@@ -103,7 +103,8 @@ public static class ExoDependencyDiscovery
     /// <c>ExoServices.X</c> usages matched to <paramref name="known"/> by name (<c>LojaItens</c> is <c>loja_itens</c>).
     /// The extension itself is never its own dependency.
     /// </summary>
-    public static DiscoveredDependencies Discover(string extensionDir, string selfName, IEnumerable<string> known)
+    public static DiscoveredDependencies Discover(string extensionDir, string selfName, IEnumerable<string> known,
+        IReadOnlyDictionary<string, string>? typeOwners = null)
     {
         var byPascal = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (string service in known)
@@ -125,6 +126,11 @@ public static class ExoDependencyDiscovery
         var (used, pins) = ScanSources(extensionDir);
         foreach (string pin in pins) Add(pin);
 
+        if (typeOwners != null)
+        {
+            foreach (string owner in ServicesOfTypesUsed(extensionDir, typeOwners)) Add(owner);
+        }
+
         var unmatched = new List<string>();
         foreach (string name in used)
         {
@@ -134,6 +140,86 @@ public static class ExoDependencyDiscovery
         }
 
         return new DiscoveredDependencies(services, unmatched);
+    }
+
+    private static readonly Regex Identifier = new(@"[A-Za-z_]\w*", RegexOptions.Compiled);
+    private static readonly Regex LocalDeclaration = new(@"\b(?:class|record|struct|enum|interface)\s+([A-Za-z_]\w*)", RegexOptions.Compiled);
+    private const string StubNamespace = "Exoforge.Plugins.Generated";
+
+    /// <summary>
+    /// The services whose generated model types the sources use: a file that names the stub namespace and a type a
+    /// service's stubs declare (<c>Item</c> of <c>items</c>) depends on that service, with no call needed. A type the
+    /// extension declares itself never counts, so a local <c>Item</c> is not a dependency on <c>items</c>.
+    /// </summary>
+    public static IReadOnlyList<string> ServicesOfTypesUsed(string extensionDir, IReadOnlyDictionary<string, string> typeOwners)
+    {
+        var texts = new List<string>();
+        if (!Directory.Exists(extensionDir)) return texts;
+        var local = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string file in SourceFiles(extensionDir))
+        {
+            try
+            {
+                string text = File.ReadAllText(file);
+                foreach (Match m in LocalDeclaration.Matches(text)) local.Add(m.Groups[1].Value);
+                if (text.Contains(StubNamespace, StringComparison.Ordinal)) texts.Add(text);
+            }
+            catch (IOException)
+            {
+            }
+        }
+
+        var services = new List<string>();
+        foreach (string text in texts)
+        {
+            foreach (Match m in Identifier.Matches(text))
+            {
+                if (local.Contains(m.Value) || !typeOwners.TryGetValue(m.Value, out string? service)) continue;
+                if (!services.Contains(service)) services.Add(service);
+            }
+        }
+
+        return services;
+    }
+
+    private static string _ownersKey = "";
+    private static Dictionary<string, string> _owners = new();
+
+    /// <summary>
+    /// Type names to services for the built sibling extensions of an extensions directory, from their manifests.
+    /// Kept for as long as no manifest changes, since the UI asks on every redraw.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> TypeOwnersOfSiblings(string extensionsPath)
+    {
+        var manifests = new List<(string Path, JsonNode Node)>();
+        var key = new System.Text.StringBuilder();
+        if (Directory.Exists(extensionsPath))
+        {
+            foreach (string dir in Directory.GetDirectories(extensionsPath).OrderBy(d => d, StringComparer.Ordinal))
+            {
+                string manifest = Path.Combine(dir, "manifest.json");
+                if (!File.Exists(manifest) || !ExoWorkspace.IsExtensionFolder(Path.GetFileName(dir))) continue;
+                key.Append(manifest).Append(File.GetLastWriteTimeUtc(manifest).Ticks).Append(';');
+                try
+                {
+                    if (JsonNode.Parse(File.ReadAllText(manifest)) is { } node) manifests.Add((manifest, node));
+                }
+                catch (Exception ex) when (ex is System.Text.Json.JsonException or IOException)
+                {
+                }
+            }
+        }
+
+        lock (typeof(ExoDependencyDiscovery))
+        {
+            if (key.ToString() == _ownersKey) return _owners;
+            var plugins = new JsonArray();
+            foreach (var (_, node) in manifests) plugins.Add(node);
+            var export = new JsonObject { ["export"] = new JsonObject { ["plugins"] = plugins } };
+            _owners = ExoCodeGenerator.StubTypeOwners(export.ToJsonString());
+            _ownersKey = key.ToString();
+            return _owners;
+        }
     }
 
     /// <summary>

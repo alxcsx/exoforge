@@ -145,6 +145,22 @@ public class StubPassTests : IDisposable
     }
 
     [Fact]
+    public void Using_A_Services_Model_Type_Is_A_Dependency_Without_A_Call()
+    {
+        Extension("items");
+        File.WriteAllText(Path.Combine(_extensions, "items", "manifest.json"), ItemsManifest);
+        Extension("shop", "using Exoforge.Plugins.Generated;\nclass Shop { ItemsGetItemRequest R; }");
+        Extension("local", "using Exoforge.Plugins.Generated;\nclass ItemsGetItemRequest { }\nclass L { ItemsGetItemRequest R; }");
+        Extension("nousing", "class N { ItemsGetItemRequest R; }");
+
+        var nodes = ExoDeployOrder.ReadNodes(_extensions, new[] { "shop", "local", "nousing" });
+
+        Assert.Contains("items", nodes.First(n => n.Name == "shop").Dependencies);
+        Assert.DoesNotContain("items", nodes.First(n => n.Name == "local").Dependencies);
+        Assert.DoesNotContain("items", nodes.First(n => n.Name == "nousing").Dependencies);
+    }
+
+    [Fact]
     public void A_Build_Stops_With_The_Reason_Before_Any_Compile_When_A_Contract_Is_Missing()
     {
         Extension("items");

@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace Exoforge.Management;
 
@@ -741,6 +742,44 @@ public static class ExoCodeGenerator
         }
 
         return result;
+    }
+
+    private static readonly Regex DeclaredType = new(@"public\s+(?:sealed\s+|static\s+|partial\s+)*(?:class|record|struct|enum)\s+([A-Za-z_]\w*)", RegexOptions.Compiled);
+
+    /// <summary>
+    /// The public type names the stubs of each service declare, mapped to that service (a name two services declare
+    /// is left out: it says nothing about which one is meant). Taken from the generated code itself, so it is always
+    /// exactly what a caller could name.
+    /// </summary>
+    public static Dictionary<string, string> StubTypeOwners(string exportJson)
+    {
+        var owners = new Dictionary<string, string>(StringComparer.Ordinal);
+        // What every stub file declares whatever the services (the holder, the JSON context) names no service.
+        var ambiguous = new HashSet<string>(
+            DeclaredType.Matches(GeneratePluginStubs(Array.Empty<ServiceContractModel>())).Select(m => m.Groups[1].Value),
+            StringComparer.Ordinal);
+        try
+        {
+            using var doc = JsonDocument.Parse(exportJson);
+            foreach (var service in ParseServices(doc.RootElement))
+            {
+                string code = GeneratePluginStubs(new[] { service });
+                foreach (Match m in DeclaredType.Matches(code))
+                {
+                    string type = m.Groups[1].Value;
+                    if (type == "ExoServices" || type.EndsWith("Client", StringComparison.Ordinal)) continue;
+                    if (owners.TryGetValue(type, out var other) && other != service.Name) ambiguous.Add(type);
+                    else owners[type] = service.Name;
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // an export that does not parse names no types
+        }
+
+        foreach (string type in ambiguous) owners.Remove(type);
+        return owners;
     }
 
     public static bool GeneratePluginStubsToFile(

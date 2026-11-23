@@ -94,6 +94,16 @@ To cross-compile for a Linux VPS or container host:
 ./exo extension build daily_rewards --rid linux-musl-x64 --json
 ```
 
+## 4b. Extensions That Use Other Extensions
+
+Good practice: one model, one owner.
+
+- **Do not copy a model.** If `inventory` needs `items`' records, it depends on `items`; it does not declare `ItemCatalogo` itself.
+- **Use the generated stubs.** `exo extension build` makes them under `obj/exoforge/PluginServices.g.cs` (never commit it). Call `ExoServices.Items.ListCatalogAsync()` and use the generated types after `using Exoforge.Plugins.Generated;`.
+- **Dependencies are found from the code**: a typed call, or naming a generated type (a type you declare yourself does not count). `[ExoDependency("x")]` is only for a service reached some other way. Stubs exist only for services you depend on.
+- **By-name calls are a last resort.** `CallAction<T>("items", "list_catalog", ...)` has no types and no compile-time check. Use it only when there is no contract to generate from.
+- **Build errors name the cause.** Building an extension builds its dependencies first. If one fails the build stops with `Cannot build '<x>': its dependency '<y>' failed to build`; fix `<y>`. `circular dependency: a → b → a` means split a shared part into its own extension. `needs '<y>', which is excluded` means include `<y>` (`exo extension include <y>`).
+
 ## 5. Deploying (Push) to Cluster
 
 Deploy the built extension into the active Exoforge cluster:

@@ -208,7 +208,7 @@ public partial class ExoDeployer
     {
         var known = new HashSet<string>(AvailableServices(mergedExport), StringComparer.Ordinal);
         known.UnionWith(ExoDependencyDiscovery.SiblingServices(_workspace.ExtensionsPath));
-        return ExoDependencyDiscovery.Discover(extensionDir, name, known);
+        return ExoDependencyDiscovery.Discover(extensionDir, name, known, ExoCodeGenerator.StubTypeOwners(mergedExport));
     }
 
     private string? ResolveExtensionDir(string cleanName)

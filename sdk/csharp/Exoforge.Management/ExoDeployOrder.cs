@@ -190,6 +190,7 @@ public static class ExoDeployOrder
     public static List<DeployNode> ReadNodes(string extensionsPath, IEnumerable<string> names)
     {
         var siblings = ExoDependencyDiscovery.SiblingServices(extensionsPath);
+        var typeOwners = ExoDependencyDiscovery.TypeOwnersOfSiblings(extensionsPath);
         var nodes = new List<DeployNode>();
         foreach (string name in names)
         {
@@ -208,7 +209,7 @@ public static class ExoDeployOrder
                 // a half-written manifest: treat as unlinked, the build will rewrite it
             }
 
-            nodes.Add(new DeployNode(name, provides, ExoDependencyDiscovery.Discover(dir, name, siblings).Services));
+            nodes.Add(new DeployNode(name, provides, ExoDependencyDiscovery.Discover(dir, name, siblings, typeOwners).Services));
         }
 
         return nodes;
