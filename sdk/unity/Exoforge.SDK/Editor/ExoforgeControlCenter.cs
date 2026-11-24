@@ -552,10 +552,14 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
         }
 
         // Validate with cluster silently in background
-        bool isValid = await ValidateTokenWithClusterAsync(token);
+        // An expired access token is not a lost session: renew it first, and only a refused
+        // refresh token ends the session and asks for a login.
+        bool isValid = await ValidateTokenWithClusterAsync(token)
+            || await RefreshStudioSessionCoreAsync(null, System.Threading.CancellationToken.None);
         if (!isValid)
         {
-            ExoTokenStore.ClearStudioSession();
+            ClearStoredSession();
+            ExoforgeAccountModal.Open();
         }
     }
 
@@ -602,7 +606,7 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
         // hardcoded default.
         if (string.IsNullOrEmpty(ExoTokenStore.StudioToken) && !string.IsNullOrEmpty(ActiveToken))
         {
-            ExoTokenStore.SaveStudioSession(ActiveToken);
+            ExoTokenStore.SaveStudioSession(ActiveToken, refreshToken: WorkspaceRefreshToken());
         }
 
         if (ExoforgeEditorConfig.WorkspacePath == "exoforge")
@@ -1346,6 +1350,18 @@ public partial class ExoforgeControlCenter : EditorWindow, ISerializationCallbac
     }
 
     private string ActiveWsUrl => ActiveEnvironment?.WsUrl ?? "";
+
+    private static string? WorkspaceRefreshToken()
+    {
+        try
+        {
+            string wsPath = ExoforgeEditorConfig.GetAbsoluteWorkspacePath();
+            return ExoWorkspace.Exists(wsPath)
+                ? ExoWorkspace.Load(wsPath).GetActiveEnvironment(ExoforgeEditorConfig.SelectedEnvironment).RefreshToken
+                : null;
+        }
+        catch { return null; }
+    }
 
     private string ActiveToken => ActiveEnvironment?.Token ?? "";
 

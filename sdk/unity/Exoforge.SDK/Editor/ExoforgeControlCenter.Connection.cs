@@ -136,14 +136,41 @@ public partial class ExoforgeControlCenter : EditorWindow
 
             await _editorClient.ConnectAsync(new Uri(targetWs), cts.Token);
 
-            var auth = await _editorClient.AuthenticateAsync(targetToken, cancellationToken: cts.Token);
+            ExoAuthResult? auth;
+            try
+            {
+                auth = await _editorClient.AuthenticateAsync(targetToken, cancellationToken: cts.Token);
+            }
+            catch (ExoActionException)
+            {
+                // An expired token comes back as an error, not as a failed result.
+                auth = null;
+            }
 
             // The stored access token may simply have reached its end; renew it before treating the
             // session as rejected.
-            if (!auth.IsSuccess && await RefreshStudioSessionAsync(cts.Token))
+            if (auth?.IsSuccess != true && await RefreshStudioSessionAsync(cts.Token))
             {
                 targetToken = ExoTokenStore.StudioToken;
-                auth = await _editorClient.AuthenticateAsync(targetToken, cancellationToken: cts.Token);
+                try
+                {
+                    auth = await _editorClient.AuthenticateAsync(targetToken, cancellationToken: cts.Token);
+                }
+                catch (ExoActionException)
+                {
+                    auth = null;
+                }
+            }
+
+            if (auth?.IsSuccess != true)
+            {
+                // Neither the token nor the refresh token is good: forget them and ask for a login once.
+                _rawConnected = false;
+                _isConnected = false;
+                _connectionStatus = "Signed out";
+                ShowStatus("Your session has expired. Sign in again.", MessageType.Warning);
+                EndStudioSession();
+                return;
             }
 
             if (auth.IsSuccess)
@@ -189,14 +216,6 @@ public partial class ExoforgeControlCenter : EditorWindow
                     ShowStatus(clientNote, StatusSeverity.Warning);
                 }
             }
-            else
-            {
-                _isConnected = false;
-                SessionState.SetBool(WasConnectedSessionKey, false);
-                _connectionStatus = "Auth failed";
-                ShowStatus($"Authentication failed: {auth.Error}. Sign in using the Account button.", MessageType.Error);
-                ExoTokenStore.ClearStudioSession();
-            }
         }
         catch (OperationCanceledException)
         {
@@ -209,8 +228,8 @@ public partial class ExoforgeControlCenter : EditorWindow
             _rawConnected = false;
             SessionState.SetBool(WasConnectedSessionKey, false);
             _connectionStatus = "Auth rejected";
-            ShowStatus($"Auth rejected: {ex.Message}. Sign in using the Account button.", MessageType.Error);
-            ExoTokenStore.ClearStudioSession();
+            ShowStatus($"Auth rejected: {ex.Message}. Sign in again.", MessageType.Error);
+            EndStudioSession();
         }
         catch (Exception ex)
         {
@@ -247,15 +266,53 @@ public partial class ExoforgeControlCenter : EditorWindow
     }
 
     /// <summary>
-    /// Renews the Studio's stored session from its refresh token through the editor's own client.
-    /// Returns false when there is nothing to renew or the server refuses it.
+    /// The session cannot be renewed: forget it everywhere it is kept (so nothing re-seeds the dead
+    /// token and loops), stop reconnecting, and open the account window to sign in again.
     /// </summary>
-    private async Task<bool> RefreshStudioSessionAsync(CancellationToken ct)
+    private void EndStudioSession()
     {
-        var client = _editorClient;
-        string refreshToken = ExoTokenStore.StudioRefreshToken;
+        ClearStoredSession();
+        _isConnected = false;
+        _rawConnected = false;
+        SessionState.SetBool(WasConnectedSessionKey, false);
+        ExoforgeAccountModal.Open();
+    }
 
-        if (client == null || string.IsNullOrEmpty(refreshToken))
+    /// <summary>Clears the Studio session and the copy kept in the workspace's exoforge.json.</summary>
+    internal static void ClearStoredSession()
+    {
+        ExoTokenStore.ClearStudioSession();
+        try
+        {
+            string wsPath = ExoforgeEditorConfig.GetAbsoluteWorkspacePath();
+            if (!ExoWorkspace.Exists(wsPath)) return;
+            var ws = ExoWorkspace.Load(wsPath);
+            var env = ws.GetActiveEnvironment(ExoforgeEditorConfig.SelectedEnvironment);
+            env.Token = "";
+            env.RefreshToken = "";
+            ws.Save();
+            InvalidateWorkspaceShared();
+        }
+        catch (Exception ex)
+        {
+            UnityEngine.Debug.LogWarning($"[Exoforge] Could not clear the workspace session: {ex.Message}");
+        }
+    }
+
+    private Task<bool> RefreshStudioSessionAsync(CancellationToken ct) =>
+        RefreshStudioSessionCoreAsync(_editorClient, ct);
+
+    /// <summary>
+    /// Renews the Studio's stored session from its refresh token. A throwaway client makes the call,
+    /// because the live one still carries the expired token. Returns false when there is nothing to
+    /// renew or the server refuses it.
+    /// </summary>
+    internal static async Task<bool> RefreshStudioSessionCoreAsync(ExoClient? live, CancellationToken ct)
+    {
+        string refreshToken = ExoTokenStore.StudioRefreshToken;
+        string httpUrl = ActiveHttpEndpoint;
+
+        if (string.IsNullOrEmpty(refreshToken) || string.IsNullOrEmpty(httpUrl))
         {
             return false;
         }
@@ -264,6 +321,7 @@ public partial class ExoforgeControlCenter : EditorWindow
 
         try
         {
+            using var client = new ExoClient { HttpBaseUri = new Uri(httpUrl) };
             data = await client.SendActionAsync<JsonElement>(
                 "auth",
                 "refresh",
@@ -295,19 +353,24 @@ public partial class ExoforgeControlCenter : EditorWindow
             .Where(scope => scope.Length > 0)
             .ToList();
 
-        client.UseToken(token);
-
-        try
-        {
-            await client.AuthenticateAsync(token, cancellationToken: ct);
-        }
-        catch (Exception)
-        {
-            // The next reconnect authenticates with the new token anyway.
-        }
-
+        // Store before anything else: the refresh token is single-use, so losing the rotated one
+        // would end the session.
         ExoTokenStore.SaveStudioSession(token, ExoTokenStore.StudioPlayerId, scopes, null, rotated);
         SaveWorkspaceSessionTokenShared(token, rotated);
+
+        if (live != null)
+        {
+            live.UseToken(token);
+            try
+            {
+                await live.AuthenticateAsync(token, cancellationToken: ct);
+            }
+            catch (Exception)
+            {
+                // The next reconnect authenticates with the new token anyway.
+            }
+        }
+
         return true;
     }
 
@@ -322,8 +385,9 @@ public partial class ExoforgeControlCenter : EditorWindow
             try
             {
                 await ConnectAsync();
-                if (_isConnected)
+                if (_isConnected || string.IsNullOrEmpty(ExoTokenStore.StudioToken))
                 {
+                    // Connected, or the session ended and the account window is asking for a login.
                     return;
                 }
             }

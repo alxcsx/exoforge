@@ -1274,15 +1274,15 @@ namespace Exoforge.Unity.Editor
                 folderBtn.style.marginRight = 6;
                 toolbar.Add(folderBtn);
 
-                var includeToggle = new Toggle("Include") { value = !plugin.IsExcluded };
-                includeToggle.tooltip = "Excluded extensions are skipped by Build & Deploy All, stub generation and bulk actions. Saved in exoforge.json.";
-                includeToggle.style.marginRight = 6;
-                includeToggle.RegisterValueChangedCallback(evt =>
+                bool wasExcluded = plugin.IsExcluded;
+                var includeBtn = ExoforgeUIStyle.CreateModernButton(wasExcluded ? "Enable" : "Disable", () =>
                 {
-                    ExoforgeExtensionOps.SetExcluded(ExoWorkspace.Load(ExoforgeEditorConfig.GetAbsoluteWorkspacePath()), plugin.Name, excluded: !evt.newValue);
+                    ExoforgeExtensionOps.SetExcluded(ExoWorkspace.Load(ExoforgeEditorConfig.GetAbsoluteWorkspacePath()), plugin.Name, excluded: !wasExcluded);
                     _ = RefreshPluginsDataAsync();
-                });
-                toolbar.Add(includeToggle);
+                }, height: 22);
+                includeBtn.tooltip = (wasExcluded ? "Disabled: skipped by Build & Deploy All, stub generation and bulk actions. Click to enable. " : "Enabled. Click to disable. ") + "Saved in exoforge.json.";
+                includeBtn.style.marginRight = 6;
+                toolbar.Add(includeBtn);
             }
 
             if (IsConnected)

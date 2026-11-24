@@ -720,15 +720,14 @@ public partial class ExoforgeControlCenter : EditorWindow
         rightButtons.style.flexDirection = FlexDirection.Row;
         rightButtons.style.alignItems = Align.Center;
 
-        var includeToggle = new Toggle("Include") { value = !excluded };
-        includeToggle.tooltip = "Excluded extensions are skipped by Build & Deploy All, stub generation and bulk actions. Saved in exoforge.json.";
-        includeToggle.style.marginRight = 8;
-        includeToggle.RegisterValueChangedCallback(evt =>
+        var includeBtn = ExoforgeUIStyle.CreateModernButton(excluded ? "Enable" : "Disable", () =>
         {
-            ExoforgeExtensionOps.SetExcluded(Workspace, plugin.Name, excluded: !evt.newValue);
+            ExoforgeExtensionOps.SetExcluded(Workspace, plugin.Name, excluded: !excluded);
             RefreshTabContent();
-        });
-        rightButtons.Add(includeToggle);
+        }, height: 26);
+        includeBtn.tooltip = (excluded ? "Disabled: skipped by Build & Deploy All, stub generation and bulk actions. Click to enable. " : "Enabled. Click to disable. ") + "Saved in exoforge.json.";
+        includeBtn.style.marginRight = 8;
+        rightButtons.Add(includeBtn);
 
         var inspectBtn = ExoforgeUIStyle.CreateModernButton("Inspect ↗", () =>
         {
